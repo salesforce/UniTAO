@@ -1,0 +1,26 @@
+{
+ "__id": "DC_admin_domain",
+ "__type": "schema",
+ "__ver": "1_01_01",
+ "data": {
+  "description": "Data Center Administrative Sub-Domain Schema",
+  "name": "DC_admin_domain",
+  "properties": {
+   "contact_info": {
+    "type": "string"
+   },
+   "description": {
+    "type": "string"
+   },
+   "id": {
+    "type": "string"
+   },
+   "organization": {
+    "type": "string"
+   },
+   "security_class": {
+    "type": "string"
+   }
+  }
+ }
+}

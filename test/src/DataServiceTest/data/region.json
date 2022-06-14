@@ -1,0 +1,22 @@
+{
+    "data": {
+        "__id": "North_America",
+        "__type": "region",
+        "__ver": "1_01_01",
+        "data": {
+            "id": "North_America",
+            "description": "North America Infrastructure",
+            "data_centers": ["SEA1"]
+        }
+    },
+    "negativeData": {
+        "__id": "North_America",
+        "__type": "region",
+        "__ver": "1_01_01",
+        "data": {
+            "id": "North_America",
+            "description": "North America Infrastructure",
+            "data_centers": ["SEA1", "DFW4", "LAX2"]
+        }
+    }
+}

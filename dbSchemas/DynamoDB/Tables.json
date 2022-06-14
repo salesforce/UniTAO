@@ -1,0 +1,30 @@
+{
+  "Data": {
+    "TableName": "Data",
+    "AttributeDefinitions": [
+      {
+        "AttributeName": "__type",
+        "AttributeType": "S"
+      },
+      {
+        "AttributeName": "__id",
+        "AttributeType": "S"
+      }
+    ],
+    "KeySchema": [
+      {
+        "AttributeName": "__type",
+        "KeyType": "HASH"
+      },
+      {
+        "AttributeName": "__id",
+        "KeyType": "RANGE"
+      }
+    ],
+    "ProvisionedThroughput": {
+      "ReadCapacityUnits": 3,
+      "WriteCapacityUnits": 3
+    }
+  }
+}
+  

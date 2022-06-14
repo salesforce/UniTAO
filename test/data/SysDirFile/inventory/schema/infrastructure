@@ -1,0 +1,21 @@
+{
+ "__id": "infrastructure",
+ "__type": "schema",
+ "__ver": "1_01_01",
+ "data": {
+  "description": "Infrastructure (root or all data)",
+  "name": "infrastructure",
+  "properties": {
+   "id": {
+    "type": "string"
+   },
+   "regions": {
+    "items": {
+     "contentMediaType": "inventory/region",
+     "type": "string"
+    },
+    "type": "array"
+   }
+  }
+ }
+}

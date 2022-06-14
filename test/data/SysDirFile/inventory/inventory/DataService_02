@@ -1,0 +1,9 @@
+{
+ "__id": "DataService_02",
+ "lastSynctime": "",
+ "typeList": [
+  "DC_admin_domain",
+  "data_center"
+ ],
+ "url": "http://localhost:8005"
+}

@@ -1,0 +1,10 @@
+{
+ "__id": "DataService_01",
+ "lastSynctime": "",
+ "typeList": [
+  "DC_type",
+  "infrastructure",
+  "region"
+ ],
+ "url": "http://localhost:8004"
+}

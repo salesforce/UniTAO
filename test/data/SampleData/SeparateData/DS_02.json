@@ -1,0 +1,138 @@
+[
+    {
+        "__id": "schema",
+        "__type": "schema",
+        "__ver": "1_01_01",
+        "data": {
+            "name": "schema",
+            "description": "schema of schema",
+            "properties": {
+                "__id": {
+                    "type": "string",
+                    "template": "{data.name}"
+                },
+                "__type": {
+                    "type": "string"
+                },
+                "__ver": {
+                    "type": "string"
+                },
+                "data": {
+                    "type": "object",
+                    "$ref": "#/definitions/schema"
+                }
+            },
+            "additionalProperties": false,
+            "definitions": {
+                "schema": {
+                    "properties": {
+                        "name": {
+                            "type": "string"
+                        },
+                        "description": {
+                            "type": "string"
+                        },
+                        "properties": {
+                            "type": "object",
+                            "$ref": "#/definitions/prop"
+                        },
+                        "definitions": {
+                            "type": "object",
+                            "$ref": "#/definitions/schema"
+                        }
+                    },
+                    "additionalProperties": false
+                },
+                "prop": {
+                    "properties": {}
+                }
+            }
+        }
+    },
+    {
+        "__id": "data_center",
+        "__type": "schema",
+        "__ver": "1_01_01",
+        "data": {
+            "name": "data_center",
+            "description": "Data Center Schema",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "DC_type": {
+                    "type": "string",
+                    "enum": ["AWSv2", "GCPv1", "SFv7"],
+                    "contentMediaType": "inventory/DC_type"
+                },
+                "location": {
+                    "type": "string"
+                },
+                "public_ipv4s": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "format": "ipv4"
+                    }
+                },
+                "admin_domains": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "contentMediaType": "inventory/DC_admin_domain"
+                    }
+                }
+            }
+        }
+    },
+    {
+        "__id": "DC_admin_domain",
+        "__type": "schema",
+        "__ver": "1_01_01",
+        "data": {
+            "name": "DC_admin_domain",
+            "description": "Data Center Administrative Sub-Domain Schema",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "organization": {
+                    "type": "string"
+                },
+                "contact_info": {
+                    "type": "string"
+                },
+                "security_class": {
+                    "type": "string"
+                }
+            }
+        }
+    },
+    {
+        "__id": "SEA1",
+        "__type": "data_center",
+        "__ver": "1_01_01",
+        "data": {
+            "id": "SEA1",
+            "description": "Seattle Data Center 1",
+            "DC_type": "SFv7",
+            "location": "US98052",
+            "public_ipv4s": ["170.2.3.0/8", "168.12.3.84"],
+            "admin_domains": ["sec", "identity", "network", "apps", "services"]
+        }
+    },
+    {
+        "__id": "network",
+        "__type": "DC_admin_domain",
+        "__ver": "1_01_01",
+        "data": {
+            "id": "network",
+            "organization": "Network_Engineering",
+            "contact_info": "+1 (206) xxx-yyyy",
+            "security_class": "Infra_Top"
+        }
+    }
+]

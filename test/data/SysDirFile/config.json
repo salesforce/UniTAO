@@ -1,0 +1,14 @@
+{
+    "database": {
+        "type": "sysdirfile",
+        "sysdirfile": {
+            "path": "test/data/SysDirFile/inventory"
+        }
+    },
+    "http": {
+        "type": "http",
+        "dns": "localhost",
+        "port": "8006",
+        "id": "Inventory_01"
+    }
+}

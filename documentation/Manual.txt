@@ -1,0 +1,59 @@
+The UniTAO inventory system can be walked through using a single GET REST command:
+SERVER/inventory/{type}         // Get list all available IDs for {type}
+SERVER/inventory/{type}/{id}    // Get specific object ID of TYPE
+
+For demo/testing data is uploaded from "dbSchemas/DynamoDB/Data.json". 
+Feel free to add/modify records, data as well as schemas, as long as they are valid based on their corresponding type schema. 
+
+Because schema is treated just like data (... it is UNIFIED), you can obtain a list of all 
+available types, and the schema for them using the same API when you ask for {type} = "schema"
+as in the following EXAMPLES:
+
+SERVER/inventory/schema                // Get list all available object types-schemas
+
+==> ["DC_admin_domain","DC_type","data_center","infrastructure","region","schema"]
+
+SERVER/inventory/schema/data_center    // Get the data_denter schema
+
+You can also traverse through the inventory relationships:
+
+curl localhost:8002/inventory/infrastructure/global -s  | jq ".data.regions" 
+[
+  "North_America",
+  "South_America",
+  "Europe",
+  "Asia",
+  "Middle_East",
+  "Africa"
+]
+
+Now fetch the North_America region::
+
+curl localhost:8002/inventory/region/North_America -s  | jq ".data.data_centers" 
+[
+  "SEA1",
+  "DFW4",
+  "LAX2"
+]
+
+Now fetch the "SEA1" data center:
+
+curl localhost:8002/inventory/data_center/SEA1 -s  | jq ".data" 
+{
+  "DC_type": "SFv7",
+  "admin_domains": [
+    "sec",
+    "identity",
+    "network",
+    "apps",
+    "services"
+  ],
+  "description": "Seattle Data Center 1",
+  "id": "SEA1",
+  "location": "US98052",
+  "public_ipv4s": [
+    "170.2.3.0/8",
+    "168.12.3.84"
+  ]
+}
+
