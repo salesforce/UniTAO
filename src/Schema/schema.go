@@ -44,6 +44,14 @@ const (
 	Inventory  = "inventory"
 )
 
+func NewRecordData(dataType string, dataId string, data interface{}) map[string]interface{} {
+	record := make(map[string]interface{})
+	record[DataId] = dataId
+	record[DataType] = dataType
+	record[RecordData] = data
+	return record
+}
+
 type Record struct {
 	Id     string
 	Raw    string
