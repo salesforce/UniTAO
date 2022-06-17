@@ -24,11 +24,8 @@
 go 1.18
 
 use (
-    ./src/Data
-    ./src/DataService
-    ./src/DataServiceAdmin
-    ./src/InventoryService
-    ./src/Schema
-    ./src/Util
-    ./test/src/
+    ./
+    ../../src/DataService
+    ../../src/Schema
+    ../../src/Util
 )
