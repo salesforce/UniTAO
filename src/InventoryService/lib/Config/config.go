@@ -27,9 +27,9 @@ package Config
 
 import (
 	"UniTao/Data/DbConfig"
-	"UniTao/Util"
 	"encoding/json"
 	"fmt"
+	"github.com/salesforce/UniTAO/lib/Util"
 	"io/ioutil"
 	"os"
 )

@@ -2,7 +2,7 @@
 // Copyright (c) 2022 Salesforce, Inc.
 // All rights reserved.
 
-// UniTAO was originally created in 2022 by Shai Herzog & Yi Huo as an 
+// UniTAO was originally created in 2022 by Shai Herzog & Yi Huo as an
 // Universal No-Coding Heterogeneous Infrastructure Maintenance & Inventory system that is holistically driven by open/community-developed semantic models/schemas.
 
 // This program is free software: you can redistribute it and/or modify
@@ -21,12 +21,6 @@
 // This copyright notice and license applies to all files in this directory or sub-directories, except when stated otherwise explicitly.
 // ******************************************************************************************************************
 
-go 1.18
+module github.com/salesforce/UniTAO/lib/Util
 
-use (
-    ./
-    ../Data
-    ../InventoryService
-    ../Schema
-    ../Util
-)
+go 1.18

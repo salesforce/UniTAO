@@ -28,9 +28,9 @@ package DataServiceTest
 import (
 	"UniTao/DataService/lib/Config"
 	"UniTao/DataService/lib/DataHandler"
-	"UniTao/Schema"
-	"UniTao/Util"
 	"fmt"
+	"github.com/salesforce/UniTAO/lib/Schema"
+	"github.com/salesforce/UniTAO/lib/Util"
 	"log"
 	"path/filepath"
 	"testing"

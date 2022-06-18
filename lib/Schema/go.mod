@@ -21,11 +21,9 @@
 // This copyright notice and license applies to all files in this directory or sub-directories, except when stated otherwise explicitly.
 // ******************************************************************************************************************
 
+
+module github.com/salesforce/UniTAO/lib/Schema
+
 go 1.18
 
-use (
-    ./
-    ../../src/DataService
-    ../../src/Schema
-    ../../src/Util
-)
+require github.com/santhosh-tekuri/jsonschema/v5 v5.0.0 // indirect

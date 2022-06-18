@@ -28,9 +28,9 @@ package InventoryServer
 import (
 	"UniTao/InventoryService/lib/Config"
 	"UniTao/InventoryService/lib/DataHandler"
-	"UniTao/Util"
 	"flag"
 	"fmt"
+	"github.com/salesforce/UniTAO/lib/Util"
 	"log"
 	"net/http"
 )

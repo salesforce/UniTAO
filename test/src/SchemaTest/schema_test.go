@@ -26,8 +26,8 @@ This copyright notice and license applies to all files in this directory or sub-
 package SchemaTest
 
 import (
-	"UniTao/Schema"
-	"UniTao/Util"
+	"github.com/salesforce/UniTAO/lib/Schema"
+	"github.com/salesforce/UniTAO/lib/Util"
 	"log"
 	"testing"
 )

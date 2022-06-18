@@ -26,11 +26,11 @@ This copyright notice and license applies to all files in this directory or sub-
 package Schema
 
 import (
-	"UniTao/Schema/JsonKey"
 	"encoding/json"
 	"fmt"
 	"path"
 
+	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 

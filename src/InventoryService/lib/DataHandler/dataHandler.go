@@ -30,9 +30,9 @@ import (
 	"UniTao/Data/DbConfig"
 	"UniTao/Data/DbIface"
 	"UniTao/InventoryService/lib/InvRecord"
-	"UniTao/Schema"
-	"UniTao/Util"
 	"fmt"
+	"github.com/salesforce/UniTAO/lib/Schema"
+	"github.com/salesforce/UniTAO/lib/Util"
 	"log"
 	"net/http"
 )
