@@ -26,4 +26,8 @@ module github.com/salesforce/UniTAO/lib/Schema
 
 go 1.18
 
+// to install the following package from go get
+// export GO111MODULE=off
+// go get -v github.com/santhosh-tekuri/jsonschema/v5
+
 require github.com/santhosh-tekuri/jsonschema/v5 v5.0.0 // indirect
