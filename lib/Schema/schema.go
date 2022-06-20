@@ -106,15 +106,15 @@ func (schema *SchemaOps) init() error {
 	return nil
 }
 
-func (schema *SchemaOps) Validate(payload map[string]interface{}) error {
-	record, err := LoadRecord(payload)
-	if err != nil {
-		return fmt.Errorf("failed to load payload as Record. Error:%s", err)
-	}
+func (schema *SchemaOps) ValidateRecord(record *Record) error {
 	if schema.Record.Id != record.Type {
 		return fmt.Errorf("schema id and payload data type does not match, [%s]!=[%s]", schema.Record.Id, record.Type)
 	}
-	err = schema.Meta.Validate(record.Data)
+	return schema.ValidateData(record.Data)
+}
+
+func (schema *SchemaOps) ValidateData(data map[string]interface{}) error {
+	err := schema.Meta.Validate(data)
 	if err != nil {
 		return fmt.Errorf("schema validation failed. Error:\n%s", err)
 	}

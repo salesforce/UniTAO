@@ -30,4 +30,4 @@ go 1.18
 // export GO111MODULE=off
 // go get -v github.com/santhosh-tekuri/jsonschema/v5
 
-require github.com/santhosh-tekuri/jsonschema/v5 v5.0.0 // indirect
+require github.com/santhosh-tekuri/jsonschema/v5 v5.0.0 // direct

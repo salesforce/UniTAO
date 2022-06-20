@@ -29,13 +29,15 @@ import (
 	"UniTao/DataService/lib/Config"
 	"UniTao/DataService/lib/DataHandler"
 	"fmt"
-	"github.com/salesforce/UniTAO/lib/Schema"
-	"github.com/salesforce/UniTAO/lib/Util"
 	"log"
 	"path/filepath"
 	"testing"
+
+	"github.com/salesforce/UniTAO/lib/Schema"
+	"github.com/salesforce/UniTAO/lib/Util"
 )
 
+// Make sure both data service and inventory Service are running before running the test
 func TestDataHander(t *testing.T) {
 	log.Print("test start")
 	config, err := loadConfig()
@@ -58,12 +60,14 @@ func TestDataHander(t *testing.T) {
 		t.Fatalf("missing field [%s] from test data", Schema.RecordData)
 	}
 	log.Print("get data for test")
-	dataType := data[Schema.DataType].(string)
-	dataId := data[Schema.DataId].(string)
-	log.Printf("[type]=[%s],[id]=[%s]", dataType, dataId)
-	_, err = handler.Validate(dataType, dataId, data)
+	record, err := Schema.LoadRecord(data)
 	if err != nil {
-		t.Fatalf("failed to validate positive data.")
+		t.Fatalf("failed to load data as record. Error:%s", err)
+	}
+	log.Printf("[type]=[%s],[id]=[%s]", record.Type, record.Id)
+	_, err = handler.Validate(record)
+	if err != nil {
+		t.Fatalf("failed to validate positive data. Error:%s", err)
 	}
 	log.Printf("positive data validate passed")
 	negativeData, ok := testData["negativeData"].(map[string]interface{})
@@ -71,10 +75,12 @@ func TestDataHander(t *testing.T) {
 		t.Fatalf("missing field [%s] from test data", Schema.RecordData)
 	}
 	log.Print("get data for test")
-	dataType = negativeData[Schema.DataType].(string)
-	dataId = negativeData[Schema.DataId].(string)
-	log.Printf("[type]=[%s],[id]=[%s]", dataType, dataId)
-	_, err = handler.Validate(dataType, dataId, negativeData)
+	record, err = Schema.LoadRecord(negativeData)
+	if err != nil {
+		t.Fatalf("failed to load negativeData as record. Error:%s", err)
+	}
+	log.Printf("[type]=[%s],[id]=[%s]", record.Type, record.Id)
+	_, err = handler.Validate(record)
 	if err == nil {
 		t.Fatalf("failed to validate negative data.")
 	}
