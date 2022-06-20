@@ -26,10 +26,11 @@ This copyright notice and license applies to all files in this directory or sub-
 package SchemaTest
 
 import (
-	"github.com/salesforce/UniTAO/lib/Schema"
-	"github.com/salesforce/UniTAO/lib/Util"
 	"log"
 	"testing"
+
+	"github.com/salesforce/UniTAO/lib/Schema"
+	"github.com/salesforce/UniTAO/lib/Util"
 )
 
 func TestSchemaValidate(t *testing.T) {
@@ -47,7 +48,7 @@ func TestSchemaValidate(t *testing.T) {
 	if !ok {
 		t.Fatalf("missing field [%s] from test data", Schema.RecordData)
 	}
-	schema, err := Schema.LoadRecord(schemaRecord)
+	schema, err := Schema.LoadSchemaOps(schemaRecord)
 	if err != nil {
 		t.Fatalf("failed to load schema record, Error:\n%s", err)
 	}

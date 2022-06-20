@@ -29,6 +29,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path"
+	"strings"
 
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/santhosh-tekuri/jsonschema/v5"
@@ -44,19 +45,17 @@ const (
 	Inventory  = "inventory"
 )
 
-func NewRecordData(dataType string, dataId string, data interface{}) map[string]interface{} {
-	record := make(map[string]interface{})
-	record[DataId] = dataId
-	record[DataType] = dataType
-	record[RecordData] = data
-	return record
+type Record struct {
+	Id      string                 `json:"__id"`
+	Type    string                 `json:"__type"`
+	Version string                 `json:"__ver"`
+	Data    map[string]interface{} `json:"data"`
+	Raw     string
 }
 
-type Record struct {
-	Id     string
-	Raw    string
-	Data   map[string]interface{}
-	Schema *Doc
+type SchemaOps struct {
+	Record *Record
+	Schema *SchemaDoc
 	Meta   *jsonschema.Schema
 }
 
@@ -65,199 +64,134 @@ func LoadRecord(data map[string]interface{}) (*Record, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal doc to string, Err:%s", err)
 	}
-	record := Record{
-		Raw:  string(recordBytes),
-		Data: data,
+	record := Record{}
+	err = json.Unmarshal(recordBytes, &record)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal data to Record. Error:%s", err)
 	}
-	record.init()
+	record.Raw = string(recordBytes)
 	return &record, nil
 }
 
-func (rec *Record) init() error {
-	schemaId, ok := rec.Data[DataId].(string)
-	if !ok {
-		return fmt.Errorf("invalid format for schema, missing field [%s]", DataId)
+func LoadSchemaOps(data map[string]interface{}) (*SchemaOps, error) {
+	record, err := LoadRecord(data)
+	if err != nil {
+		return nil, err
 	}
-	rec.Id = schemaId
-	schemaDataType, ok := rec.Data[DataType].(string)
-	if !ok {
-		return fmt.Errorf("invalid format for schema, missing field [%s]", DataType)
+	recWithSchema := SchemaOps{
+		Record: record,
 	}
-	if schemaDataType != Schema {
-		return fmt.Errorf("schema record has wrong [%s], [%s]!=[%s]", DataType, schemaDataType, Schema)
+	recWithSchema.init()
+	return &recWithSchema, nil
+}
+
+func (schema *SchemaOps) init() error {
+	if schema.Record.Type != Schema {
+		return fmt.Errorf("schema record has wrong [%s], [%s]!=[%s]", DataType, schema.Record.Id, Schema)
 	}
-	schemaData, ok := rec.Data[RecordData].(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("invalid format for schema, missing field [%s]", RecordData)
-	}
-	doc, err := NewDoc(schemaData, schemaId, rec, nil)
+	doc, err := NewSchemaDoc(schema.Record.Data, schema.Record.Id, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create Schema Doc, err: %s", err)
 	}
-	rec.Schema = doc
-	schemaBytes, err := json.MarshalIndent(doc.Data, "", "    ")
+	schema.Schema = doc
+	schemaBytes, err := json.MarshalIndent(schema.Record.Data, "", "    ")
 	if err != nil {
-		return fmt.Errorf("failed to MarshalIndent value [field]=[%s], Err:%s", RecordData, err)
+		return fmt.Errorf("failed to MarshalIndent value [field]=[data], Err:%s", err)
 	}
-	meta, err := jsonschema.CompileString(rec.Id, string(schemaBytes))
+	meta, err := jsonschema.CompileString(schema.Record.Id, string(schemaBytes))
 	if err != nil {
-		return fmt.Errorf("failed to compile schema, [%s]=[%s] Err:%s", DataId, schemaId, err)
+		return fmt.Errorf("failed to compile schema, [%s]=[%s] Err:%s", DataId, schema.Record.Id, err)
 	}
-	rec.Meta = meta
+	schema.Meta = meta
 	return nil
 }
 
-func (rec *Record) Validate(payload map[string]interface{}) error {
-	payloadType, ok := payload[DataType].(string)
-	if !ok {
-		return fmt.Errorf("missing field [%s] from payload", DataType)
+func (schema *SchemaOps) Validate(payload map[string]interface{}) error {
+	record, err := LoadRecord(payload)
+	if err != nil {
+		return fmt.Errorf("failed to load payload as Record. Error:%s", err)
 	}
-	if rec.Id != payloadType {
-		return fmt.Errorf("schema id and payload data type does not match, [%s]!=[%s]", rec.Id, payloadType)
+	if schema.Record.Id != record.Type {
+		return fmt.Errorf("schema id and payload data type does not match, [%s]!=[%s]", schema.Record.Id, record.Type)
 	}
-	payloadData, ok := payload[RecordData]
-	if !ok {
-		return fmt.Errorf("missing field [%s] from payload", RecordData)
-	}
-
-	err := rec.Meta.Validate(payloadData)
+	err = schema.Meta.Validate(record.Data)
 	if err != nil {
 		return fmt.Errorf("schema validation failed. Error:\n%s", err)
 	}
 	return nil
 }
 
-type Doc struct {
+type SchemaDoc struct {
 	Id          string
-	Record      *Record
-	Parent      *Doc
-	Raw         string
+	Parent      *SchemaDoc
 	Data        map[string]interface{}
-	Properties  map[string]interface{}
-	Definitions map[string]*Doc
-	Refs        []*DocRef
-	SubDoc      map[string]*Doc
+	Definitions map[string]*SchemaDoc
+	Refs        []*SchemaDocRef
+	SubDocs     map[string]*SchemaDoc
 }
 
-type DocRef struct {
-	Doc         *Doc
+type SchemaDocRef struct {
+	Doc         *SchemaDoc
 	Name        string
 	ContentType string
 }
 
-func NewDoc(data map[string]interface{}, id string, record *Record, parent *Doc) (*Doc, error) {
-	rawBytes, err := json.MarshalIndent(data, "", "    ")
-	if err != nil {
-		return nil, fmt.Errorf("invalid format, field=[%s] failed Marshal, Error:%s", RecordData, err)
+func NewSchemaDoc(data map[string]interface{}, id string, parent *SchemaDoc) (*SchemaDoc, error) {
+	parentPath := ""
+	if parent != nil {
+		parentPath = parent.Path()
 	}
-	doc := Doc{
-		Id:     id,
-		Raw:    string(rawBytes),
-		Record: record,
-		Parent: parent,
-		Data:   data,
-		Refs:   []*DocRef{},
-		SubDoc: make(map[string]*Doc),
+	_, ok := data[JsonKey.Properties].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("failed to create doc path=[%s/%s]", parentPath, id)
 	}
-	err = doc.init()
-	if err != nil {
-		return nil, fmt.Errorf("failed @init, Err:\n%s", err)
+	doc := SchemaDoc{
+		Id:      id,
+		Parent:  parent,
+		Data:    data,
+		Refs:    []*SchemaDocRef{},
+		SubDocs: map[string]*SchemaDoc{},
 	}
-	err = doc.preprocess()
+	docDefs, ok := data[JsonKey.Definitions]
+	if ok {
+		defMap, ok := docDefs.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("failed to parse field=[%s], path=[%s/%s]", JsonKey.Definitions, parentPath, id)
+		}
+		doc.Definitions = make(map[string]*SchemaDoc, len(defMap))
+		for key, def := range defMap {
+			defObj, ok := def.(map[string]interface{})
+			if !ok {
+				return nil, fmt.Errorf("failed to parse definition to object. path=[%s/%s/%s/%s]", parentPath, id, JsonKey.Definitions, key)
+			}
+			defDoc, err := NewSchemaDoc(defObj, key, &doc)
+			if err != nil {
+				return nil, err
+			}
+			doc.Definitions[key] = defDoc
+		}
+	}
+	err := doc.preprocess()
 	if err != nil {
 		return nil, fmt.Errorf("failed @preprocess, Err:\n%s", err)
 	}
 	return &doc, nil
 }
 
-func (d *Doc) Path() string {
+func (d *SchemaDoc) Path() string {
 	if d.Parent == nil {
 		return d.Id
 	}
 	return path.Join(d.Parent.Path(), d.Id)
 }
 
-func (d *Doc) init() error {
-	propDef, ok := d.Data[JsonKey.Properties]
-	if !ok {
-		return nil
-	}
-	propMap, ok := propDef.(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("invalid data value, [path]=[%s/%s]", d.Path(), JsonKey.Properties)
-	}
-	d.Properties = propMap
-	definitions, ok := d.Data[JsonKey.Definitions]
-	if !ok {
-		return nil
-	}
-	defMap, ok := definitions.(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("invalid data type, [path]=[%s/%s]", d.Path(), JsonKey.Definitions)
-	}
-	d.Definitions = make(map[string]*Doc)
-	for defId, defItem := range defMap {
-		defData, ok := defItem.(map[string]interface{})
-		if !ok {
-			return fmt.Errorf("invalid data type, [path]=[%s/%s/%s]", d.Path(), JsonKey.Definitions, defId)
-		}
-		defDoc, err := NewDoc(defData, defId, d.Record, d)
-		if err != nil {
-			return fmt.Errorf("failed to parse definition, [path]=[%s/%s/%s]", d.Path(), JsonKey.Definitions, defId)
-		}
-		d.Definitions[defId] = defDoc
-	}
-	for pname, prop := range d.Properties {
-		err := d.getSubDoc(pname, prop)
-		if err != nil {
-			return fmt.Errorf("failed to find get subdoc,[path]=[%s]", path.Join(d.Path(), JsonKey.Properties, pname))
-		}
-	}
-	return nil
-}
-
-func (d *Doc) getDefinition(dataType string) (*Doc, error) {
-	if d.Definitions != nil {
-		doc, ok := d.Definitions[dataType]
-		if ok {
-			return doc, nil
-		}
-	}
-	if d.Parent != nil {
-		doc, err := d.Parent.getDefinition(dataType)
-		if err != nil {
-			return nil, err
-		}
-		return doc, nil
-	}
-	return nil, nil
-}
-
-func (d *Doc) getSubDoc(pname string, prop interface{}) error {
-	dataType := prop.(map[string]interface{})[JsonKey.Type].(string)
-	doc, err := d.getDefinition(dataType)
-	if err != nil {
-		return err
-	}
-	if doc != nil {
-		d.SubDoc[pname] = doc
-		return nil
-	}
-	items, ok := prop.(map[string]interface{})[JsonKey.Items]
-	if !ok {
-		return nil
-	}
-	itemName := path.Join(pname, "key")
-	return d.getSubDoc(itemName, items)
-}
-
-func (d *Doc) preprocess() error {
+func (d *SchemaDoc) preprocess() error {
 	err := d.processRequired()
 	if err != nil {
 		err := fmt.Errorf("preprocess failed @processRequired, [path]=[%s], Error:%s", d.Path(), err)
 		return err
 	}
-	err = d.processInvRefs()
+	err = d.processRefs()
 	if err != nil {
 		err := fmt.Errorf("preprocess failed @processInvRefs, [path]=[%s], Error:%s", d.Path(), err)
 		return err
@@ -273,10 +207,11 @@ func (d *Doc) preprocess() error {
 	return nil
 }
 
-func (d *Doc) processRequired() error {
+func (d *SchemaDoc) processRequired() error {
 	propPath := path.Join(d.Path(), JsonKey.Properties)
-	requiredList := make([]string, 0, len(d.Properties))
-	for pname, prop := range d.Properties {
+	propMap := d.Data[JsonKey.Properties].(map[string]interface{})
+	requiredList := make([]string, 0, len(propMap))
+	for pname, prop := range propMap {
 		propDef, ok := prop.(map[string]interface{})
 		if !ok {
 			return fmt.Errorf("invalid property value !=[map[string]interface{}], path:[%s/%s]", propPath, pname)
@@ -301,46 +236,110 @@ func (d *Doc) processRequired() error {
 	return nil
 }
 
-func (d *Doc) processInvRefs() error {
-	for pname, prop := range d.Properties {
-		ref, err := d.getCmtRef(pname, prop)
+func (d *SchemaDoc) processRefs() error {
+	for pname, prop := range d.Data[JsonKey.Properties].(map[string]interface{}) {
+		propDef, ok := prop.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("failed to parse property [%s], path=[%s]", pname, d.Path())
+		}
+		success, err := d.processRef(pname, propDef)
 		if err != nil {
 			return err
 		}
-		if ref != nil {
-			d.Refs = append(d.Refs, ref)
+		if success {
 			continue
 		}
-		itemDef, ok := prop.(map[string]interface{})[JsonKey.Items]
+		item, ok := propDef[JsonKey.Items]
 		if ok {
-			ref, err = d.getCmtRef(pname, itemDef)
+			itemDef, ok := item.(map[string]interface{})
+			if !ok {
+				return fmt.Errorf("failed to parse field=[%s], path=[%s/%s]", JsonKey.Items, d.Path(), pname)
+			}
+			_, err := d.processRef(pname, itemDef)
 			if err != nil {
 				return err
-			}
-			if ref != nil {
-				d.Refs = append(d.Refs, ref)
 			}
 		}
 	}
 	return nil
 }
 
-func (d *Doc) getCmtRef(pname string, prop interface{}) (*DocRef, error) {
-	propDef, ok := prop.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid property definition. [path]=[%s]", path.Join(d.Path(), JsonKey.Properties, pname))
+func (d *SchemaDoc) processRef(pname string, prop map[string]interface{}) (bool, error) {
+	ref, err := d.getCmtRef(pname, prop)
+	if err != nil {
+		return false, err
 	}
-	cmt, ok := propDef[JsonKey.ContentMediaType]
+	if ref != nil {
+		d.Refs = append(d.Refs, ref)
+		return true, nil
+	}
+	doc, err := d.getSubDoc(pname, prop)
+	if err != nil {
+		return false, err
+	}
+	if doc != nil {
+		d.SubDocs[pname] = doc
+		return true, nil
+	}
+	return false, nil
+}
+
+func (d *SchemaDoc) getCmtRef(pname string, prop map[string]interface{}) (*SchemaDocRef, error) {
+	cmt, ok := prop[JsonKey.ContentMediaType]
 	if !ok {
 		return nil, nil
 	}
-	if propDef[JsonKey.Type] != JsonKey.String {
-		return nil, fmt.Errorf("expect [%s]=[%s], found [%s], [path]=[%s]", JsonKey.Type, JsonKey.String, propDef[JsonKey.Type], path.Join(d.Path(), JsonKey.Properties, pname))
+	if prop[JsonKey.Type] != JsonKey.String {
+		return nil, fmt.Errorf("expect [%s]=[%s], found [%s], [path]=[%s]", JsonKey.Type, JsonKey.String, prop[JsonKey.Type], path.Join(d.Path(), JsonKey.Properties, pname))
 	}
-	ref := DocRef{
+	ref := SchemaDocRef{
 		Doc:         d,
 		Name:        pname,
 		ContentType: cmt.(string),
 	}
 	return &ref, nil
+}
+
+func (d *SchemaDoc) getSubDoc(pname string, prop map[string]interface{}) (*SchemaDoc, error) {
+	dataType := prop[JsonKey.Type].(string)
+	if dataType != JsonKey.Object {
+		return nil, nil
+	}
+	ref, ok := prop[JsonKey.Ref]
+	if !ok {
+		return nil, fmt.Errorf("object type no schema definition. path=[%s/%s]", d.Path(), pname)
+	}
+	refVal, ok := ref.(string)
+	if !ok {
+		return nil, fmt.Errorf("failed to parse ref value. path=[%s/%s/%s]", d.Path(), pname, JsonKey.Ref)
+	}
+	if !strings.HasPrefix(refVal, JsonKey.DefinitionPrefix) {
+		return nil, fmt.Errorf("unknown ref value=[%s], path=[%s/%s/%s]", refVal, d.Path(), pname, JsonKey.Ref)
+	}
+	docType := refVal[len(JsonKey.DefinitionPrefix):]
+	doc, err := d.getDefinition(docType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Definition=[%s], path=[%s/%s/%s], Error:%s", docType, d.Path(), pname, JsonKey.Ref, err)
+	}
+	if doc == nil {
+		return nil, fmt.Errorf("cannot find definition=[%s], path=[%s/%s/%s], no error", docType, d.Path(), pname, JsonKey.Ref)
+	}
+	return doc, nil
+}
+
+func (d *SchemaDoc) getDefinition(dataType string) (*SchemaDoc, error) {
+	if d.Definitions != nil {
+		doc, ok := d.Definitions[dataType]
+		if ok {
+			return doc, nil
+		}
+	}
+	if d.Parent != nil {
+		doc, err := d.Parent.getDefinition(dataType)
+		if err != nil {
+			return nil, err
+		}
+		return doc, nil
+	}
+	return nil, nil
 }

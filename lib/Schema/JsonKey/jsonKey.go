@@ -28,8 +28,11 @@ package JsonKey
 const (
 	ContentMediaType = "contentMediaType"
 	Definitions      = "definitions"
+	DefinitionPrefix = "#/definitions/"
 	Items            = "items"
+	Object           = "object"
 	Properties       = "properties"
+	Ref              = "#ref"
 	Required         = "required"
 	String           = "string"
 	Type             = "type"
