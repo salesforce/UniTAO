@@ -25,8 +25,10 @@
 
 SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]:-$0}"; )" &> /dev/null && pwd 2> /dev/null; )";
 
+mkdir -p $SCRIPT_DIR/__inventory
+
 pushd $SCRIPT_DIR/../../../
 
-go run ./src/InventoryService/main.go -config test/data/SysDirFile/config.json
+go run ./src/InventoryService/main.go -config $SCRIPT_DIR/config.json
 
 popd

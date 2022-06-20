@@ -2,7 +2,7 @@
     "database": {
         "type": "sysdirfile",
         "sysdirfile": {
-            "path": "test/data/SysDirFile/inventory"
+            "path": "test/data/SysDirFile/__inventory"
         }
     },
     "http": {

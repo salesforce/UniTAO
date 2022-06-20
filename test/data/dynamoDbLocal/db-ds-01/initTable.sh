@@ -37,6 +37,6 @@ go run ./src/DataServiceAdmin/main.go table \
 go run ./src/DataServiceAdmin/main.go data \
     -config $SCRIPT_DIR/config.json \
     -table Data \
-    -data ./src/Schema/data/schema.json
+    -data ./lib/Schema/data/schema.json
 
 popd
