@@ -23,4 +23,9 @@
 # This copyright notice and license applies to all files in this directory or sub-directories, except when stated otherwise explicitly.
 # ************************************************************************************************************
 
-DYNAMO_ENDPOINT=http://localhost:8001 dynamodb-admin -p 8003
+SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]:-$0}"; )" &> /dev/null && pwd 2> /dev/null; )";
+
+pushd $SCRIPT_DIR
+docker-compose down
+popd
+

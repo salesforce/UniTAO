@@ -29,17 +29,18 @@ import (
 	"UniTao/Data"
 	"UniTao/Data/DbIface"
 	"UniTao/DataService/lib/Config"
-	"UniTao/Schema"
-	"UniTao/Util"
 	"fmt"
 	"net/http"
 	"path"
 	"reflect"
+
+	"github.com/salesforce/UniTAO/lib/Schema"
+	"github.com/salesforce/UniTAO/lib/Util"
 )
 
 type Handler struct {
 	db        DbIface.Database
-	schemaMap map[string]*Schema.Record
+	schemaMap map[string]*Schema.SchemaOps
 	config    Config.Confuguration
 }
 
@@ -49,7 +50,7 @@ func New(config Config.Confuguration) (*Handler, error) {
 		return nil, err
 	}
 	handler := Handler{
-		schemaMap: make(map[string]*Schema.Record),
+		schemaMap: make(map[string]*Schema.SchemaOps),
 		db:        db,
 		config:    config,
 	}
@@ -120,7 +121,7 @@ func (h *Handler) Lock(dataType string, dataId string) (int, error) {
 	return http.StatusAccepted, err
 }
 
-func (h *Handler) localSchema(dataType string) (*Schema.Record, int, error) {
+func (h *Handler) localSchema(dataType string) (*Schema.SchemaOps, int, error) {
 	if dataType == Schema.Schema {
 		return nil, http.StatusBadRequest, fmt.Errorf("should not get schema of schema")
 	}
@@ -133,7 +134,7 @@ func (h *Handler) localSchema(dataType string) (*Schema.Record, int, error) {
 		err = fmt.Errorf("failed to get schema for type=[%s], Err:%s", dataType, err)
 		return nil, code, err
 	}
-	schema, err := Schema.LoadRecord(data)
+	schema, err := Schema.LoadSchemaOps(data)
 	if err != nil {
 		return nil, http.StatusInternalServerError, fmt.Errorf("failed to load Schema Record, [%s]=[%s], Err:\n%s", Schema.DataType, dataType, err)
 	}
@@ -160,41 +161,36 @@ func (h *Handler) inventoryData(dataType string, value string) (map[string]inter
 	return nil, code, err
 }
 
-func (h *Handler) Validate(dataType string, dataId string, data map[string]interface{}) (int, error) {
-	if dataType != data[Schema.DataType].(string) {
-		return http.StatusBadRequest, fmt.Errorf("path type [%s]!= payload type[%s]", dataType, data[Schema.DataType].(string))
-	}
-	if dataId != data[Schema.DataId].(string) {
-		return http.StatusBadRequest, fmt.Errorf("path id [%s]!= payload id[%s]", dataId, data[Schema.DataId].(string))
-	}
-	schema, code, err := h.localSchema(dataType)
+func (h *Handler) Validate(record *Schema.Record) (int, error) {
+	schema, code, err := h.localSchema(record.Type)
 	if err != nil {
 		return code, err
 	}
-	err = schema.Validate(data)
+	err = schema.ValidateRecord(record)
 	if err != nil {
-		return http.StatusBadRequest, fmt.Errorf("failed to validate payload against schema for type %s, Err: \n%s", dataType, err)
+		return http.StatusBadRequest, fmt.Errorf("failed to validate payload against schema for type %s, Err: \n%s", record.Type, err)
 	}
-	code, err = h.ValidateDataRefs(schema.Schema, data[Schema.RecordData].(map[string]interface{}), path.Join(dataType, dataId))
+	code, err = h.ValidateDataRefs(schema.Schema, record.Data, path.Join(record.Type, record.Id))
 	if err != nil {
 		return code, err
 	}
 	return code, nil
 }
 
-func (h *Handler) ValidateDataRefs(doc *Schema.Doc, data interface{}, dataPath string) (int, error) {
+func (h *Handler) ValidateDataRefs(doc *Schema.SchemaDoc, data interface{}, dataPath string) (int, error) {
 	dataMap, ok := data.(map[string]interface{})
 	if !ok {
 		return http.StatusBadRequest, fmt.Errorf("failed to convert data to map")
 	}
-	code, err := h.validateRefs(doc, dataMap, dataPath)
+	code, err := h.validateCmtRefs(doc, dataMap, dataPath)
 	if err != nil {
 		return code, err
 	}
 	return h.validateSubDoc(doc, dataMap, dataPath)
 }
 
-func (h *Handler) validateRefs(doc *Schema.Doc, data map[string]interface{}, dataPath string) (int, error) {
+// Validate Content Media Type Reference Values
+func (h *Handler) validateCmtRefs(doc *Schema.SchemaDoc, data map[string]interface{}, dataPath string) (int, error) {
 	for _, ref := range doc.Refs {
 		value, ok := data[ref.Name]
 		if !ok {
@@ -203,28 +199,17 @@ func (h *Handler) validateRefs(doc *Schema.Doc, data map[string]interface{}, dat
 		refPath := path.Join(dataPath, ref.Name)
 		switch reflect.TypeOf(value).Kind() {
 		case reflect.String:
-			hasRef, err := h.validateRefValue(ref, value.(string))
+			hasRef, err := h.validateCmtRefValue(ref, value.(string))
 			if err != nil {
 				return http.StatusBadRequest, fmt.Errorf("failed to validate value with [type]=[%s], [path]=[%s], Err:%s", ref.ContentType, refPath, err)
 			}
 			if !hasRef {
 				return http.StatusBadRequest, fmt.Errorf("ref does not exists,[type]=[%s], [path]=[%s], [ref]=[%s]", ref.ContentType, refPath, value)
 			}
-		case reflect.Map:
-			for key, keyVal := range value.(map[string]string) {
-				keyPath := path.Join(refPath, key)
-				hasRef, err := h.validateRefValue(ref, keyVal)
-				if err != nil {
-					return http.StatusBadRequest, fmt.Errorf("failed to validate value with [type]=[%s], [path]=[%s], Err:%s", ref.ContentType, keyPath, err)
-				}
-				if !hasRef {
-					return http.StatusBadRequest, fmt.Errorf("ref does not exists,[type]=[%s], [path]=[%s], [ref]=[%s]", ref.ContentType, keyPath, keyVal)
-				}
-			}
 		case reflect.Slice:
 			for idx, item := range value.([]interface{}) {
 				idxPath := fmt.Sprintf("%s[%d]", refPath, idx)
-				hasRef, err := h.validateRefValue(ref, item.(string))
+				hasRef, err := h.validateCmtRefValue(ref, item.(string))
 				if err != nil {
 					return http.StatusBadRequest, fmt.Errorf("failed to validate value with [type]=[%s], [path]=[%s], Err:%s", ref.ContentType, idxPath, err)
 				}
@@ -232,55 +217,14 @@ func (h *Handler) validateRefs(doc *Schema.Doc, data map[string]interface{}, dat
 					return http.StatusBadRequest, fmt.Errorf("ref does not exists,[type]=[%s], [path]=[%s], [ref]=[%s]", ref.ContentType, idxPath, item.(string))
 				}
 			}
-		}
-	}
-	return http.StatusAccepted, nil
-}
-
-func (h *Handler) validateSubDoc(doc *Schema.Doc, data map[string]interface{}, dataPath string) (int, error) {
-	for pPath, pDoc := range doc.SubDoc {
-		pname, key := Util.ParsePath(pPath)
-		subPath := path.Join(dataPath, pname)
-		subData, ok := data[pname]
-		if !ok {
-			// property does not exists
-			continue
-		}
-		if key == "" {
-			// property is not an itemized type (slice or map)
-			return h.ValidateDataRefs(pDoc, subData, subPath)
-		}
-		switch reflect.TypeOf(subData).Kind() {
-		case reflect.Map:
-			// check each key value of map
-			for key, keyData := range subData.(map[string]interface{}) {
-				keyPath := path.Join(subPath, key)
-				code, err := h.ValidateDataRefs(pDoc, keyData, keyPath)
-				if err != nil {
-					return code, err
-				}
-			}
-		case reflect.Slice:
-			// check each item value of array
-			for idx, idxData := range subData.([]interface{}) {
-				idxPath := fmt.Sprintf("%s[%d]", subPath, idx)
-				code, err := h.ValidateDataRefs(pDoc, idxData, idxPath)
-				if err != nil {
-					return code, err
-				}
-			}
 		default:
-			// data value does not match schema
-			return http.StatusBadRequest, fmt.Errorf("data is not [%s or %s] @[path]=[%s]", reflect.Map, reflect.Slice, subPath)
+			return http.StatusBadRequest, fmt.Errorf("failed to validate, ref only support on string or array, [path]=[%s]", refPath)
 		}
-		// itemized data type passed
-		return http.StatusAccepted, nil
 	}
-
 	return http.StatusAccepted, nil
 }
 
-func (h *Handler) validateRefValue(ref *Schema.DocRef, value string) (bool, error) {
+func (h *Handler) validateCmtRefValue(ref *Schema.SchemaDocRef, value string) (bool, error) {
 	typePath, dataType := Util.ParsePath(ref.ContentType)
 	if typePath != Schema.Inventory {
 		// ContentMediaType not start with inventory, we don't understand
@@ -313,8 +257,53 @@ func (h *Handler) validateRefValue(ref *Schema.DocRef, value string) (bool, erro
 	return true, nil
 }
 
+func (h *Handler) validateSubDoc(doc *Schema.SchemaDoc, data map[string]interface{}, dataPath string) (int, error) {
+	for pname, pDoc := range doc.SubDocs {
+		subPath := path.Join(dataPath, pname)
+		subData, ok := data[pname]
+		if !ok {
+			// property does not exists
+			continue
+		}
+		switch reflect.TypeOf(subData).Kind() {
+		case reflect.Map:
+			// Object, validate directly
+			code, err := h.ValidateDataRefs(pDoc, subData, subPath)
+			if err != nil {
+				return code, err
+			}
+		case reflect.Slice:
+			// check each item value of array
+			for idx, idxData := range subData.([]interface{}) {
+				idxPath := fmt.Sprintf("%s[%d]", subPath, idx)
+				code, err := h.ValidateDataRefs(pDoc, idxData, idxPath)
+				if err != nil {
+					return code, err
+				}
+			}
+		default:
+			// data value does not match schema
+			return http.StatusBadRequest, fmt.Errorf("data is not [%s or %s] @[path]=[%s]", reflect.Map, reflect.Slice, subPath)
+		}
+		// itemized data type passed
+		return http.StatusAccepted, nil
+	}
+
+	return http.StatusAccepted, nil
+}
+
 func (h *Handler) Add(dataType string, dataId string, payload map[string]interface{}) (int, error) {
-	code, err := h.Validate(dataType, dataId, payload)
+	record, err := Schema.LoadRecord(payload)
+	if err != nil {
+		return http.StatusBadRequest, fmt.Errorf("failed to load payload as Record. Error:%s", err)
+	}
+	if dataType != record.Type {
+		return http.StatusBadRequest, fmt.Errorf("data type does not match payload. type: [%s]!=[%s]", dataType, record.Type)
+	}
+	if dataId != record.Id {
+		return http.StatusBadRequest, fmt.Errorf("data type does not match payload. id: [%s]!=[%s]", dataId, record.Id)
+	}
+	code, err := h.Validate(record)
 	if err != nil {
 		return code, err
 	}
@@ -337,7 +326,17 @@ func (h *Handler) Add(dataType string, dataId string, payload map[string]interfa
 }
 
 func (h *Handler) Set(dataType string, dataId string, payload map[string]interface{}) (int, error) {
-	code, err := h.Validate(dataType, dataId, payload)
+	record, err := Schema.LoadRecord(payload)
+	if err != nil {
+		return http.StatusBadRequest, fmt.Errorf("failed to load payload as Record. Error:%s", err)
+	}
+	if dataType != record.Type {
+		return http.StatusBadRequest, fmt.Errorf("data type does not match payload. type: [%s]!=[%s]", dataType, record.Type)
+	}
+	if dataId != record.Id {
+		return http.StatusBadRequest, fmt.Errorf("data type does not match payload. id: [%s]!=[%s]", dataId, record.Id)
+	}
+	code, err := h.Validate(record)
 	if err != nil {
 		return code, err
 	}

@@ -29,8 +29,8 @@ import (
 	"UniTao/Data"
 	"UniTao/Data/DbIface"
 	"UniTao/DataService/lib/Config"
-	"UniTao/Util"
 	"flag"
+	"github.com/salesforce/UniTAO/lib/Util"
 	"log"
 	"os"
 )

@@ -26,3 +26,4 @@ The model/schema uses the standard JSON schema format as basis, with additional 
  brew install go
  ```
  - follow src/README.md to init and run the Inventory Service
+

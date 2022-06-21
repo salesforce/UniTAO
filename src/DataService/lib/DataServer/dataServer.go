@@ -28,9 +28,9 @@ package DataServer
 import (
 	"UniTao/DataService/lib/Config"
 	"UniTao/DataService/lib/DataHandler"
-	"UniTao/Util"
 	"flag"
 	"fmt"
+	"github.com/salesforce/UniTAO/lib/Util"
 	"log"
 	"net/http"
 )

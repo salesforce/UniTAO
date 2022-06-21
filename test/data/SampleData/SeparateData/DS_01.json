@@ -1,55 +1,5 @@
 [
     {
-        "__id": "schema",
-        "__type": "schema",
-        "__ver": "1_01_01",
-        "data": {
-            "name": "schema",
-            "description": "schema of schema",
-            "properties": {
-                "__id": {
-                    "type": "string",
-                    "template": "{data.name}"
-                },
-                "__type": {
-                    "type": "string"
-                },
-                "__ver": {
-                    "type": "string"
-                },
-                "data": {
-                    "type": "object",
-                    "$ref": "#/definitions/schema"
-                }
-            },
-            "additionalProperties": false,
-            "definitions": {
-                "schema": {
-                    "properties": {
-                        "name": {
-                            "type": "string"
-                        },
-                        "description": {
-                            "type": "string"
-                        },
-                        "properties": {
-                            "type": "object",
-                            "$ref": "#/definitions/prop"
-                        },
-                        "definitions": {
-                            "type": "object",
-                            "$ref": "#/definitions/schema"
-                        }
-                    },
-                    "additionalProperties": false
-                },
-                "prop": {
-                    "properties": {}
-                }
-            }
-        }
-    },
-    {
         "__id": "infrastructure",
         "__type": "schema",
         "__ver": "1_01_01",

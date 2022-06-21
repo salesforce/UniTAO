@@ -26,10 +26,11 @@ This copyright notice and license applies to all files in this directory or sub-
 package SchemaTest
 
 import (
-	"UniTao/Schema"
-	"UniTao/Util"
 	"log"
 	"testing"
+
+	"github.com/salesforce/UniTAO/lib/Schema"
+	"github.com/salesforce/UniTAO/lib/Util"
 )
 
 func TestSchemaValidate(t *testing.T) {
@@ -43,15 +44,19 @@ func TestSchemaValidate(t *testing.T) {
 	if !ok {
 		t.Fatalf("missing field [%s] from test data", Schema.Schema)
 	}
-	data, ok := testData[Schema.RecordData].(map[string]interface{})
+	data, ok := testData["data"].(map[string]interface{})
 	if !ok {
 		t.Fatalf("missing field [%s] from test data", Schema.RecordData)
 	}
-	schema, err := Schema.LoadRecord(schemaRecord)
+	schema, err := Schema.LoadSchemaOps(schemaRecord)
 	if err != nil {
 		t.Fatalf("failed to load schema record, Error:\n%s", err)
 	}
-	err = schema.Validate(data)
+	record, err := Schema.LoadRecord(data)
+	if err != nil {
+		t.Fatalf("failed to load data from file=%s", filePath)
+	}
+	err = schema.ValidateRecord(record)
 	if err != nil {
 		t.Fatalf("schema validation failed. Error:\n%s", err)
 	}
@@ -60,7 +65,11 @@ func TestSchemaValidate(t *testing.T) {
 		return
 	}
 	for idx, data := range negativeData {
-		err = schema.Validate(data.(map[string]interface{}))
+		record, err = Schema.LoadRecord(data.(map[string]interface{}))
+		if err != nil {
+			t.Fatalf("failed to load netative data @[%d]", idx)
+		}
+		err = schema.ValidateRecord(record)
 		if err == nil {
 			t.Fatalf("failed to alert schema err on negative data [idx]=[%d]", idx)
 		}
