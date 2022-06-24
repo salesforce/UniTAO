@@ -29,6 +29,6 @@ mkdir -p $SCRIPT_DIR/__inventory
 
 pushd $SCRIPT_DIR/../../../
 
-go run ./src/InventoryService/main.go -config $SCRIPT_DIR/config.json
+go run ./app/InventoryService/main.go -config $SCRIPT_DIR/config.json
 
 popd

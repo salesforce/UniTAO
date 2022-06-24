@@ -21,7 +21,7 @@
 // This copyright notice and license applies to all files in this directory or sub-directories, except when stated otherwise explicitly.
 // ******************************************************************************************************************
 
-module UniTao/Data
+module Data
 
 go 1.18
 

@@ -27,6 +27,6 @@ SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]:-$0}"; )" &> /dev/null && 
 
 pushd $SCRIPT_DIR/../../../
 
-go run ./src/DataService/main.go -config $SCRIPT_DIR/config.json
+go run ./app/DataService/main.go -config $SCRIPT_DIR/config.json
 
 popd

@@ -26,12 +26,13 @@ This copyright notice and license applies to all files in this directory or sub-
 package main
 
 import (
-	"UniTao/Data"
-	"UniTao/Data/DbIface"
-	"UniTao/DataService/lib/Config"
 	"flag"
 	"log"
 	"os"
+
+	"Data"
+	"Data/DbIface"
+	"DataService/Config"
 
 	"github.com/salesforce/UniTAO/lib/Util"
 )

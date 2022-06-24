@@ -26,13 +26,14 @@ This copyright notice and license applies to all files in this directory or sub-
 package DataHandler
 
 import (
-	"UniTao/Data"
-	"UniTao/Data/DbConfig"
-	"UniTao/Data/DbIface"
-	"UniTao/InventoryService/lib/InvRecord"
 	"fmt"
 	"log"
 	"net/http"
+
+	"Data"
+	"Data/DbConfig"
+	"Data/DbIface"
+	"InventoryService/InvRecord"
 
 	"github.com/salesforce/UniTAO/lib/Schema"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"

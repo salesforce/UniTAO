@@ -29,24 +29,24 @@ mkdir -p $SCRIPT_DIR/__inventory
 
 pushd $SCRIPT_DIR/../../../
 
-go run ./src/InventoryServiceAdmin/main.go \
+go run ./tool/InventoryServiceAdmin/main.go \
     add \
     -config ./test/data/InventoryService/config.json \
     -ds http://localhost:8002 \
     -id DataService_01
 
-go run ./src/InventoryServiceAdmin/main.go \
+go run ./tool/InventoryServiceAdmin/main.go \
     sync \
     -config ./test/data/InventoryService/config.json \
     -id DataService_01
 
-go run ./src/InventoryServiceAdmin/main.go \
+go run ./tool/InventoryServiceAdmin/main.go \
     add \
     -config ./test/data/InventoryService/config.json \
     -ds http://localhost:8003 \
     -id DataService_02
 
-go run ./src/InventoryServiceAdmin/main.go \
+go run ./tool/InventoryServiceAdmin/main.go \
     sync \
     -config ./test/data/InventoryService/config.json \
     -id DataService_02

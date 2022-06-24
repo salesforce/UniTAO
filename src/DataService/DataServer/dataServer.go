@@ -26,13 +26,15 @@ This copyright notice and license applies to all files in this directory or sub-
 package DataServer
 
 import (
-	"UniTao/DataService/lib/Config"
-	"UniTao/DataService/lib/DataHandler"
 	"flag"
 	"fmt"
-	"github.com/salesforce/UniTAO/lib/Util"
 	"log"
 	"net/http"
+
+	"DataService/Config"
+	"DataService/DataHandler"
+
+	"github.com/salesforce/UniTAO/lib/Util"
 )
 
 const (

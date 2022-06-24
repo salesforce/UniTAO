@@ -26,11 +26,12 @@ This copyright notice and license applies to all files in this directory or sub-
 package DbDynamoDb
 
 import (
-	"UniTao/Data/DbConfig"
-	"UniTao/Data/DbIface"
 	"encoding/json"
 	"fmt"
 	"log"
+
+	"Data/DbConfig"
+	"Data/DbIface"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"

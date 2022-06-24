@@ -23,22 +23,55 @@ This copyright notice and license applies to all files in this directory or sub-
 ************************************************************************************************************
 */
 
-package main
+package Config
 
-// Run Data Service
 import (
-	"UniTao/DataService/lib/DataServer"
+	"encoding/json"
 	"fmt"
-	"log"
+	"io/ioutil"
+	"os"
+
+	"Data/DbConfig"
+
+	"github.com/salesforce/UniTAO/lib/Util"
 )
 
-func main() {
-	log.Printf("data service started")
-	server, err := DataServer.New()
+const (
+	DATABASE = "database"
+	HTTP     = "http"
+)
+
+type Confuguration struct {
+	Database  DbConfig.DatabaseConfig `json:"database"`
+	DataTable DataTableConfig         `json:"table"`
+	Http      Util.HttpConfig         `json:"http"`
+	Inv       InvConfig               `json:"inventory"`
+}
+
+type DataTableConfig struct {
+	Data string `json:"data"`
+}
+
+func (t *DataTableConfig) Map() map[string]interface{} {
+	data, _ := Util.StructToMap(t)
+	return data
+}
+
+type InvConfig struct {
+	Url string `json:"url"`
+}
+
+func Read(configPath string, config *Confuguration) error {
+	jsonFile, err := os.Open(configPath)
 	if err != nil {
-		newErr := fmt.Errorf("failed to create instance of DataServer. Err:%s", err.Error())
-		log.Print(newErr.Error())
-		panic(newErr)
+		return fmt.Errorf("failed to open Config JSON file: [%s], err:%s", configPath, err)
+
 	}
-	server.Run()
+	defer jsonFile.Close()
+	byteValue, _ := ioutil.ReadAll(jsonFile)
+	json.Unmarshal([]byte(byteValue), config)
+	if config.DataTable.Data == "" {
+		return fmt.Errorf("missing field data in Config.DataTable")
+	}
+	return nil
 }

@@ -26,12 +26,13 @@ This copyright notice and license applies to all files in this directory or sub-
 package DataServiceTest
 
 import (
-	"UniTao/DataService/lib/Config"
-	"UniTao/DataService/lib/DataHandler"
 	"fmt"
 	"log"
 	"path/filepath"
 	"testing"
+
+	"DataService/Config"
+	"DataService/DataHandler"
 
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Util"

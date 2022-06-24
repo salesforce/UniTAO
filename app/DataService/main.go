@@ -25,11 +25,21 @@ This copyright notice and license applies to all files in this directory or sub-
 
 package main
 
+// Run Data Service
 import (
-	"UniTao/InventoryService/lib/InventoryServer"
+	"fmt"
+	"log"
+
+	"DataService/DataServer"
 )
 
 func main() {
-	server := InventoryServer.New()
+	log.Printf("data service started")
+	server, err := DataServer.New()
+	if err != nil {
+		newErr := fmt.Errorf("failed to create instance of DataServer. Err:%s", err.Error())
+		log.Print(newErr.Error())
+		panic(newErr)
+	}
 	server.Run()
 }

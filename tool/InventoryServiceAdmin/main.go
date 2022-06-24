@@ -33,9 +33,9 @@ import (
 	"os"
 	"time"
 
-	"UniTao/InventoryService/lib/Config"
-	"UniTao/InventoryService/lib/DataHandler"
-	"UniTao/InventoryService/lib/InvRecord"
+	"InventoryService/Config"
+	"InventoryService/DataHandler"
+	"InventoryService/InvRecord"
 
 	"github.com/salesforce/UniTAO/lib/Schema"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
