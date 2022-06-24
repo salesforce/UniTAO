@@ -25,7 +25,10 @@
 
 SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]:-$0}"; )" &> /dev/null && pwd 2> /dev/null; )";
 
-pushd $SCRIPT_DIR
-docker-compose up -d dynamodb
-popd
+pushd $SCRIPT_DIR/../../../
 
+go run ./src/DataServiceAdmin/main.go data \
+    -config $SCRIPT_DIR/config.json \
+    -data ./test/data/SampleData/SeparateData/DS_01.json
+
+popd

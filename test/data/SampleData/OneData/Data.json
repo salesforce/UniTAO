@@ -1,188 +1,191 @@
-[
-    {
-        "__id": "infrastructure",
-        "__type": "schema",
-        "__ver": "1_01_01",
-        "data": {
-            "name": "infrastructure",
-            "description": "Infrastructure (root or all data)",
-            "properties": {
-                "id": {
-                    "type": "string"
-                },
-                "regions": {
-                    "type": "array",
-                    "items": {
-                        "type": "string",
-                        "contentMediaType": "inventory/region"
+{
+    "data": [
+        {
+            "__id": "infrastructure",
+            "__type": "schema",
+            "__ver": "1_01_01",
+            "data": {
+                "name": "infrastructure",
+                "description": "Infrastructure (root or all data)",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "regions": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "contentMediaType": "inventory/region"
+                        }
                     }
                 }
             }
-        }
-    },
-    {
-        "__id": "region",
-        "__type": "schema",
-        "__ver": "1_01_01",
-        "data": {
-            "name": "region",
-            "description": "geographical regions Schema",
-            "properties": {
-                "id": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "data_centers": {
-                    "type": "array",
-                    "items": {
-                        "type": "string",
-                        "contentMediaType": "inventory/data_center"
+        },
+        {
+            "__id": "region",
+            "__type": "schema",
+            "__ver": "1_01_01",
+            "data": {
+                "name": "region",
+                "description": "geographical regions Schema",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "data_centers": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "contentMediaType": "inventory/data_center"
+                        }
                     }
                 }
             }
-        }
-    },
-    {
-        "__id": "data_center",
-        "__type": "schema",
-        "__ver": "1_01_01",
-        "data": {
-            "name": "data_center",
-            "description": "Data Center Schema",
-            "properties": {
-                "id": {
-                    "type": "string"
-                },
-                "DC_type": {
-                    "type": "string",
-                    "enum": ["AWSv2", "GCPv1", "SFv7"],
-                    "contentMediaType": "inventory/DC_type"
-                },
-                "location": {
-                    "type": "string"
-                },
-                "public_ipv4s": {
-                    "type": "array",
-                    "items": {
+        },
+        {
+            "__id": "data_center",
+            "__type": "schema",
+            "__ver": "1_01_01",
+            "data": {
+                "name": "data_center",
+                "description": "Data Center Schema",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "DC_type": {
                         "type": "string",
-                        "format": "ipv4"
+                        "enum": ["AWSv2", "GCPv1", "SFv7"],
+                        "contentMediaType": "inventory/DC_type"
+                    },
+                    "location": {
+                        "type": "string"
+                    },
+                    "public_ipv4s": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "format": "ipv4"
+                        }
+                    },
+                    "admin_domains": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "contentMediaType": "inventory/DC_admin_domain"
+                        }
                     }
-                },
-                "admin_domains": {
-                    "type": "array",
-                    "items": {
+                }
+            }
+        },
+        {
+            "__id": "DC_type",
+            "__type": "schema",
+            "__ver": "1_01_01",
+            "data": {
+                "name": "DC_type",
+                "description": "Data Center Type Schema",
+                "properties": {
+                    "id": {
                         "type": "string",
-                        "contentMediaType": "inventory/DC_admin_domain"
+                        "enum": ["AWSv2", "GCPv1", "SFv7"]
+                    },
+                    "specURL": {
+                        "type": "string"
                     }
                 }
             }
-        }
-    },
-    {
-        "__id": "DC_type",
-        "__type": "schema",
-        "__ver": "1_01_01",
-        "data": {
-            "name": "DC_type",
-            "description": "Data Center Type Schema",
-            "properties": {
-                "id": {
-                    "type": "string",
-                    "enum": ["AWSv2", "GCPv1", "SFv7"]
-                },
-                "specURL": {
-                    "type": "string"
+        },
+        {
+            "__id": "DC_admin_domain",
+            "__type": "schema",
+            "__ver": "1_01_01",
+            "data": {
+                "name": "DC_admin_domain",
+                "description": "Data Center Administrative Sub-Domain Schema",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "organization": {
+                        "type": "string"
+                    },
+                    "contact_info": {
+                        "type": "string"
+                    },
+                    "security_class": {
+                        "type": "string"
+                    }
                 }
             }
-        }
-    },
-    {
-        "__id": "DC_admin_domain",
-        "__type": "schema",
-        "__ver": "1_01_01",
-        "data": {
-            "name": "DC_admin_domain",
-            "description": "Data Center Administrative Sub-Domain Schema",
-            "properties": {
-                "id": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "organization": {
-                    "type": "string"
-                },
-                "contact_info": {
-                    "type": "string"
-                },
-                "security_class": {
-                    "type": "string"
-                }
+        },
+        {
+            "__id": "global",
+            "__type": "infrastructure",
+            "__ver": "1_01_01",
+            "data": {
+                "name": "global",
+                "description": "Global Root of all infrastructure",
+                "regions": [
+                    "North_America",
+                    "South_America",
+                    "Europe",
+                    "Asia",
+                    "Middle_East",
+                    "Africa"
+                ]
+            }
+        },
+        {
+            "__id": "North_America",
+            "__type": "region",
+            "__ver": "1_01_01",
+            "data": {
+                "id": "North_America",
+                "description": "North America Infrastructure",
+                "data_centers": ["SEA1", "DFW4", "LAX2"]
+            }
+        },
+        {
+            "__id": "SEA1",
+            "__type": "data_center",
+            "__ver": "1_01_01",
+            "data": {
+                "id": "SEA1",
+                "description": "Seattle Data Center 1",
+                "DC_type": "SFv7",
+                "location": "US98052",
+                "public_ipv4s": ["170.2.3.0/8", "168.12.3.84"],
+                "admin_domains": ["sec", "identity", "network", "apps", "services"]
+            }
+        },
+        {
+            "__id": "network",
+            "__type": "DC_admin_domain",
+            "__ver": "1_01_01",
+            "data": {
+                "id": "network",
+                "organization": "Network_Engineering",
+                "contact_info": "+1 (206) xxx-yyyy",
+                "security_class": "Infra_Top"
+            }
+        },
+        {
+            "__id": "SFv7",
+            "__type": "DC_type",
+            "__ver": "1_01_01",
+            "data": {
+                "id": "SFv7",
+                "description": "SF Data Centers v7",
+                "specURL": "specs.internal.salesforce.com/dataCenter/SFv7.pdf"
             }
         }
-    },
-    {
-        "__id": "global",
-        "__type": "infrastructure",
-        "__ver": "1_01_01",
-        "data": {
-            "name": "global",
-            "description": "Global Root of all infrastructure",
-            "regions": [
-                "North_America",
-                "South_America",
-                "Europe",
-                "Asia",
-                "Middle_East",
-                "Africa"
-            ]
-        }
-    },
-    {
-        "__id": "North_America",
-        "__type": "region",
-        "__ver": "1_01_01",
-        "data": {
-            "id": "North_America",
-            "description": "North America Infrastructure",
-            "data_centers": ["SEA1", "DFW4", "LAX2"]
-        }
-    },
-    {
-        "__id": "SEA1",
-        "__type": "data_center",
-        "__ver": "1_01_01",
-        "data": {
-            "id": "SEA1",
-            "description": "Seattle Data Center 1",
-            "DC_type": "SFv7",
-            "location": "US98052",
-            "public_ipv4s": ["170.2.3.0/8", "168.12.3.84"],
-            "admin_domains": ["sec", "identity", "network", "apps", "services"]
-        }
-    },
-    {
-        "__id": "network",
-        "__type": "DC_admin_domain",
-        "__ver": "1_01_01",
-        "data": {
-            "id": "network",
-            "organization": "Network_Engineering",
-            "contact_info": "+1 (206) xxx-yyyy",
-            "security_class": "Infra_Top"
-        }
-    },
-    {
-        "__id": "SFv7",
-        "__type": "DC_type",
-        "__ver": "1_01_01",
-        "data": {
-            "id": "SFv7",
-            "description": "SF Data Centers v7",
-            "specURL": "specs.internal.salesforce.com/dataCenter/SFv7.pdf"
-        }
-    }
-]
+    ]
+    
+}

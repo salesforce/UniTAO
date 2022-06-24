@@ -44,6 +44,7 @@ import (
 const (
 	Name      = "dynamodb"
 	UpdateOps = "updateops"
+	TableName = "TableName"
 )
 
 type Database struct {
@@ -147,6 +148,7 @@ func (db *Database) ListTable() ([]*string, error) {
 }
 
 func (db *Database) CreateTable(name string, meta map[string]interface{}) error {
+	meta[TableName] = name
 	rawJson, _ := json.Marshal(meta)
 	input := &dynamodb.CreateTableInput{}
 	json.Unmarshal([]byte(rawJson), &input)

@@ -26,14 +26,18 @@ This copyright notice and license applies to all files in this directory or sub-
 package JsonKey
 
 const (
-	ContentMediaType = "contentMediaType"
-	Definitions      = "definitions"
-	DefinitionPrefix = "#/definitions/"
-	Items            = "items"
-	Object           = "object"
-	Properties       = "properties"
-	Ref              = "#ref"
-	Required         = "required"
-	String           = "string"
-	Type             = "type"
+	AdditionalProperties = "additionalProperties"
+	Array                = "array"
+	ContentMediaType     = "contentMediaType"
+	Definitions          = "definitions"
+	DefinitionPrefix     = "#/definitions/"
+	Items                = "items"
+	Name                 = "name"
+	Map                  = "map"
+	Object               = "object"
+	Properties           = "properties"
+	Ref                  = "$ref"
+	Required             = "required"
+	String               = "string"
+	Type                 = "type"
 )

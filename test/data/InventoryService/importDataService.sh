@@ -25,11 +25,30 @@
 
 SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]:-$0}"; )" &> /dev/null && pwd 2> /dev/null; )";
 
-pushd $SCRIPT_DIR/../../../../
+mkdir -p $SCRIPT_DIR/__inventory
 
-go run ./src/DataServiceAdmin/main.go data \
-    -config $SCRIPT_DIR/config.json \
-    -table Data \
-    -data ./test/data/SampleData/SeparateData/DS_01.json
+pushd $SCRIPT_DIR/../../../
+
+go run ./src/InventoryServiceAdmin/main.go \
+    add \
+    -config ./test/data/InventoryService/config.json \
+    -ds http://localhost:8002 \
+    -id DataService_01
+
+go run ./src/InventoryServiceAdmin/main.go \
+    sync \
+    -config ./test/data/InventoryService/config.json \
+    -id DataService_01
+
+go run ./src/InventoryServiceAdmin/main.go \
+    add \
+    -config ./test/data/InventoryService/config.json \
+    -ds http://localhost:8003 \
+    -id DataService_02
+
+go run ./src/InventoryServiceAdmin/main.go \
+    sync \
+    -config ./test/data/InventoryService/config.json \
+    -id DataService_02
 
 popd

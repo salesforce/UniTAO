@@ -25,7 +25,16 @@
 
 SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]:-$0}"; )" &> /dev/null && pwd 2> /dev/null; )";
 
-pushd $SCRIPT_DIR
-docker-compose down
-popd
+pushd $SCRIPT_DIR/../../../
 
+# reset table structure
+go run ./src/DataServiceAdmin/main.go table \
+    -config $SCRIPT_DIR/config.json \
+    -table ./dbSchemas/DynamoDB/Tables.json \
+    -reset true
+
+# import schema record
+go run ./src/DataServiceAdmin/main.go data \
+    -config $SCRIPT_DIR/config.json \
+    -data ./lib/Schema/data/schema.json
+popd

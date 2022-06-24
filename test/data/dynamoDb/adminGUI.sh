@@ -23,4 +23,4 @@
 # This copyright notice and license applies to all files in this directory or sub-directories, except when stated otherwise explicitly.
 # ************************************************************************************************************
 
-DYNAMO_ENDPOINT=http://localhost:8001 dynamodb-admin -p 8003
+DYNAMO_ENDPOINT=http://localhost:8000 dynamodb-admin -p 8001
