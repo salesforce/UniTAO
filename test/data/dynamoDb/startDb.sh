@@ -25,30 +25,6 @@
 
 SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]:-$0}"; )" &> /dev/null && pwd 2> /dev/null; )";
 
-mkdir -p $SCRIPT_DIR/__inventory
-
-pushd $SCRIPT_DIR/../../../
-
-go run ./src/InventoryServiceAdmin/main.go \
-    add \
-    -config ./test/data/SysDirFile/config.json \
-    -ds http://localhost:8004 \
-    -id DataService_01
-
-go run ./src/InventoryServiceAdmin/main.go \
-    sync \
-    -config ./test/data/SysDirFile/config.json \
-    -id DataService_01
-
-go run ./src/InventoryServiceAdmin/main.go \
-    add \
-    -config ./test/data/SysDirFile/config.json \
-    -ds http://localhost:8005 \
-    -id DataService_02
-
-go run ./src/InventoryServiceAdmin/main.go \
-    sync \
-    -config ./test/data/SysDirFile/config.json \
-    -id DataService_02
-
+pushd $SCRIPT_DIR
+docker-compose up -d dynamodb
 popd

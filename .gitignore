@@ -1,3 +1,3 @@
-test/data/SysDirFile/__inventory/*
+__inventory
 .idea/*
 *.db

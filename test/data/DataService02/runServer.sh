@@ -23,4 +23,10 @@
 # This copyright notice and license applies to all files in this directory or sub-directories, except when stated otherwise explicitly.
 # ************************************************************************************************************
 
-DYNAMO_ENDPOINT=http://localhost:8000 dynamodb-admin -p 8002
+SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]:-$0}"; )" &> /dev/null && pwd 2> /dev/null; )";
+
+pushd $SCRIPT_DIR/../../../
+
+go run ./src/DataService/main.go -config $SCRIPT_DIR/config.json
+
+popd

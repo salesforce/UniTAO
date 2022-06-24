@@ -10,45 +10,41 @@
    - ./dynamoDbLocal/README.md
    - Commands:
   ```
-  db-ds-01: ./dynamoDbLocal/db-ds-01/startDb.sh
-  Admin-01: ./dynamoDbLocal/db-ds-01/adminGUI.sh
-  db-ds-02: ./dynamoDbLocal/db-ds-02/startDb.sh
-  Admin-02: ./dynamoDbLocal/db-ds-02/adminGUI.sh
+  dynamoDb: ./dynamoDb/startDb.sh
+  dynamoDB-Admin: ./dynamoDb/adminGUI.sh
   ```
 - to Init table of database
   ```
-  db-ds-01: ./dynamoDbLocal/db-ds-01/initTable.sh
-  db-ds-02: ./dynamoDbLocal/db-ds-02/initTable.sh
+  db-ds-01: ./DataServce01/initTable.sh    # init table: DataServce01
+  db-ds-02: ./DataServce02/initTable.sh    # init table: DataServce02
   ```
 - to run DataService
   ```
-  db-ds-01: ./dynamoDbLocal/db-ds-01/runServer.sh
-  db-ds-02: ./dynamoDbLocal/db-ds-02/runServer.sh
+  db-ds-01: ./DataServce01/runServer.sh
+  db-ds-02: ./DataServce02/runServer.sh
   ```
 - to start Inventory Service
   ```
-  ./SysDirFile/runServer.sh
+  ./InventoryService/runServer.sh
   ```
 - to importTestData from Test Data Service 01 and 02
   - make sure both DataService 01 and 02 is running at 8004 and 8005
   ```
-  ./SysDirFile/importDataService.sh
+  ./InventoryService/importDataService.sh
   ```
 - to import test data
   ```
-  db-ds-01: ./dynamoDbLocal/db-ds-01/importData.sh
-  db-ds-02: ./dynamoDbLocal/db-ds-02/importData.sh
+  db-ds-01: ./DataServce01/importData.sh
+  db-ds-02: ./DataServce02/importData.sh
   ```
 - to stop and remove DynamoDb instance.
   ```
-  db-ds-01: ./dynamoDbLocal/db-ds-01/stopDb.sh
-  db-ds-02: ./dynamoDbLocal/db-ds-02/stopDb.sh
+  db-ds-01: ./DataServce01/stopDb.sh
+  db-ds-02: ./DataServce02/stopDb.sh
   ```
 #### Test Environment Port Arrangement:
- - 8000:    DB-DS-01
- - 8001:    DB-DS-02
- - 8002:    DB-DS-01-GUI-Admin
- - 8003:    DB-DS-02-GUI-Admin
- - 8004:    DataService01
- - 8005:    DataService02
- - 8006:    InventoryService
+ - 8000:    DynamoDB Database
+ - 8001:    DynamoDB Admin UI
+ - 8002:    DataService01
+ - 8003:    DataService02
+ - 8004:    InventoryService

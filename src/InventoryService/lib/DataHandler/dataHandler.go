@@ -31,10 +31,12 @@ import (
 	"UniTao/Data/DbIface"
 	"UniTao/InventoryService/lib/InvRecord"
 	"fmt"
-	"github.com/salesforce/UniTAO/lib/Schema"
-	"github.com/salesforce/UniTAO/lib/Util"
 	"log"
 	"net/http"
+
+	"github.com/salesforce/UniTAO/lib/Schema"
+	"github.com/salesforce/UniTAO/lib/Schema/Record"
+	"github.com/salesforce/UniTAO/lib/Util"
 )
 
 type Handler struct {
@@ -80,17 +82,14 @@ func (h *Handler) init() error {
 }
 
 func (h *Handler) List(dataType string) ([]string, int, error) {
-	if dataType == Schema.Schema {
-		return nil, http.StatusBadRequest, fmt.Errorf("list of schema is not supported. please specify data type")
-	}
-	if dataType == Schema.Inventory {
-		result, code, err := h.ListData(Schema.Inventory)
+	if dataType == Schema.Schema || dataType == Schema.Inventory {
+		result, code, err := h.ListData(dataType)
 		if err != nil {
 			return nil, code, err
 		}
 		dsList := make([]string, 0, len(result))
 		for _, data := range result {
-			dsList = append(dsList, data[Schema.DataId].(string))
+			dsList = append(dsList, data[Record.DataId].(string))
 		}
 		return dsList, http.StatusOK, nil
 	}
@@ -104,7 +103,7 @@ func (h *Handler) List(dataType string) ([]string, int, error) {
 	}
 	urlPath, err := Util.URLPathJoin(dsInfo.URL, dataType)
 	if err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("failed to parse url from data service [%s]=[%s], url=[%s], Error:%s", Schema.DataId, dsInfo.Id, dsInfo.URL, err)
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to parse url from data service [%s]=[%s], url=[%s], Error:%s", Record.DataId, dsInfo.Id, dsInfo.URL, err)
 	}
 	dataList, code, err := Util.GetRestData(*urlPath)
 	if err != nil {
@@ -140,7 +139,7 @@ func (h *Handler) Get(dataType string, dataId string) (interface{}, int, error) 
 	}
 	idPath, err := Util.URLPathJoin(dsInfo.URL, dataType, dataId)
 	if err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("failed to parse url from data service [%s]=[%s], url=[%s], Error:%s", Schema.DataId, dsInfo.Id, dsInfo.URL, err)
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to parse url from data service [%s]=[%s], url=[%s], Error:%s", Record.DataId, dsInfo.Id, dsInfo.URL, err)
 	}
 	data, code, err := Util.GetRestData(*idPath)
 	if err != nil {
@@ -173,7 +172,7 @@ func (h *Handler) ListData(dataType string) ([]map[string]interface{}, int, erro
 func (h *Handler) GetData(dataType string, dataId string) (interface{}, int, error) {
 	args := make(map[string]interface{})
 	args[DbIface.Table] = dataType
-	args[Schema.DataId] = dataId
+	args[Record.DataId] = dataId
 	recordList, err := h.Db.Get(args)
 	if err != nil {
 		return nil, http.StatusInternalServerError, err
@@ -192,7 +191,7 @@ func (h *Handler) GetDataServiceInfo(dataType string) (*InvRecord.DataServiceInf
 	for _, inv := range invList {
 		dsInfo, err := InvRecord.CreateDsInfo(inv)
 		if err != nil {
-			log.Printf("Failed to load record [%s]=[%s]", Schema.DataId, inv[Schema.DataId])
+			log.Printf("Failed to load record [%s]=[%s]", Record.DataId, inv[Record.DataId])
 			continue
 		}
 		for _, dsDataType := range dsInfo.TypeList {

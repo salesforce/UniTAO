@@ -26,17 +26,20 @@ This copyright notice and license applies to all files in this directory or sub-
 package main
 
 import (
-	"UniTao/InventoryService/lib/Config"
-	"UniTao/InventoryService/lib/DataHandler"
-	"UniTao/InventoryService/lib/InvRecord"
 	"flag"
 	"fmt"
-	"github.com/salesforce/UniTAO/lib/Schema"
-	"github.com/salesforce/UniTAO/lib/Util"
 	"log"
 	"net/http"
 	"os"
 	"time"
+
+	"UniTao/InventoryService/lib/Config"
+	"UniTao/InventoryService/lib/DataHandler"
+	"UniTao/InventoryService/lib/InvRecord"
+
+	"github.com/salesforce/UniTAO/lib/Schema"
+	"github.com/salesforce/UniTAO/lib/Schema/Record"
+	"github.com/salesforce/UniTAO/lib/Util"
 )
 
 type AdminArgs struct {
@@ -158,11 +161,11 @@ func (a *Admin) Run() error {
 func (a *Admin) addDsRecord() error {
 	_, code, err := a.handler.GetData(Schema.Inventory, a.args.ops.id)
 	if err == nil {
-		err = fmt.Errorf("Data Server Record already exists, [%s]=[%s]", Schema.DataId, a.args.ops.id)
+		err = fmt.Errorf("Data Server Record already exists, [%s]=[%s]", Record.DataId, a.args.ops.id)
 		return err
 	}
 	if code != http.StatusNotFound {
-		err = fmt.Errorf("failed to query Data Service record, [%s]=[%s], CODE:%d, Error:%s", Schema.DataId, a.args.ops.id, code, err)
+		err = fmt.Errorf("failed to query Data Service record, [%s]=[%s], CODE:%d, Error:%s", Record.DataId, a.args.ops.id, code, err)
 		return err
 	}
 	dsInfo := InvRecord.NewDsInfo(a.args.ops.id, a.args.ops.url)
@@ -177,15 +180,15 @@ func (a *Admin) addDsRecord() error {
 func (a *Admin) syncDsSchema() error {
 	record, code, err := a.handler.Get(Schema.Inventory, a.args.ops.id)
 	if err != nil {
-		return fmt.Errorf("failed to retrieve Data Service Record [%s]=[%s], Code:%d, Error:%s", Schema.DataId, a.args.ops.id, code, err)
+		return fmt.Errorf("failed to retrieve Data Service Record [%s]=[%s], Code:%d, Error:%s", Record.DataId, a.args.ops.id, code, err)
 	}
 	ds, err := InvRecord.CreateDsInfo(record)
 	if err != nil {
-		return fmt.Errorf("format error, failed to parse DS record [%s]=[%s] to DataServiceInfo, Error:%s", Schema.DataId, a.args.ops.id, err)
+		return fmt.Errorf("format error, failed to parse DS record [%s]=[%s] to DataServiceInfo, Error:%s", Record.DataId, a.args.ops.id, err)
 	}
 	schemaUrl, err := Util.URLPathJoin(ds.URL, Schema.Schema)
 	if err != nil {
-		return fmt.Errorf("failed to parse url from DS record [%s]=[%s], Err:%s", Schema.DataId, a.args.ops.id, err)
+		return fmt.Errorf("failed to parse url from DS record [%s]=[%s], Err:%s", Record.DataId, a.args.ops.id, err)
 	}
 	result, code, err := Util.GetRestData(*schemaUrl)
 	if err != nil {
@@ -214,11 +217,11 @@ func (a *Admin) syncDsSchema() error {
 	}
 	keys := make(map[string]interface{})
 	ds.LastSyncTime = time.Now().Format(time.RFC850)
-	keys[Schema.DataId] = ds.Id
+	keys[Record.DataId] = ds.Id
 	log.Printf("refresh DataService record for data type mapping")
 	err = a.handler.Db.Replace(Schema.Inventory, keys, payload)
 	if err != nil {
-		return fmt.Errorf("failed to replace [%s]=[%s], Err:%s", Schema.DataId, ds.Id, err)
+		return fmt.Errorf("failed to replace [%s]=[%s], Err:%s", Record.DataId, ds.Id, err)
 	}
 	for _, dataType := range ds.TypeList {
 		typeSchema, code, err := a.handler.Get(Schema.Schema, dataType)
@@ -251,10 +254,10 @@ func (a *Admin) removeDsRecord() error {
 
 func (a *Admin) removeData(dataType string, id string) error {
 	keys := make(map[string]interface{})
-	keys[Schema.DataId] = id
+	keys[Record.DataId] = id
 	err := a.handler.Db.Delete(dataType, keys)
 	if err != nil {
-		return fmt.Errorf("failed to delete Data  [type/%s]=[%s/%s], Err:%s", Schema.DataId, dataType, id, err)
+		return fmt.Errorf("failed to delete Data  [type/%s]=[%s/%s], Err:%s", Record.DataId, dataType, id, err)
 	}
 	return nil
 }

@@ -33,7 +33,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/salesforce/UniTAO/lib/Schema"
+	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Util"
 )
 
@@ -54,13 +54,8 @@ func TestDataHander(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed loading data from [path]=[%s], Err:%s", filePath, err)
 	}
-	log.Print("data loaded")
-	data, ok := testData[Schema.RecordData].(map[string]interface{})
-	if !ok {
-		t.Fatalf("missing field [%s] from test data", Schema.RecordData)
-	}
-	log.Print("get data for test")
-	record, err := Schema.LoadRecord(data)
+	log.Print("get positive data for test")
+	record, err := Record.LoadMap(testData["data"].(map[string]interface{}))
 	if err != nil {
 		t.Fatalf("failed to load data as record. Error:%s", err)
 	}
@@ -70,12 +65,8 @@ func TestDataHander(t *testing.T) {
 		t.Fatalf("failed to validate positive data. Error:%s", err)
 	}
 	log.Printf("positive data validate passed")
-	negativeData, ok := testData["negativeData"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("missing field [%s] from test data", Schema.RecordData)
-	}
-	log.Print("get data for test")
-	record, err = Schema.LoadRecord(negativeData)
+	log.Print("get negative Data for test")
+	record, err = Record.LoadMap(testData["negativeData"].(map[string]interface{}))
 	if err != nil {
 		t.Fatalf("failed to load negativeData as record. Error:%s", err)
 	}
@@ -90,7 +81,7 @@ func TestDataHander(t *testing.T) {
 
 func loadConfig() (*Config.Confuguration, error) {
 	config := Config.Confuguration{}
-	configPathStr := "../../data/dynamoDbLocal/db-ds-01/config.json"
+	configPathStr := "../../data/DataService01/config.json"
 	configPath, err := filepath.Abs(configPathStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ABS Path [%s], Error:%s", configPathStr, err)

@@ -30,10 +30,11 @@ import (
 	"UniTao/Data/DbIface"
 	"UniTao/Data/SysDirFile/DirTable"
 	"fmt"
-	"github.com/salesforce/UniTAO/lib/Schema"
 	"log"
 	"os"
 	"path/filepath"
+
+	"github.com/salesforce/UniTAO/lib/Schema/Record"
 )
 
 const (
@@ -106,7 +107,7 @@ func (db *Database) Get(queryArgs map[string]interface{}) ([]map[string]interfac
 		err = fmt.Errorf("failed to get table, Err: %s", err)
 		return nil, err
 	}
-	dataId, ok := queryArgs[Schema.DataId].(string)
+	dataId, ok := queryArgs[Record.DataId].(string)
 	if !ok {
 		result, err := table.List()
 		if err != nil {
@@ -170,9 +171,9 @@ func (db *Database) GetTable(name string) (*DirTable.Table, error) {
 
 func (db *Database) Create(table string, data interface{}) error {
 	payload := data.(map[string]interface{})
-	dataId, ok := payload[Schema.DataId].(string)
+	dataId, ok := payload[Record.DataId].(string)
 	if !ok {
-		err := fmt.Errorf("missing key [%s] from data", Schema.DataId)
+		err := fmt.Errorf("missing key [%s] from data", Record.DataId)
 		log.Print(err)
 		return err
 	}
@@ -183,10 +184,10 @@ func (db *Database) Create(table string, data interface{}) error {
 	}
 	record, err := tbl.Get(dataId)
 	if err != nil {
-		return fmt.Errorf("failed to get data [%s]=[%s]. Error:%s", Schema.DataId, dataId, err)
+		return fmt.Errorf("failed to get data [%s]=[%s]. Error:%s", Record.DataId, dataId, err)
 	}
 	if record != nil {
-		return fmt.Errorf("data [%s]=[%s] already exists", Schema.DataId, dataId)
+		return fmt.Errorf("data [%s]=[%s] already exists", Record.DataId, dataId)
 	}
 	err = tbl.Put(dataId, payload)
 	if err != nil {
@@ -201,9 +202,9 @@ func (db *Database) Update(table string, keys map[string]interface{}, cmd DbIfac
 }
 func (db *Database) Replace(table string, keys map[string]interface{}, data interface{}) error {
 	payload := data.(map[string]interface{})
-	dataId, ok := payload[Schema.DataId].(string)
+	dataId, ok := payload[Record.DataId].(string)
 	if !ok {
-		err := fmt.Errorf("missing key [%s] from data", Schema.DataId)
+		err := fmt.Errorf("missing key [%s] from data", Record.DataId)
 		log.Print(err)
 		return err
 	}
@@ -226,9 +227,9 @@ func (db *Database) Delete(table string, keys map[string]interface{}) error {
 		log.Print(err)
 		return err
 	}
-	dataId, ok := keys[Schema.DataId].(string)
+	dataId, ok := keys[Record.DataId].(string)
 	if !ok {
-		err = fmt.Errorf("missing key field [%s]", Schema.DataId)
+		err = fmt.Errorf("missing key field [%s]", Record.DataId)
 		return err
 	}
 	err = tbl.Delete(dataId)

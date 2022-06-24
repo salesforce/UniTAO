@@ -184,3 +184,29 @@ func DirExists(dirPath string) bool {
 	}
 	return !info.IsDir()
 }
+
+func StructToMap(sData interface{}) (map[string]interface{}, error) {
+	sDataBytes, err := json.Marshal(sData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to Marshal data. Error:%s", err)
+	}
+	data := make(map[string]interface{})
+	err = json.Unmarshal(sDataBytes, &data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to Unmarshal sData to map[string]interface{}, Error:%s", err)
+	}
+	return data, nil
+}
+
+func JsonCopy(data interface{}) (interface{}, error) {
+	dataBytes, err := json.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf("Util.JsonCopy failed to Marshal data, Error: %s", err)
+	}
+	var result interface{}
+	err = json.Unmarshal(dataBytes, &result)
+	if err != nil {
+		return nil, fmt.Errorf("Util.JsonCopy failed to UnMarshal data, Error: %s", err)
+	}
+	return result, nil
+}

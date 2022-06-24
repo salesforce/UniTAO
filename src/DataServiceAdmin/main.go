@@ -30,16 +30,18 @@ import (
 	"UniTao/Data/DbIface"
 	"UniTao/DataService/lib/Config"
 	"flag"
-	"github.com/salesforce/UniTAO/lib/Util"
 	"log"
 	"os"
+
+	"github.com/salesforce/UniTAO/lib/Util"
 )
 
 type AdminArgs struct {
-	cmd    string
-	config string
-	table  TableArgs
-	data   DataArgs
+	cmd       string
+	config    string
+	srvConfig Config.Confuguration
+	table     TableArgs
+	data      DataArgs
 }
 
 type TableArgs struct {
@@ -117,9 +119,16 @@ func CreateTables(db DbIface.Database, args AdminArgs) {
 	if err != nil {
 		log.Fatalf(err.Error())
 	}
+	configMeta := make(map[string]interface{})
+	configTables := args.srvConfig.DataTable.Map()
+	for key, table := range configTables {
+		if _, ok := tableMeta[key]; ok {
+			configMeta[table.(string)] = tableMeta[key]
+		}
+	}
 	for _, table := range tableList {
 		log.Printf("Match table [%s] with expected meta", *table)
-		_, exists := tableMeta[*table]
+		_, exists := configMeta[*table]
 		if exists {
 			log.Printf("table [%s] exists", *table)
 			if args.table.reset {
@@ -131,17 +140,13 @@ func CreateTables(db DbIface.Database, args AdminArgs) {
 			}
 			continue
 		}
-		log.Printf("unexpected table [%s]", *table)
-		if args.table.reset {
-			log.Printf("remove table [%s]", *table)
-			db.DeleteTable(*table)
-		}
+		log.Printf("ignore unknown table [%s]", *table)
 	}
-	if len(tableMeta) == 0 {
+	if len(configMeta) == 0 {
 		log.Print("there is no table to create")
 		return
 	}
-	for table, meta := range tableMeta {
+	for table, meta := range configMeta {
 		log.Printf("create table [%s]", table)
 		err := db.CreateTable(table, meta.(map[string]interface{}))
 		if err != nil {
@@ -156,25 +161,7 @@ func ImportData(db DbIface.Database, args AdminArgs) {
 		log.Fatalf(err.Error())
 	}
 	if args.data.table == "" {
-		log.Print("no table specified, load multi-table data file")
-		data, err := Util.LoadJSONMap(args.data.file)
-		if err != nil {
-			log.Fatalf("failed to load database metadata file [%s]", args.data.file)
-		}
-		for _, table := range tableList {
-			log.Printf("Match table [%s] with table data", *table)
-			tableData, exists := data[*table].([]interface{})
-			if !exists {
-				log.Printf("table [%s], no data import", *table)
-				continue
-			}
-			for idx, record := range tableData {
-				err := db.Create(*table, record)
-				if err != nil {
-					log.Fatalf("falied to create data @%d for table %s, Err: %s", idx, *table, err)
-				}
-			}
-		}
+		ImportTables(db, tableList, args)
 		return
 	}
 	log.Printf("load record list for table [%s]", args.data.table)
@@ -198,15 +185,48 @@ func ImportData(db DbIface.Database, args AdminArgs) {
 	log.Fatalf("table [%s] does not exists in database", args.data.table)
 }
 
+func ImportTables(db DbIface.Database, tableList []*string, args AdminArgs) {
+	tableMap := args.srvConfig.DataTable.Map()
+	log.Print("no table specified, load multi-table data file")
+	data, err := Util.LoadJSONMap(args.data.file)
+	if err != nil {
+		log.Fatalf("failed to load database metadata file [%s]", args.data.file)
+	}
+	impData := make(map[string]interface{})
+	for key, tData := range data {
+		if _, ok := tableMap[key]; ok {
+			impData[tableMap[key].(string)] = tData
+		} else {
+			impData[key] = tData
+		}
+	}
+
+	for _, table := range tableList {
+		log.Printf("Match table [%s] with table data", *table)
+		tableData, exists := impData[*table].([]interface{})
+		if !exists {
+			log.Printf("table [%s], no data import", *table)
+			continue
+		}
+		for idx, record := range tableData {
+			err := db.Create(*table, record)
+			if err != nil {
+				log.Fatalf("falied to create data @%d for table %s, Err: %s", idx, *table, err)
+			}
+		}
+	}
+}
+
 func main() {
 	log.Print("Admin tool for Data Service")
 	args := ArgHandler()
-	dbConfig := Config.Confuguration{}
-	err := Config.Read(args.config, &dbConfig)
+	config := Config.Confuguration{}
+	err := Config.Read(args.config, &config)
 	if err != nil {
 		log.Fatalf("failed to read configuration file=[%s], Err:%s", args.config, err)
 	}
-	database, err := Data.ConnectDb(dbConfig.Database)
+	args.srvConfig = config
+	database, err := Data.ConnectDb(config.Database)
 	if err != nil {
 		log.Fatalf("failed to connect to database, err:%s", err)
 	}

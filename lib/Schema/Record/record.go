@@ -23,54 +23,67 @@ This copyright notice and license applies to all files in this directory or sub-
 ************************************************************************************************************
 */
 
-package Config
+package Record
 
 import (
-	"UniTao/Data/DbConfig"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"os"
-
-	"github.com/salesforce/UniTAO/lib/Util"
 )
 
 const (
-	DATABASE = "database"
-	HTTP     = "http"
+	DataId   = "__id"
+	DataType = "__type"
+	DataVer  = "__typeVer"
 )
 
-type Confuguration struct {
-	Database  DbConfig.DatabaseConfig `json:"database"`
-	DataTable DataTableConfig         `json:"table"`
-	Http      Util.HttpConfig         `json:"http"`
-	Inv       InvConfig               `json:"inventory"`
+type Record struct {
+	Id      string                 `json:"__id"`
+	Type    string                 `json:"__type"`
+	Version string                 `json:"__typeVer"`
+	Data    map[string]interface{} `json:"data"`
 }
 
-type DataTableConfig struct {
-	Data string `json:"data"`
+func NewRecord(dataType string, dataTypeVersion string, dataId string, data map[string]interface{}) *Record {
+	record := Record{
+		Id:      dataId,
+		Type:    dataType,
+		Version: dataTypeVersion,
+		Data:    data,
+	}
+	return &record
 }
 
-func (t *DataTableConfig) Map() map[string]interface{} {
-	data, _ := Util.StructToMap(t)
-	return data
-}
-
-type InvConfig struct {
-	Url string `json:"url"`
-}
-
-func Read(configPath string, config *Confuguration) error {
-	jsonFile, err := os.Open(configPath)
+func LoadMap(data map[string]interface{}) (*Record, error) {
+	recordBytes, err := json.Marshal(data)
 	if err != nil {
-		return fmt.Errorf("failed to open Config JSON file: [%s], err:%s", configPath, err)
+		return nil, fmt.Errorf("failed to marshal doc to string, Err:%s", err)
+	}
+	return LoadStr(string(recordBytes))
+}
 
+func LoadStr(dataStr string) (*Record, error) {
+	record := Record{}
+	err := json.Unmarshal([]byte(dataStr), &record)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal data to Record. Error:%s", err)
 	}
-	defer jsonFile.Close()
-	byteValue, _ := ioutil.ReadAll(jsonFile)
-	json.Unmarshal([]byte(byteValue), config)
-	if config.DataTable.Data == "" {
-		return fmt.Errorf("missing field data in Config.DataTable")
+	return &record, nil
+}
+
+func (rec *Record) Raw() (*string, error) {
+	rawbytes, err := json.MarshalIndent(rec, "", "    ")
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	rawStr := string(rawbytes)
+	return &rawStr, nil
+}
+
+func (rec *Record) RawData() (*string, error) {
+	rawbytes, err := json.MarshalIndent(rec.Data, "", "    ")
+	if err != nil {
+		return nil, err
+	}
+	rawStr := string(rawbytes)
+	return &rawStr, nil
 }

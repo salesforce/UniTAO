@@ -35,6 +35,8 @@ import (
 	"reflect"
 
 	"github.com/salesforce/UniTAO/lib/Schema"
+	"github.com/salesforce/UniTAO/lib/Schema/Record"
+	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
 	"github.com/salesforce/UniTAO/lib/Util"
 )
 
@@ -66,10 +68,10 @@ func (h *Handler) List(dataType string) ([]string, int, error) {
 		}
 	}
 	args := make(map[string]interface{})
-	args[DbIface.Table] = Schema.Data
-	args[Schema.DataType] = dataType
-	if args[Schema.DataType] == "" {
-		args[Schema.DataType] = Schema.Schema
+	args[DbIface.Table] = h.config.DataTable.Data
+	args[Record.DataType] = dataType
+	if args[Record.DataType] == "" {
+		args[Record.DataType] = Schema.Schema
 	}
 	recordList, err := h.db.Get(args)
 	if err != nil {
@@ -77,7 +79,7 @@ func (h *Handler) List(dataType string) ([]string, int, error) {
 	}
 	result := make([]string, 0, len(recordList))
 	for _, record := range recordList {
-		result = append(result, record[Schema.DataId].(string))
+		result = append(result, record[Record.DataId].(string))
 	}
 	return result, http.StatusOK, nil
 }
@@ -96,9 +98,9 @@ func (h *Handler) Get(dataType string, dataId string) (map[string]interface{}, i
 
 func (h *Handler) GetData(dataType string, dataId string) (map[string]interface{}, int, error) {
 	args := make(map[string]interface{})
-	args[DbIface.Table] = Schema.Data
-	args[Schema.DataType] = dataType
-	args[Schema.DataId] = dataId
+	args[DbIface.Table] = h.config.DataTable.Data
+	args[Record.DataType] = dataType
+	args[Record.DataId] = dataId
 	recordList, err := h.db.Get(args)
 	if err != nil {
 		return nil, http.StatusInternalServerError, err
@@ -125,18 +127,22 @@ func (h *Handler) localSchema(dataType string) (*Schema.SchemaOps, int, error) {
 	if dataType == Schema.Schema {
 		return nil, http.StatusBadRequest, fmt.Errorf("should not get schema of schema")
 	}
-	record, ok := h.schemaMap[dataType]
+	schema, ok := h.schemaMap[dataType]
 	if ok {
-		return record, http.StatusOK, nil
+		return schema, http.StatusOK, nil
 	}
 	data, code, err := h.GetData(Schema.Schema, dataType)
 	if err != nil {
 		err = fmt.Errorf("failed to get schema for type=[%s], Err:%s", dataType, err)
 		return nil, code, err
 	}
-	schema, err := Schema.LoadSchemaOps(data)
+	record, err := Record.LoadMap(data)
 	if err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("failed to load Schema Record, [%s]=[%s], Err:\n%s", Schema.DataType, dataType, err)
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to load schema record. [type]=[%s], Error:%s", dataType, err)
+	}
+	schema, err = Schema.LoadSchemaOpsRecord(record)
+	if err != nil {
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to load Schema Record, [%s]=[%s], Err:\n%s", Record.DataType, dataType, err)
 	}
 	h.schemaMap[dataType] = schema
 	return schema, http.StatusOK, nil
@@ -161,7 +167,7 @@ func (h *Handler) inventoryData(dataType string, value string) (map[string]inter
 	return nil, code, err
 }
 
-func (h *Handler) Validate(record *Schema.Record) (int, error) {
+func (h *Handler) Validate(record *Record.Record) (int, error) {
 	schema, code, err := h.localSchema(record.Type)
 	if err != nil {
 		return code, err
@@ -177,7 +183,7 @@ func (h *Handler) Validate(record *Schema.Record) (int, error) {
 	return code, nil
 }
 
-func (h *Handler) ValidateDataRefs(doc *Schema.SchemaDoc, data interface{}, dataPath string) (int, error) {
+func (h *Handler) ValidateDataRefs(doc *SchemaDoc.SchemaDoc, data interface{}, dataPath string) (int, error) {
 	dataMap, ok := data.(map[string]interface{})
 	if !ok {
 		return http.StatusBadRequest, fmt.Errorf("failed to convert data to map")
@@ -190,8 +196,8 @@ func (h *Handler) ValidateDataRefs(doc *Schema.SchemaDoc, data interface{}, data
 }
 
 // Validate Content Media Type Reference Values
-func (h *Handler) validateCmtRefs(doc *Schema.SchemaDoc, data map[string]interface{}, dataPath string) (int, error) {
-	for _, ref := range doc.Refs {
+func (h *Handler) validateCmtRefs(doc *SchemaDoc.SchemaDoc, data map[string]interface{}, dataPath string) (int, error) {
+	for _, ref := range doc.CmtRefs {
 		value, ok := data[ref.Name]
 		if !ok {
 			continue
@@ -224,7 +230,7 @@ func (h *Handler) validateCmtRefs(doc *Schema.SchemaDoc, data map[string]interfa
 	return http.StatusAccepted, nil
 }
 
-func (h *Handler) validateCmtRefValue(ref *Schema.SchemaDocRef, value string) (bool, error) {
+func (h *Handler) validateCmtRefValue(ref *SchemaDoc.SchemaDocRef, value string) (bool, error) {
 	typePath, dataType := Util.ParsePath(ref.ContentType)
 	if typePath != Schema.Inventory {
 		// ContentMediaType not start with inventory, we don't understand
@@ -257,7 +263,7 @@ func (h *Handler) validateCmtRefValue(ref *Schema.SchemaDocRef, value string) (b
 	return true, nil
 }
 
-func (h *Handler) validateSubDoc(doc *Schema.SchemaDoc, data map[string]interface{}, dataPath string) (int, error) {
+func (h *Handler) validateSubDoc(doc *SchemaDoc.SchemaDoc, data map[string]interface{}, dataPath string) (int, error) {
 	for pname, pDoc := range doc.SubDocs {
 		subPath := path.Join(dataPath, pname)
 		subData, ok := data[pname]
@@ -293,7 +299,7 @@ func (h *Handler) validateSubDoc(doc *Schema.SchemaDoc, data map[string]interfac
 }
 
 func (h *Handler) Add(dataType string, dataId string, payload map[string]interface{}) (int, error) {
-	record, err := Schema.LoadRecord(payload)
+	record, err := Record.LoadMap(payload)
 	if err != nil {
 		return http.StatusBadRequest, fmt.Errorf("failed to load payload as Record. Error:%s", err)
 	}
@@ -318,7 +324,7 @@ func (h *Handler) Add(dataType string, dataId string, payload map[string]interfa
 	if code != http.StatusNotFound {
 		return code, fmt.Errorf("failed to check exists for add [type/id]=[%s/%s], Err:%s", dataType, dataId, err)
 	}
-	err = h.db.Create(Schema.Data, payload)
+	err = h.db.Create(h.config.DataTable.Data, payload)
 	if err != nil {
 		return http.StatusInternalServerError, fmt.Errorf("failed to create record [{type}/{id}]=[%s]/%s, Err:%s", dataType, dataId, err)
 	}
@@ -326,7 +332,7 @@ func (h *Handler) Add(dataType string, dataId string, payload map[string]interfa
 }
 
 func (h *Handler) Set(dataType string, dataId string, payload map[string]interface{}) (int, error) {
-	record, err := Schema.LoadRecord(payload)
+	record, err := Record.LoadMap(payload)
 	if err != nil {
 		return http.StatusBadRequest, fmt.Errorf("failed to load payload as Record. Error:%s", err)
 	}
@@ -344,7 +350,7 @@ func (h *Handler) Set(dataType string, dataId string, payload map[string]interfa
 	if err != nil {
 		return code, err
 	}
-	err = h.db.Create(Schema.Data, payload)
+	err = h.db.Create(h.config.DataTable.Data, payload)
 	if err != nil {
 		return http.StatusInternalServerError, fmt.Errorf("failed to create record [{type}/{id}]=[%s]/%s, Err:%s", dataType, dataId, err)
 	}
@@ -357,9 +363,9 @@ func (h *Handler) Delete(dataType string, dataId string) (int, error) {
 		return code, err
 	}
 	keys := make(map[string]interface{})
-	keys[Schema.DataType] = dataType
-	keys[Schema.DataId] = dataId
-	err = h.db.Delete(Schema.Data, keys)
+	keys[Record.DataType] = dataType
+	keys[Record.DataId] = dataId
+	err = h.db.Delete(h.config.DataTable.Data, keys)
 	if err != nil {
 		return http.StatusInternalServerError, fmt.Errorf("failed to delete record [type/id]=[%s/%s], Err:%s", dataType, dataId, err)
 	}
