@@ -22,6 +22,6 @@
 // ******************************************************************************************************************
 
 
-module github.com/salesforce/UniTao/app/InventoryService
+module github.com/salesforce/UniTAO/app/InventoryService
 
 go 1.18
