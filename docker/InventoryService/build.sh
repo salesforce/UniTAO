@@ -23,32 +23,15 @@
 # This copyright notice and license applies to all files in this directory or sub-directories, except when stated otherwise explicitly.
 # ************************************************************************************************************
 
+
 SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]:-$0}"; )" &> /dev/null && pwd 2> /dev/null; )";
+IMAGE_NAME="$(echo "UniTAO/${SCRIPT_DIR##*/}:localbuild" | awk '{print tolower($0)}';)"
 
-mkdir -p $SCRIPT_DIR/__inventory
+pushd $SCRIPT_DIR/../../
 
-pushd $SCRIPT_DIR/../../../
-
-go run ./tool/InventoryServiceAdmin/main.go \
-    add \
-    -config ./test/data/InventoryService/config.json \
-    -ds http://localhost:8002 \
-    -id DataService_01
-
-go run ./tool/InventoryServiceAdmin/main.go \
-    sync \
-    -config ./test/data/InventoryService/config.json \
-    -id DataService_01
-
-go run ./tool/InventoryServiceAdmin/main.go \
-    add \
-    -config ./test/data/InventoryService/config.json \
-    -ds http://localhost:8003 \
-    -id DataService_02
-
-go run ./tool/InventoryServiceAdmin/main.go \
-    sync \
-    -config ./test/data/InventoryService/config.json \
-    -id DataService_02
+# Create the docker image with tag localbuild the image with same tag will be set as empty
+docker build --no-cache -t $IMAGE_NAME -f $SCRIPT_DIR/dockerfile .
+# remove the empty image from previous command
+docker rmi $(docker images --filter "dangling=true" -q --no-trunc)
 
 popd

@@ -26,12 +26,14 @@ This copyright notice and license applies to all files in this directory or sub-
 package Config
 
 import (
-	"UniTao/Data/DbConfig"
 	"encoding/json"
 	"fmt"
-	"github.com/salesforce/UniTAO/lib/Util"
 	"io/ioutil"
 	"os"
+
+	"Data/DbConfig"
+
+	"github.com/salesforce/UniTAO/lib/Util"
 )
 
 type ServerConfig struct {

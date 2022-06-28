@@ -26,13 +26,14 @@ This copyright notice and license applies to all files in this directory or sub-
 package SysDirFile
 
 import (
-	"UniTao/Data/DbConfig"
-	"UniTao/Data/DbIface"
-	"UniTao/Data/SysDirFile/DirTable"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+
+	"Data/DbConfig"
+	"Data/DbIface"
+	"Data/SysDirFile/DirTable"
 
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
 )

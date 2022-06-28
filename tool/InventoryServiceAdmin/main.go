@@ -33,9 +33,9 @@ import (
 	"os"
 	"time"
 
-	"UniTao/InventoryService/lib/Config"
-	"UniTao/InventoryService/lib/DataHandler"
-	"UniTao/InventoryService/lib/InvRecord"
+	"InventoryService/Config"
+	"InventoryService/DataHandler"
+	"InventoryService/InvRecord"
 
 	"github.com/salesforce/UniTAO/lib/Schema"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
@@ -75,7 +75,7 @@ func (a *Admin) argHandler() (*AdminArgs, error) {
 
 	syncCmd := flag.NewFlagSet(CMD_SYNC, flag.ExitOnError)
 	syncDbConfig := syncCmd.String("config", "", "database connection config")
-	syncDsId := syncCmd.String(CMD_DS_ID, "", "data service unique id to sync data with")
+	syncDsId := syncCmd.String(CMD_DS_ID, "", "data service unique id to sync data with. if empty, then all ds will be sync-ed")
 
 	delCmd := flag.NewFlagSet(CMD_DEL, flag.ExitOnError)
 	delDbConfig := delCmd.String("config", "", "database connection config")
@@ -107,7 +107,7 @@ func (a *Admin) argHandler() (*AdminArgs, error) {
 		args.ops = OpsCmd{
 			id: *syncDsId,
 		}
-		if args.config == "" || args.ops.id == "" {
+		if args.config == "" {
 			syncCmd.Usage()
 		}
 	case CMD_DEL:
@@ -178,7 +178,24 @@ func (a *Admin) addDsRecord() error {
 }
 
 func (a *Admin) syncDsSchema() error {
-	record, code, err := a.handler.Get(Schema.Inventory, a.args.ops.id)
+	if a.args.ops.id != "" {
+		return a.syncSchemaWithId(a.args.ops.id)
+	}
+	idList, _, err := a.handler.List(Schema.Inventory)
+	if err != nil {
+		return fmt.Errorf("failed to list all inventorys. Error: %s", err)
+	}
+	for _, dsId := range idList {
+		err = a.syncSchemaWithId(dsId)
+		if err != nil {
+			return fmt.Errorf("failed to get schema from DS_Id=[%s], Error:%s", dsId, err)
+		}
+	}
+	return nil
+}
+
+func (a *Admin) syncSchemaWithId(dsId string) error {
+	record, code, err := a.handler.Get(Schema.Inventory, dsId)
 	if err != nil {
 		return fmt.Errorf("failed to retrieve Data Service Record [%s]=[%s], Code:%d, Error:%s", Record.DataId, a.args.ops.id, code, err)
 	}

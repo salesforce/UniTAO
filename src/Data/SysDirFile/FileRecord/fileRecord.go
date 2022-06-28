@@ -28,12 +28,13 @@ package FileRecord
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/salesforce/UniTAO/lib/Util"
 	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/salesforce/UniTAO/lib/Util"
 )
 
 type Record struct {

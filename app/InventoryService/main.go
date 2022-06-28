@@ -23,54 +23,13 @@ This copyright notice and license applies to all files in this directory or sub-
 ************************************************************************************************************
 */
 
-package Config
+package main
 
 import (
-	"UniTao/Data/DbConfig"
-	"encoding/json"
-	"fmt"
-	"io/ioutil"
-	"os"
-
-	"github.com/salesforce/UniTAO/lib/Util"
+	"InventoryService/InventoryServer"
 )
 
-const (
-	DATABASE = "database"
-	HTTP     = "http"
-)
-
-type Confuguration struct {
-	Database  DbConfig.DatabaseConfig `json:"database"`
-	DataTable DataTableConfig         `json:"table"`
-	Http      Util.HttpConfig         `json:"http"`
-	Inv       InvConfig               `json:"inventory"`
-}
-
-type DataTableConfig struct {
-	Data string `json:"data"`
-}
-
-func (t *DataTableConfig) Map() map[string]interface{} {
-	data, _ := Util.StructToMap(t)
-	return data
-}
-
-type InvConfig struct {
-	Url string `json:"url"`
-}
-
-func Read(configPath string, config *Confuguration) error {
-	jsonFile, err := os.Open(configPath)
-	if err != nil {
-		return fmt.Errorf("failed to open Config JSON file: [%s], err:%s", configPath, err)
-
-	}
-	defer jsonFile.Close()
-	byteValue, _ := ioutil.ReadAll(jsonFile)
-	json.Unmarshal([]byte(byteValue), config)
-	if config.DataTable.Data == "" {
-		return fmt.Errorf("missing field data in Config.DataTable")
-	}
-	return nil
+func main() {
+	server := InventoryServer.New()
+	server.Run()
 }

@@ -23,32 +23,11 @@
 # This copyright notice and license applies to all files in this directory or sub-directories, except when stated otherwise explicitly.
 # ************************************************************************************************************
 
-SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]:-$0}"; )" &> /dev/null && pwd 2> /dev/null; )";
+DataServiceAdmin  table \
+    -config config/config.json \
+    -table schema/Tables.json \
+    -reset true
 
-mkdir -p $SCRIPT_DIR/__inventory
-
-pushd $SCRIPT_DIR/../../../
-
-go run ./tool/InventoryServiceAdmin/main.go \
-    add \
-    -config ./test/data/InventoryService/config.json \
-    -ds http://localhost:8002 \
-    -id DataService_01
-
-go run ./tool/InventoryServiceAdmin/main.go \
-    sync \
-    -config ./test/data/InventoryService/config.json \
-    -id DataService_01
-
-go run ./tool/InventoryServiceAdmin/main.go \
-    add \
-    -config ./test/data/InventoryService/config.json \
-    -ds http://localhost:8003 \
-    -id DataService_02
-
-go run ./tool/InventoryServiceAdmin/main.go \
-    sync \
-    -config ./test/data/InventoryService/config.json \
-    -id DataService_02
-
-popd
+DataServiceAdmin data \
+    -config config/config.json \
+    -data schema/schema.json

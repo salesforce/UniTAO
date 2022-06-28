@@ -22,6 +22,6 @@
 // ******************************************************************************************************************
 
 
-module DataService
+module github.com/salesforce/UniTAO/app/DataService
 
 go 1.18

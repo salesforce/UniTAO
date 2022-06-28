@@ -22,6 +22,6 @@
 // ******************************************************************************************************************
 
 
-module DataService
+module github.com/salesforce/UniTAO/app/InventoryService
 
 go 1.18

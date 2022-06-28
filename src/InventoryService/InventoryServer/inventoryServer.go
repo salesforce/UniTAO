@@ -26,13 +26,15 @@ This copyright notice and license applies to all files in this directory or sub-
 package InventoryServer
 
 import (
-	"UniTao/InventoryService/lib/Config"
-	"UniTao/InventoryService/lib/DataHandler"
 	"flag"
 	"fmt"
-	"github.com/salesforce/UniTAO/lib/Util"
 	"log"
 	"net/http"
+
+	"InventoryService/Config"
+	"InventoryService/DataHandler"
+
+	"github.com/salesforce/UniTAO/lib/Util"
 )
 
 type Server struct {

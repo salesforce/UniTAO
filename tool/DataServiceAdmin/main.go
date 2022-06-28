@@ -26,12 +26,13 @@ This copyright notice and license applies to all files in this directory or sub-
 package main
 
 import (
-	"UniTao/Data"
-	"UniTao/Data/DbIface"
-	"UniTao/DataService/lib/Config"
 	"flag"
 	"log"
 	"os"
+
+	"Data"
+	"Data/DbIface"
+	"DataService/Config"
 
 	"github.com/salesforce/UniTAO/lib/Util"
 )
@@ -111,6 +112,7 @@ func ArgHandler() AdminArgs {
 }
 
 func CreateTables(db DbIface.Database, args AdminArgs) {
+	log.Printf("create table from %s", args.table.meta)
 	tableMeta, err := Util.LoadJSONMap(args.table.meta)
 	if err != nil {
 		log.Fatalf("failed to load database metadata file [%s]", args.table.meta)
@@ -119,13 +121,22 @@ func CreateTables(db DbIface.Database, args AdminArgs) {
 	if err != nil {
 		log.Fatalf(err.Error())
 	}
+	log.Printf("current table length, %d", len(tableList))
 	configMeta := make(map[string]interface{})
 	configTables := args.srvConfig.DataTable.Map()
-	for key, table := range configTables {
-		if _, ok := tableMeta[key]; ok {
-			configMeta[table.(string)] = tableMeta[key]
+	log.Printf("create translated table structure")
+
+	for key, meta := range tableMeta {
+		log.Printf("check for table %s", key)
+		if tableName, ok := configTables[key].(string); ok {
+			log.Printf("custom table name [%s]=>[%s]", key, tableName)
+			configMeta[tableName] = meta
+			continue
 		}
+		log.Printf("keep table as the same name: [%s]", key)
+		configMeta[key] = meta
 	}
+	log.Print("determine if we should remove existing table")
 	for _, table := range tableList {
 		log.Printf("Match table [%s] with expected meta", *table)
 		_, exists := configMeta[*table]
@@ -146,6 +157,7 @@ func CreateTables(db DbIface.Database, args AdminArgs) {
 		log.Print("there is no table to create")
 		return
 	}
+	log.Printf("create %d tables", len(configMeta))
 	for table, meta := range configMeta {
 		log.Printf("create table [%s]", table)
 		err := db.CreateTable(table, meta.(map[string]interface{}))
@@ -230,6 +242,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to connect to database, err:%s", err)
 	}
+	log.Println("database connected")
 	switch args.cmd {
 	case "table":
 		CreateTables(database, args)
