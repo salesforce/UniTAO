@@ -26,12 +26,13 @@ This copyright notice and license applies to all files in this directory or sub-
 package Data
 
 import (
-	"UniTao/Data/DbConfig"
-	"UniTao/Data/DbDynamoDb"
-	"UniTao/Data/DbIface"
-	"UniTao/Data/SysDirFile"
 	"fmt"
 	"log"
+
+	"Data/DbConfig"
+	"Data/DbDynamoDb"
+	"Data/DbIface"
+	"Data/SysDirFile"
 )
 
 func ConnectDb(config DbConfig.DatabaseConfig) (DbIface.Database, error) {

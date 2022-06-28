@@ -26,10 +26,13 @@ This copyright notice and license applies to all files in this directory or sub-
 package SchemaTest
 
 import (
+	"encoding/json"
+	"fmt"
 	"log"
 	"testing"
 
 	"github.com/salesforce/UniTAO/lib/Schema"
+	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Util"
 )
 
@@ -40,19 +43,19 @@ func TestSchemaValidate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed loading data from [path]=[%s], Err:%s", filePath, err)
 	}
-	schemaRecord, ok := testData[Schema.Schema].(map[string]interface{})
+	schemaRecordData, ok := testData[Schema.Schema].(map[string]interface{})
 	if !ok {
 		t.Fatalf("missing field [%s] from test data", Schema.Schema)
 	}
-	data, ok := testData["data"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("missing field [%s] from test data", Schema.RecordData)
+	schemaRecord, err := Record.LoadMap(schemaRecordData)
+	if err != nil {
+		t.Fatalf("failed to load data as record. Error:%s", err)
 	}
-	schema, err := Schema.LoadSchemaOps(schemaRecord)
+	schema, err := Schema.LoadSchemaOpsRecord(schemaRecord)
 	if err != nil {
 		t.Fatalf("failed to load schema record, Error:\n%s", err)
 	}
-	record, err := Schema.LoadRecord(data)
+	record, err := Record.LoadMap(testData["data"].(map[string]interface{}))
 	if err != nil {
 		t.Fatalf("failed to load data from file=%s", filePath)
 	}
@@ -60,12 +63,8 @@ func TestSchemaValidate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("schema validation failed. Error:\n%s", err)
 	}
-	negativeData, ok := testData["negativeData"].([]interface{})
-	if !ok {
-		return
-	}
-	for idx, data := range negativeData {
-		record, err = Schema.LoadRecord(data.(map[string]interface{}))
+	for idx, data := range testData["negativeData"].([]interface{}) {
+		record, err = Record.LoadMap(data.(map[string]interface{}))
 		if err != nil {
 			t.Fatalf("failed to load netative data @[%d]", idx)
 		}
@@ -75,5 +74,183 @@ func TestSchemaValidate(t *testing.T) {
 		}
 		log.Printf("spot err at idx=[%d], Err:\n%s", idx, err)
 	}
+}
 
+func TestSchemaSimpleMap(t *testing.T) {
+	log.Print("test simple map definitions")
+	simpleMapSchemaStr := `{
+		"name": "mapDefintions",
+		"description": "map data schema defintions",
+		"properties": {
+			"simpleMap": {
+				"type": "object",
+				"additionalProperties": {
+					"type": "string"
+				}
+			}
+		}		
+	}`
+	simpleData1 := `{
+		"simpleMap": {
+			"test0": "123"
+		}
+	}`
+	simpleData2 := `{
+		"simpleMap": {
+			"test0": 123
+		}
+	}`
+	schema, err := LoadSchema(simpleMapSchemaStr)
+	if err != nil {
+		t.Fatalf("failed load simple map schema. Error:%s", err)
+	}
+	err = validateData(schema, simpleData1)
+	if err != nil {
+		t.Fatalf("Failed on pass positive simpleData1, Error:%s", err)
+	}
+	err = validateData(schema, simpleData2)
+	if err == nil {
+		t.Fatal("Failed on negative simpleData2, Error")
+	}
+}
+
+func TestSchemaHashObj(t *testing.T) {
+	log.Print("test simple map definitions")
+	hashObjSchemaStr := `{
+		"name": "hashObjectMap",
+		"description": "map data schema defintions",
+		"properties": {
+			"hashObjMap": {
+				"type": "object",
+				"additionalProperties": {
+					"type": "object",
+					"$ref": "#/definitions/dataItem"
+				}
+			}
+		},
+		"definitions": {
+			"dataItem": {
+				"name": "dataItem",
+				"description": "object data as item for hash map",
+				"properties": {
+					"field0": {
+						"type": "string"
+					},
+					"field1": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	}`
+	hashObjectData01 := `{
+		"hashObjMap": {
+			"testKey0": {
+				"field0": "123",
+				"field1": "234"
+			}
+		}
+	}`
+	hashObjectData02 := `{
+		"hashObjMap": {
+			"testKey0": {
+				"field0": "123"
+			}
+		}
+	}`
+	schema, err := LoadSchema(hashObjSchemaStr)
+	if err != nil {
+		t.Fatalf("failed load simple map schema. Error:%s", err)
+	}
+	err = validateData(schema, hashObjectData01)
+	if err != nil {
+		t.Fatalf("Failed on pass positive simpleData1, Error:%s", err)
+	}
+	err = validateData(schema, hashObjectData02)
+	if err == nil {
+		t.Fatal("Failed on negative simpleData2, Error")
+	}
+}
+
+func TestSchemaCustomTypeMap(t *testing.T) {
+	hashObjSchemaStr := `{
+		"name": "hashObjectMap",
+		"description": "map data schema defintions",
+		"properties": {
+			"hashObjMap": {
+				"type": "map",
+				"items": {
+					"type": "object",
+					"$ref": "#/definitions/dataItem"
+				}
+			}
+		},
+		"definitions": {
+			"dataItem": {
+				"name": "dataItem",
+				"description": "object data as item for hash map",
+				"properties": {
+					"field0": {
+						"type": "string"
+					},
+					"field1": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	}`
+	hashObjectData01 := `{
+		"hashObjMap": {
+			"testKey0": {
+				"field0": "123",
+				"field1": "234"
+			}
+		}
+	}`
+	hashObjectData02 := `{
+		"hashObjMap": {
+			"testKey0": {
+				"field0": "123"
+			}
+		}
+	}`
+	schema, err := LoadSchema(hashObjSchemaStr)
+	if err != nil {
+		t.Fatalf("failed load simple map schema. Error:%s", err)
+	}
+	err = validateData(schema, hashObjectData01)
+	if err != nil {
+		t.Fatalf("Failed on pass positive simpleData1, Error:%s", err)
+	}
+	err = validateData(schema, hashObjectData02)
+	if err == nil {
+		t.Fatal("Failed on negative simpleData2, Error")
+	}
+}
+
+func validateData(schema *Schema.SchemaOps, dataStr string) error {
+	var data map[string]interface{}
+	err := json.Unmarshal([]byte(dataStr), &data)
+	if err != nil {
+		return fmt.Errorf("failed to parse dataStr. Error:%s", err)
+	}
+	err = schema.ValidateData(data)
+	if err != nil {
+		return fmt.Errorf("failed to validate data. Error:%s", err)
+	}
+	return nil
+}
+
+func LoadSchema(schemaData string) (*Schema.SchemaOps, error) {
+	var data map[string]interface{}
+	err := json.Unmarshal([]byte(schemaData), &data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse schemaData, Error:%s", err)
+	}
+	schema, err := Schema.LoadSchemaOpsData(Schema.Schema, "0.00.0001", data)
+	if err != nil {
+		return nil, err
+	}
+	return schema, nil
 }

@@ -26,11 +26,12 @@ This copyright notice and license applies to all files in this directory or sub-
 package DirTable
 
 import (
-	"UniTao/Data/SysDirFile/FileRecord"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+
+	"Data/SysDirFile/FileRecord"
 )
 
 type Table struct {

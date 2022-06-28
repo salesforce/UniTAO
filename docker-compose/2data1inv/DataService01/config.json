@@ -1,0 +1,21 @@
+{
+    "database": {
+        "type": "dynamodb",
+        "dynamodb": {
+            "region": "us-west-2",
+            "endpoint": "http://dynamodb-local:8000"
+        }
+    },
+    "table": {
+        "data": "DataService01"
+    },
+    "http": {
+        "type": "http",
+        "dns": "localhost",
+        "port": "80",
+        "id": "DataService_01"
+    },
+    "inventory": {
+        "url": "http://unitao-inv-service"
+    }
+}

@@ -1,6 +1,6 @@
 {
-  "Data": {
-    "TableName": "Data",
+  "data": {
+    "TableName": "data",
     "AttributeDefinitions": [
       {
         "AttributeName": "__type",

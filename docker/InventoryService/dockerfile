@@ -1,0 +1,13 @@
+FROM golang:1.18 AS build
+WORKDIR /go/src/github.com/salesforce/UniTAO/
+COPY . ./
+RUN go build -a -o ./bin/ ./app/InventoryService
+RUN go build -a -o ./bin/ ./tool/InventoryServiceAdmin
+
+FROM centos:latest
+WORKDIR /opt/UniTAO/
+ENV PATH="/opt/UniTAO/:${PATH}"
+RUN mkdir ./config
+RUN mkdir ./data
+RUN echo 'alias ll="ls -alF"' >> ~/.bashrc
+COPY --from=build /go/src/github.com/salesforce/UniTAO/bin/. ./
