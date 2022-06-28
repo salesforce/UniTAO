@@ -149,6 +149,7 @@ func (db *Database) ListTable() ([]*string, error) {
 }
 
 func (db *Database) CreateTable(name string, meta map[string]interface{}) error {
+	log.Printf("create table %s in dynamodb", name)
 	meta[TableName] = name
 	rawJson, _ := json.Marshal(meta)
 	input := &dynamodb.CreateTableInput{}
