@@ -38,6 +38,7 @@ const (
 	Properties           = "properties"
 	Ref                  = "$ref"
 	Required             = "required"
+	Schema               = "schema"
 	String               = "string"
 	Type                 = "type"
 )

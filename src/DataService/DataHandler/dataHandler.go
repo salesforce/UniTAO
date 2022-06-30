@@ -36,6 +36,7 @@ import (
 	"DataService/Config"
 
 	"github.com/salesforce/UniTAO/lib/Schema"
+	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
 	"github.com/salesforce/UniTAO/lib/Util"
@@ -61,8 +62,8 @@ func New(config Config.Confuguration) (*Handler, error) {
 }
 
 func (h *Handler) List(dataType string) ([]string, int, error) {
-	if dataType != Schema.Schema && dataType != "" {
-		_, code, err := h.GetData(Schema.Schema, dataType)
+	if dataType != JsonKey.Schema && dataType != "" {
+		_, code, err := h.GetData(JsonKey.Schema, dataType)
 		if err != nil {
 			err = fmt.Errorf("failed to get schema for type=[%s], Err:%s", dataType, err)
 			return nil, code, err
@@ -72,7 +73,7 @@ func (h *Handler) List(dataType string) ([]string, int, error) {
 	args[DbIface.Table] = h.config.DataTable.Data
 	args[Record.DataType] = dataType
 	if args[Record.DataType] == "" {
-		args[Record.DataType] = Schema.Schema
+		args[Record.DataType] = JsonKey.Schema
 	}
 	recordList, err := h.db.Get(args)
 	if err != nil {
@@ -80,16 +81,19 @@ func (h *Handler) List(dataType string) ([]string, int, error) {
 	}
 	result := make([]string, 0, len(recordList))
 	for _, record := range recordList {
-		result = append(result, record[Record.DataId].(string))
+		// not record schema is only for schema.
+		if record[Record.DataId] != Record.KeyRecord {
+			result = append(result, record[Record.DataId].(string))
+		}
 	}
 	return result, http.StatusOK, nil
 }
 
 func (h *Handler) Get(dataType string, dataId string) (map[string]interface{}, int, error) {
-	if dataType == Schema.Schema {
-		return h.GetData(Schema.Schema, dataId)
+	if dataType == JsonKey.Schema {
+		return h.GetData(JsonKey.Schema, dataId)
 	}
-	_, code, err := h.GetData(Schema.Schema, dataType)
+	_, code, err := h.GetData(JsonKey.Schema, dataType)
 	if err != nil {
 		err = fmt.Errorf("failed to get schema for type=[%s], Err:%s", dataType, err)
 		return nil, code, err
@@ -113,10 +117,10 @@ func (h *Handler) GetData(dataType string, dataId string) (map[string]interface{
 }
 
 func (h *Handler) Lock(dataType string, dataId string) (int, error) {
-	if dataType == Schema.Schema {
+	if dataType == JsonKey.Schema {
 		return http.StatusAccepted, nil
 	}
-	_, code, err := h.GetData(Schema.Schema, dataType)
+	_, code, err := h.GetData(JsonKey.Schema, dataType)
 	if err != nil {
 		err = fmt.Errorf("failed to get schema for data type=[%s], Err:%s", dataType, err)
 		return code, err
@@ -125,14 +129,14 @@ func (h *Handler) Lock(dataType string, dataId string) (int, error) {
 }
 
 func (h *Handler) localSchema(dataType string) (*Schema.SchemaOps, int, error) {
-	if dataType == Schema.Schema {
-		return nil, http.StatusBadRequest, fmt.Errorf("should not get schema of schema")
+	if dataType == JsonKey.Schema {
+		return nil, http.StatusBadRequest, fmt.Errorf("should not validate schema of %s", JsonKey.Schema)
 	}
 	schema, ok := h.schemaMap[dataType]
 	if ok {
 		return schema, http.StatusOK, nil
 	}
-	data, code, err := h.GetData(Schema.Schema, dataType)
+	data, code, err := h.GetData(JsonKey.Schema, dataType)
 	if err != nil {
 		err = fmt.Errorf("failed to get schema for type=[%s], Err:%s", dataType, err)
 		return nil, code, err
@@ -237,7 +241,7 @@ func (h *Handler) validateCmtRefValue(ref *SchemaDoc.SchemaDocRef, value string)
 		// ContentMediaType not start with inventory, we don't understand
 		return true, nil
 	}
-	if dataType == Schema.Schema {
+	if dataType == JsonKey.Schema {
 		return false, fmt.Errorf("should not refer to schema of schema as data type")
 	}
 	_, code, err := h.localSchema(dataType)
@@ -299,61 +303,45 @@ func (h *Handler) validateSubDoc(doc *SchemaDoc.SchemaDoc, data map[string]inter
 	return http.StatusAccepted, nil
 }
 
-func (h *Handler) Add(dataType string, dataId string, payload map[string]interface{}) (int, error) {
-	record, err := Record.LoadMap(payload)
-	if err != nil {
-		return http.StatusBadRequest, fmt.Errorf("failed to load payload as Record. Error:%s", err)
+func (h *Handler) Add(record *Record.Record) (int, error) {
+	if record.Type != JsonKey.Schema {
+		code, err := h.Validate(record)
+		if err != nil {
+			return code, err
+		}
 	}
-	if dataType != record.Type {
-		return http.StatusBadRequest, fmt.Errorf("data type does not match payload. type: [%s]!=[%s]", dataType, record.Type)
-	}
-	if dataId != record.Id {
-		return http.StatusBadRequest, fmt.Errorf("data type does not match payload. id: [%s]!=[%s]", dataId, record.Id)
-	}
-	code, err := h.Validate(record)
+	code, err := h.Lock(record.Type, record.Id)
 	if err != nil {
 		return code, err
 	}
-	code, err = h.Lock(dataType, dataId)
-	if err != nil {
-		return code, err
-	}
-	_, code, err = h.GetData(dataType, dataId)
+	_, code, err = h.GetData(record.Type, record.Id)
 	if err == nil {
-		return http.StatusConflict, fmt.Errorf("data [type/id]=[%s/%s] already exists", dataType, dataId)
+		return http.StatusConflict, fmt.Errorf("data [type/id]=[%s/%s] already exists", record.Type, record.Id)
 	}
 	if code != http.StatusNotFound {
-		return code, fmt.Errorf("failed to check exists for add [type/id]=[%s/%s], Err:%s", dataType, dataId, err)
+		return code, fmt.Errorf("failed to check exists for add [type/id]=[%s/%s], Err:%s", record.Type, record.Id, err)
 	}
-	err = h.db.Create(h.config.DataTable.Data, payload)
+	err = h.db.Create(h.config.DataTable.Data, record.Map())
 	if err != nil {
-		return http.StatusInternalServerError, fmt.Errorf("failed to create record [{type}/{id}]=[%s]/%s, Err:%s", dataType, dataId, err)
+		return http.StatusInternalServerError, fmt.Errorf("failed to create record [{type}/{id}]=[%s]/%s, Err:%s", record.Type, record.Id, err)
 	}
 	return http.StatusAccepted, nil
 }
 
-func (h *Handler) Set(dataType string, dataId string, payload map[string]interface{}) (int, error) {
-	record, err := Record.LoadMap(payload)
-	if err != nil {
-		return http.StatusBadRequest, fmt.Errorf("failed to load payload as Record. Error:%s", err)
+func (h *Handler) Set(record *Record.Record) (int, error) {
+	if record.Type != JsonKey.Schema {
+		code, err := h.Validate(record)
+		if err != nil {
+			return code, err
+		}
 	}
-	if dataType != record.Type {
-		return http.StatusBadRequest, fmt.Errorf("data type does not match payload. type: [%s]!=[%s]", dataType, record.Type)
-	}
-	if dataId != record.Id {
-		return http.StatusBadRequest, fmt.Errorf("data type does not match payload. id: [%s]!=[%s]", dataId, record.Id)
-	}
-	code, err := h.Validate(record)
+	code, err := h.Lock(record.Type, record.Id)
 	if err != nil {
 		return code, err
 	}
-	code, err = h.Lock(dataType, dataId)
+	err = h.db.Create(h.config.DataTable.Data, record.Map())
 	if err != nil {
-		return code, err
-	}
-	err = h.db.Create(h.config.DataTable.Data, payload)
-	if err != nil {
-		return http.StatusInternalServerError, fmt.Errorf("failed to create record [{type}/{id}]=[%s]/%s, Err:%s", dataType, dataId, err)
+		return http.StatusInternalServerError, fmt.Errorf("failed to create record [{type}/{id}]=[%s]/%s, Err:%s", record.Type, record.Id, err)
 	}
 	return http.StatusAccepted, nil
 }

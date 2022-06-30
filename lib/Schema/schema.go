@@ -37,7 +37,6 @@ import (
 )
 
 const (
-	Schema    = "schema"
 	Inventory = "inventory"
 )
 
@@ -69,8 +68,8 @@ func LoadSchemaOpsData(dataType string, typeVer string, data map[string]interfac
 }
 
 func (schema *SchemaOps) init() error {
-	if schema.Record.Type != Schema {
-		return fmt.Errorf("schema record has wrong [%s], [%s]!=[%s]", Record.DataType, schema.Record.Id, Schema)
+	if schema.Record.Type != JsonKey.Schema {
+		return fmt.Errorf("schema record has wrong [%s], [%s]!=[%s]", Record.DataType, schema.Record.Id, JsonKey.Schema)
 	}
 	schemaData, err := Util.JsonCopy(schema.Record.Data)
 	if err != nil {

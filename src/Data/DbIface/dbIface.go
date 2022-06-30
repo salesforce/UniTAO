@@ -28,10 +28,11 @@ package DbIface
 import "fmt"
 
 const (
-	DbType  = "type"
-	Table   = "table"
-	command = "command"
-	payload = "payload"
+	Command           = "command"
+	DbType            = "type"
+	DisplayAttributes = "displayAttributes"
+	Payload           = "payload"
+	Table             = "table"
 )
 
 type UpdateCommand struct {
@@ -52,12 +53,12 @@ type Database interface {
 
 func CreateUpdateCommand(data map[string]interface{}) (UpdateCommand, error) {
 	update := UpdateCommand{}
-	cmd, ok := data[command].(string)
+	cmd, ok := data[Command].(string)
 	if !ok {
-		return update, fmt.Errorf("missing field %s", command)
+		return update, fmt.Errorf("missing field %s", Command)
 	}
 	update.Command = cmd
-	payload, ok := data[payload].(map[string]interface{})
+	payload, ok := data[Payload].(map[string]interface{})
 	if !ok {
 		return update, fmt.Errorf("missing field %s", payload)
 	}

@@ -32,6 +32,7 @@ import (
 	"testing"
 
 	"github.com/salesforce/UniTAO/lib/Schema"
+	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Util"
 )
@@ -43,9 +44,9 @@ func TestSchemaValidate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed loading data from [path]=[%s], Err:%s", filePath, err)
 	}
-	schemaRecordData, ok := testData[Schema.Schema].(map[string]interface{})
+	schemaRecordData, ok := testData[JsonKey.Schema].(map[string]interface{})
 	if !ok {
-		t.Fatalf("missing field [%s] from test data", Schema.Schema)
+		t.Fatalf("missing field [%s] from test data", JsonKey.Schema)
 	}
 	schemaRecord, err := Record.LoadMap(schemaRecordData)
 	if err != nil {
@@ -248,7 +249,7 @@ func LoadSchema(schemaData string) (*Schema.SchemaOps, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse schemaData, Error:%s", err)
 	}
-	schema, err := Schema.LoadSchemaOpsData(Schema.Schema, "0.00.0001", data)
+	schema, err := Schema.LoadSchemaOpsData(JsonKey.Schema, "0.00.0001", data)
 	if err != nil {
 		return nil, err
 	}

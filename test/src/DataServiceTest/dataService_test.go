@@ -28,11 +28,13 @@ package DataServiceTest
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"path/filepath"
 	"testing"
 
 	"DataService/Config"
 	"DataService/DataHandler"
+	"DataService/DataServer"
 
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Util"
@@ -77,7 +79,26 @@ func TestDataHander(t *testing.T) {
 		t.Fatalf("failed to validate negative data.")
 	}
 	log.Printf("negative data validate passed")
+}
 
+func TestParseRecord(t *testing.T) {
+	server := DataServer.Server{}
+	payload := make(map[string]interface{})
+	dataType := "test"
+	typeVer := "00_00_00"
+	dataId := "test_01"
+	record := Record.NewRecord(dataType, typeVer, dataId, payload)
+	_, code, _ := server.ParseRecord([]string{}, record.Map(), dataType, dataId)
+	if code != http.StatusAccepted {
+		t.Fatalf("failed to parse record. type=[%s], id=[%s]", dataType, dataId)
+	}
+	pRecord, _, err := server.ParseRecord([]string{"true"}, record.Data, dataType, dataId)
+	if err != nil {
+		t.Fatalf("failed to parse record with no Reacod header. Error:%s", err)
+	}
+	if pRecord.Version != "0_00_00" {
+		t.Fatalf("failed to create record with correct version")
+	}
 }
 
 func loadConfig() (*Config.Confuguration, error) {

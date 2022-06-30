@@ -34,6 +34,7 @@ import (
 	"DataService/Config"
 	"DataService/DataHandler"
 
+	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Util"
 )
 
@@ -101,6 +102,10 @@ func (srv *Server) init() error {
 
 func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 	dataType, dataId := Util.ParsePath(r.URL.Path)
+	if dataType == Record.KeyRecord {
+		http.Error(w, fmt.Sprintf("data type=[%s] is not supported", dataType), http.StatusBadRequest)
+		return
+	}
 	switch r.Method {
 	case "GET":
 		srv.handleGet(w, dataType, dataId)
@@ -133,34 +138,62 @@ func (srv *Server) handleGet(w http.ResponseWriter, dataType string, dataId stri
 	Util.ResponseJson(w, result, code)
 }
 
+func (srv *Server) ParseRecord(noRecordList []string, payload map[string]interface{}, dataType string, dataId string) (*Record.Record, int, error) {
+	if len(noRecordList) == 0 {
+		record, err := Record.LoadMap(payload)
+		if err != nil {
+			return nil, http.StatusBadRequest, fmt.Errorf("failed to load JSON payload from request. Error:%s", err)
+		}
+		if record.Type != dataType {
+			return nil, http.StatusBadRequest, fmt.Errorf("invalid type. [%s]!=[%s]", dataType, record.Type)
+		}
+		if record.Id != dataId {
+			return nil, http.StatusBadRequest, fmt.Errorf("data id does not match. [%s]!=[%s]", dataId, record.Id)
+		}
+		return record, http.StatusAccepted, nil
+	}
+	record := Record.NewRecord(dataType, "0_00_00", dataId, payload)
+	return record, http.StatusAccepted, nil
+}
+
 func (srv *Server) handlePost(w http.ResponseWriter, r *http.Request, dataType string, dataId string) {
 	payload := make(map[string]interface{})
 	code, err := Util.LoadJSONPayload(r, payload)
 	if err != nil {
-		http.Error(w, err.Error(), code)
+		http.Error(w, fmt.Sprintf("failed to load JSON payload from request. Error:%s", err), code)
 		return
 	}
-	code, err = srv.data.Add(dataType, dataId, payload)
+	record, code, err := srv.ParseRecord(r.Header.Values(Record.NotRecord), payload, dataType, dataId)
 	if err != nil {
 		http.Error(w, err.Error(), code)
 		return
 	}
-	Util.ResponseJson(w, payload, http.StatusCreated)
+	code, err = srv.data.Add(record)
+	if err != nil {
+		http.Error(w, err.Error(), code)
+		return
+	}
+	Util.ResponseJson(w, record, http.StatusCreated)
 }
 
 func (srv *Server) handlerPut(w http.ResponseWriter, r *http.Request, dataType string, dataId string) {
 	payload := make(map[string]interface{})
 	code, err := Util.LoadJSONPayload(r, payload)
 	if err != nil {
-		http.Error(w, err.Error(), code)
+		http.Error(w, fmt.Sprintf("failed to load JSON payload from request. Error:%s", err), code)
 		return
 	}
-	code, err = srv.data.Set(dataType, dataId, payload)
+	record, code, err := srv.ParseRecord(r.Header.Values(Record.NotRecord), payload, dataType, dataId)
 	if err != nil {
 		http.Error(w, err.Error(), code)
 		return
 	}
-	Util.ResponseJson(w, payload, http.StatusCreated)
+	code, err = srv.data.Set(record)
+	if err != nil {
+		http.Error(w, err.Error(), code)
+		return
+	}
+	Util.ResponseJson(w, record, http.StatusCreated)
 }
 
 func (srv *Server) handleDelete(w http.ResponseWriter, dataType string, dataId string) {
