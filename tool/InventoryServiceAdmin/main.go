@@ -38,6 +38,7 @@ import (
 	"InventoryService/InvRecord"
 
 	"github.com/salesforce/UniTAO/lib/Schema"
+	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Util"
 )
@@ -203,7 +204,7 @@ func (a *Admin) syncSchemaWithId(dsId string) error {
 	if err != nil {
 		return fmt.Errorf("format error, failed to parse DS record [%s]=[%s] to DataServiceInfo, Error:%s", Record.DataId, a.args.ops.id, err)
 	}
-	schemaUrl, err := Util.URLPathJoin(ds.URL, Schema.Schema)
+	schemaUrl, err := Util.URLPathJoin(ds.URL, JsonKey.Schema)
 	if err != nil {
 		return fmt.Errorf("failed to parse url from DS record [%s]=[%s], Err:%s", Record.DataId, a.args.ops.id, err)
 	}
@@ -213,7 +214,7 @@ func (a *Admin) syncSchemaWithId(dsId string) error {
 	}
 	newTypeList := []string{}
 	for _, dataType := range result.([]interface{}) {
-		if dataType != Schema.Schema {
+		if dataType != JsonKey.Schema && dataType != Record.KeyRecord {
 			newTypeList = append(newTypeList, dataType.(string))
 		}
 	}
@@ -222,7 +223,7 @@ func (a *Admin) syncSchemaWithId(dsId string) error {
 			continue
 		}
 		log.Printf("data type [%s] removed from ds [%s], remove schema", dataType, ds.Id)
-		err = a.removeData(Schema.Schema, dataType)
+		err = a.removeData(JsonKey.Schema, dataType)
 		if err != nil {
 			return fmt.Errorf("failed to remove schema [%s], Err:%s", dataType, err)
 		}
@@ -241,7 +242,7 @@ func (a *Admin) syncSchemaWithId(dsId string) error {
 		return fmt.Errorf("failed to replace [%s]=[%s], Err:%s", Record.DataId, ds.Id, err)
 	}
 	for _, dataType := range ds.TypeList {
-		typeSchema, code, err := a.handler.Get(Schema.Schema, dataType)
+		_, code, err := a.handler.Get(JsonKey.Schema, dataType)
 		if err == nil {
 			log.Printf("data type [%s] schema exists, next", dataType)
 			continue
@@ -250,10 +251,16 @@ func (a *Admin) syncSchemaWithId(dsId string) error {
 			return fmt.Errorf("failed to get schema for [type]=[%s], Err:%s", dataType, err)
 		}
 		typeSchemaUrl, err := Util.URLPathJoin(*schemaUrl, dataType)
+		if err != nil {
+			return fmt.Errorf("failed to build schema url. for type=[%s], Error:%s", dataType, err)
+		}
 		log.Printf("download schema for type=[%s], from url=[%s]", dataType, *typeSchemaUrl)
-		typeSchema, code, err = Util.GetRestData(*typeSchemaUrl)
+		typeSchema, code, err := Util.GetRestData(*typeSchemaUrl)
+		if err != nil {
+			return fmt.Errorf("failed to retrieve data from [url]=[%s], Error:%s", *typeSchemaUrl, err)
+		}
 		log.Printf("save schema for type=[%s], code=[%d]", dataType, code)
-		err = a.handler.Db.Create(Schema.Schema, typeSchema)
+		err = a.handler.Db.Create(JsonKey.Schema, typeSchema)
 		if err != nil {
 			return fmt.Errorf("failed to create schema [type]=[%s], Err:%s", dataType, err)
 		}

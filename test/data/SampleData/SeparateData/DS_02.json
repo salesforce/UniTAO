@@ -3,7 +3,7 @@
         {
             "__id": "data_center",
             "__type": "schema",
-            "__ver": "1_01_01",
+            "__ver": "0.0.1",
             "data": {
                 "name": "data_center",
                 "description": "Data Center Schema",
@@ -39,7 +39,7 @@
         {
             "__id": "DC_admin_domain",
             "__type": "schema",
-            "__ver": "1_01_01",
+            "__ver": "0.0.1",
             "data": {
                 "name": "DC_admin_domain",
                 "description": "Data Center Administrative Sub-Domain Schema",
@@ -65,7 +65,7 @@
         {
             "__id": "SEA1",
             "__type": "data_center",
-            "__ver": "1_01_01",
+            "__ver": "0.0.1",
             "data": {
                 "id": "SEA1",
                 "description": "Seattle Data Center 1",
@@ -78,7 +78,7 @@
         {
             "__id": "network",
             "__type": "DC_admin_domain",
-            "__ver": "1_01_01",
+            "__ver": "0.0.1",
             "data": {
                 "id": "network",
                 "organization": "Network_Engineering",

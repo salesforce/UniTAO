@@ -3,7 +3,7 @@
         {
             "__id": "infrastructure",
             "__type": "schema",
-            "__ver": "1_01_01",
+            "__ver": "0.0.1",
             "data": {
                 "name": "infrastructure",
                 "description": "Infrastructure (root or all data)",
@@ -24,7 +24,7 @@
         {
             "__id": "region",
             "__type": "schema",
-            "__ver": "1_01_01",
+            "__ver": "0.0.1",
             "data": {
                 "name": "region",
                 "description": "geographical regions Schema",
@@ -48,7 +48,7 @@
         {
             "__id": "DC_type",
             "__type": "schema",
-            "__ver": "1_01_01",
+            "__ver": "0.0.1",
             "data": {
                 "name": "DC_type",
                 "description": "Data Center Type Schema",
@@ -66,7 +66,7 @@
         {
             "__id": "global",
             "__type": "infrastructure",
-            "__ver": "1_01_01",
+            "__ver": "0.0.1",
             "data": {
                 "name": "global",
                 "description": "Global Root of all infrastructure",
@@ -83,7 +83,7 @@
         {
             "__id": "North_America",
             "__type": "region",
-            "__ver": "1_01_01",
+            "__ver": "0.0.1",
             "data": {
                 "id": "North_America",
                 "description": "North America Infrastructure",
@@ -91,9 +91,19 @@
             }
         },
         {
+            "__id": "South_America",
+            "__type": "region",
+            "__ver": "0.0.1",
+            "data": {
+                "id": "South_America",
+                "description": "North America Infrastructure",
+                "data_centers": ["SEA1"]
+            }
+        },
+        {
             "__id": "SFv7",
             "__type": "DC_type",
-            "__ver": "1_01_01",
+            "__ver": "0.0.1",
             "data": {
                 "id": "SFv7",
                 "description": "SF Data Centers v7",

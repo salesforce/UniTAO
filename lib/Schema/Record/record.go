@@ -31,23 +31,25 @@ import (
 )
 
 const (
-	DataId   = "__id"
-	DataType = "__type"
-	DataVer  = "__typeVer"
+	DataId    = "__id"
+	DataType  = "__type"
+	KeyRecord = "record"
+	NotRecord = "No-Record-Framework"
+	Version   = "__ver"
 )
 
 type Record struct {
 	Id      string                 `json:"__id"`
 	Type    string                 `json:"__type"`
-	Version string                 `json:"__typeVer"`
+	Version string                 `json:"__ver"`
 	Data    map[string]interface{} `json:"data"`
 }
 
-func NewRecord(dataType string, dataTypeVersion string, dataId string, data map[string]interface{}) *Record {
+func NewRecord(dataType string, typeVersion string, dataId string, data map[string]interface{}) *Record {
 	record := Record{
 		Id:      dataId,
 		Type:    dataType,
-		Version: dataTypeVersion,
+		Version: typeVersion,
 		Data:    data,
 	}
 	return &record
@@ -70,20 +72,20 @@ func LoadStr(dataStr string) (*Record, error) {
 	return &record, nil
 }
 
-func (rec *Record) Raw() (*string, error) {
-	rawbytes, err := json.MarshalIndent(rec, "", "    ")
-	if err != nil {
-		return nil, err
-	}
+func (rec *Record) Raw() *string {
+	rawbytes, _ := json.MarshalIndent(rec, "", "    ")
 	rawStr := string(rawbytes)
-	return &rawStr, nil
+	return &rawStr
 }
 
-func (rec *Record) RawData() (*string, error) {
-	rawbytes, err := json.MarshalIndent(rec.Data, "", "    ")
-	if err != nil {
-		return nil, err
-	}
+func (rec *Record) RawData() *string {
+	rawbytes, _ := json.MarshalIndent(rec.Data, "", "    ")
 	rawStr := string(rawbytes)
-	return &rawStr, nil
+	return &rawStr
+}
+
+func (rec *Record) Map() map[string]interface{} {
+	data := make(map[string]interface{})
+	json.Unmarshal([]byte(*rec.Raw()), &data)
+	return data
 }

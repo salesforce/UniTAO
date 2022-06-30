@@ -1,49 +1,59 @@
 {
     "data": [
         {
-            "__id": "schema",
+            "__id": "record",
             "__type": "schema",
-            "__ver": "1_01_01",
+            "__ver": "0.0.1",
             "data": {
-                "name": "schema",
-                "description": "schema of schema",
+                "name": "record",
+                "description": "schema of data record",
                 "properties": {
                     "__id": {
-                        "type": "string",
-                        "template": "{data.name}"
+                        "type": "string"
                     },
                     "__type": {
                         "type": "string"
                     },
                     "__ver": {
-                        "type": "string"
+                        "type": "string"         
                     },
                     "data": {
-                        "type": "object",
-                        "$ref": "#/definitions/schema"
+                        "type": "object"
+                    }
+                }
+            }            
+        },
+        {
+            "__id": "schema",
+            "__type": "schema",
+            "__ver": "0.0.1",
+            "data": {
+                "name": "schema",
+                "description": "schema of schema",
+                "additionalProperties": false,
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "properties": {
+                        "type": "map",
+                        "items": {
+                            "type": "object",
+                            "$ref": "#/definitions/prop"
+                        }
+                    },
+                    "definitions": {
+                        "type": "map",
+                        "items": {
+                            "type": "object",
+                            "$ref": "#"
+                        }
                     }
                 },
-                "additionalProperties": false,
                 "definitions": {
-                    "schema": {
-                        "properties": {
-                            "name": {
-                                "type": "string"
-                            },
-                            "description": {
-                                "type": "string"
-                            },
-                            "properties": {
-                                "type": "object",
-                                "$ref": "#/definitions/prop"
-                            },
-                            "definitions": {
-                                "type": "object",
-                                "$ref": "#/definitions/schema"
-                            }
-                        },
-                        "additionalProperties": false
-                    },
                     "prop": {
                         "properties": {}
                     }
