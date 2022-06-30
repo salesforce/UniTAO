@@ -36,6 +36,7 @@ import (
 	"InventoryService/InvRecord"
 
 	"github.com/salesforce/UniTAO/lib/Schema"
+	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Util"
 )
@@ -63,7 +64,7 @@ func (h *Handler) init() error {
 	if err != nil {
 		return err
 	}
-	for _, name := range []string{Schema.Schema, Schema.Inventory} {
+	for _, name := range []string{JsonKey.Schema, Schema.Inventory} {
 		tblExists := false
 		for _, tbl := range tbList {
 			if *tbl == name {
@@ -83,7 +84,7 @@ func (h *Handler) init() error {
 }
 
 func (h *Handler) List(dataType string) ([]string, int, error) {
-	if dataType == Schema.Schema || dataType == Schema.Inventory {
+	if dataType == JsonKey.Schema || dataType == Schema.Inventory {
 		result, code, err := h.ListData(dataType)
 		if err != nil {
 			return nil, code, err
@@ -94,7 +95,7 @@ func (h *Handler) List(dataType string) ([]string, int, error) {
 		}
 		return dsList, http.StatusOK, nil
 	}
-	_, code, err := h.GetData(Schema.Schema, dataType)
+	_, code, err := h.GetData(JsonKey.Schema, dataType)
 	if err != nil {
 		return nil, code, err
 	}
@@ -118,8 +119,8 @@ func (h *Handler) List(dataType string) ([]string, int, error) {
 }
 
 func (h *Handler) Get(dataType string, dataId string) (interface{}, int, error) {
-	if dataType == Schema.Schema {
-		return h.GetData(Schema.Schema, dataId)
+	if dataType == JsonKey.Schema {
+		return h.GetData(JsonKey.Schema, dataId)
 	}
 	if dataType == Schema.Inventory {
 		// retrieve data service record from Inventory
@@ -129,7 +130,7 @@ func (h *Handler) Get(dataType string, dataId string) (interface{}, int, error) 
 		}
 		return inv, code, err
 	}
-	_, code, err := h.GetData(Schema.Schema, dataType)
+	_, code, err := h.GetData(JsonKey.Schema, dataType)
 	if err != nil {
 		err = fmt.Errorf("failed to get schema for type [%s], Err:%s", dataType, err)
 		return nil, code, err
@@ -158,7 +159,7 @@ func (h *Handler) Get(dataType string, dataId string) (interface{}, int, error) 
 }
 
 func (h *Handler) ListData(dataType string) ([]map[string]interface{}, int, error) {
-	if dataType != Schema.Schema && dataType != Schema.Inventory {
+	if dataType != JsonKey.Schema && dataType != Schema.Inventory {
 		return nil, http.StatusBadRequest, fmt.Errorf("[type]=[%s] is not supported", dataType)
 	}
 	args := make(map[string]interface{})

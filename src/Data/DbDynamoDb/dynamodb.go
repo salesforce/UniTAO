@@ -33,6 +33,8 @@ import (
 	"Data/DbConfig"
 	"Data/DbIface"
 
+	"github.com/salesforce/UniTAO/lib/Schema/Record"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -54,51 +56,7 @@ type Database struct {
 	database *dynamodb.DynamoDB
 }
 
-func GenerateQueryInput(queryArgs map[string]interface{}) *dynamodb.QueryInput {
-	tableName := ""
-	conditionList := []expression.KeyConditionBuilder{}
-	for key, value := range queryArgs {
-		if key == "table" {
-			tableName = value.(string)
-			continue
-		}
-		filter := expression.Key(key).Equal(expression.Value(value.(string)))
-		conditionList = append(conditionList, filter)
-	}
-	if tableName == "" {
-		panic("missing parameter [table] from queryArgs")
-	}
-	if len(conditionList) == 0 {
-		panic("missing query parameter to build condition list")
-	}
-
-	filter := conditionList[0]
-	for idx, item := range conditionList {
-		if idx > 0 {
-			filter = filter.And(item)
-		}
-	}
-	expr, err := expression.NewBuilder().WithKeyCondition(filter).Build()
-	if err != nil {
-		panic("failed to generate query with filter")
-	}
-	queryInput := &dynamodb.QueryInput{
-		ExpressionAttributeNames:  expr.Names(),
-		ExpressionAttributeValues: expr.Values(),
-		KeyConditionExpression:    expr.KeyCondition(),
-		ProjectionExpression:      expr.Projection(),
-		TableName:                 aws.String(tableName),
-	}
-	return queryInput
-}
-
-func (db *Database) Get(queryArgs map[string]interface{}) ([]map[string]interface{}, error) {
-	query := GenerateQueryInput(queryArgs)
-	output, err := db.database.Query(query)
-	if err != nil {
-		err = fmt.Errorf("failed to query data. Error: %s", err)
-		return nil, err
-	}
+func ParseQueryOutput(output *dynamodb.QueryOutput) ([]map[string]interface{}, error) {
 	result := make([]map[string]interface{}, len(output.Items))
 	for idx, value := range output.Items {
 		item := make(map[string]interface{})
@@ -110,6 +68,56 @@ func (db *Database) Get(queryArgs map[string]interface{}) ([]map[string]interfac
 		result[idx] = item
 	}
 	return result, nil
+}
+
+func (db *Database) Query(table string, index string, queryArgs map[string]interface{}) ([]map[string]interface{}, error) {
+	init := false
+	var cond expression.KeyConditionBuilder
+	for key, value := range queryArgs {
+		if !init {
+			cond = expression.Key(key).Equal(expression.Value(value))
+			init = true
+			continue
+		}
+		cond = cond.And(expression.Key(key).Equal(expression.Value(value)))
+	}
+	expr, err := expression.NewBuilder().WithKeyCondition(cond).Build()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build index query. Error:%s", err)
+	}
+	queryInput := &dynamodb.QueryInput{
+		ExpressionAttributeNames:  expr.Names(),
+		ExpressionAttributeValues: expr.Values(),
+		KeyConditionExpression:    expr.KeyCondition(),
+		ProjectionExpression:      expr.Projection(),
+		TableName:                 aws.String(table),
+	}
+	if index != "" {
+		queryInput.IndexName = aws.String(index)
+	}
+	output, err := db.database.Query(queryInput)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query version for [table]=[%s]. Error: %s", table, err)
+	}
+	return ParseQueryOutput(output)
+}
+
+func (db *Database) Get(queryArgs map[string]interface{}) ([]map[string]interface{}, error) {
+	tableName, ok := queryArgs[DbIface.Table].(string)
+	if !ok {
+		return nil, fmt.Errorf("missing parameter [%s] from queryArgs", DbIface.Table)
+	}
+	dataType, ok := queryArgs[Record.DataType].(string)
+	if !ok {
+		return nil, fmt.Errorf("missing parameter [%s] from queryArgs", Record.DataType)
+	}
+	args := make(map[string]interface{})
+	args[Record.DataType] = dataType
+	dataId, ok := queryArgs[Record.DataId].(string)
+	if ok {
+		args[Record.DataId] = dataId
+	}
+	return db.Query(tableName, "", args)
 }
 
 func (db *Database) ListTable() ([]*string, error) {
