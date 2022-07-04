@@ -26,6 +26,8 @@ services:
     image: unitao/dataservice:localbuild
     container_name: unitao-data-service01
     restart: always
+    stdin_open: true
+    tty: true
     volumes:
       -  ./DataService01:/opt/UniTAO/config
     ports:
@@ -48,6 +50,8 @@ services:
     image: unitao/dataservice:localbuild
     container_name: unitao-data-service02
     restart: always
+    stdin_open: true
+    tty: true
     volumes:
       -  ./DataService02:/opt/UniTAO/config
     ports:
