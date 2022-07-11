@@ -28,19 +28,22 @@ package InvRecord
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/salesforce/UniTAO/lib/Util"
 )
 
 type DataServiceInfo struct {
 	Id           string   `json:"__id"`
-	URL          string   `json:"url"`
+	URL          []string `json:"url"`
 	TypeList     []string `json:"typeList"`
 	LastSyncTime string   `json:"lastSynctime"`
+	goodUrl      string
 }
 
 func NewDsInfo(id string, url string) *DataServiceInfo {
 	dsInfo := DataServiceInfo{
 		Id:       id,
-		URL:      url,
+		URL:      []string{url},
 		TypeList: []string{},
 	}
 	return &dsInfo
@@ -72,4 +75,20 @@ func (ds *DataServiceInfo) ToIface() (interface{}, error) {
 		return nil, err
 	}
 	return payload, nil
+}
+
+func (ds *DataServiceInfo) GetUrl() (string, error) {
+	if ds.goodUrl == "" || !Util.SiteReachable(ds.goodUrl) {
+		ds.goodUrl = ""
+		for _, url := range ds.URL {
+			if Util.SiteReachable(url) {
+				ds.goodUrl = url
+			}
+		}
+		if ds.goodUrl == "" {
+			return "", fmt.Errorf("no good url is reachable for DS=[%s]", ds.Id)
+		}
+	}
+
+	return ds.goodUrl, nil
 }

@@ -109,14 +109,14 @@ func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Inventory Server only support GET method", http.StatusMethodNotAllowed)
 		return
 	}
-	dataType, dataId := Util.ParsePath(r.URL.Path)
+	dataType, dataPath := Util.ParsePath(r.URL.Path)
 	if dataType == "" {
 		respObj := make(map[string]string)
 		respObj["error message"] = "please use inventory{type}[/{id}]"
 		Util.ResponseJson(w, respObj, http.StatusOK)
 		return
 	}
-	if dataId == "" {
+	if dataPath == "" {
 		idList, code, err := srv.data.List(dataType)
 		if err != nil {
 			http.Error(w, err.Error(), code)
@@ -125,7 +125,7 @@ func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 		Util.ResponseJson(w, idList, code)
 		return
 	}
-	data, code, err := srv.data.Get(dataType, dataId)
+	data, code, err := srv.data.Get(dataType, dataPath)
 	if err != nil {
 		http.Error(w, err.Error(), code)
 		return

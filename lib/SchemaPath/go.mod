@@ -21,18 +21,8 @@
 // This copyright notice and license applies to all files in this directory or sub-directories, except when stated otherwise explicitly.
 // ******************************************************************************************************************
 
+module github.com/salesforce/UniTAO/lib/SchemaPath
+
 go 1.18
 
-use (
-    ./app/DataService
-    ./app/InventoryService
-    ./lib/Schema
-    ./lib/SchemaPath
-    ./lib/Util
-    ./src/Data
-    ./src/DataService
-    ./src/InventoryService
-    ./tool/DataServiceAdmin
-    ./tool/InventoryServiceAdmin
-    ./test/src
-)
+

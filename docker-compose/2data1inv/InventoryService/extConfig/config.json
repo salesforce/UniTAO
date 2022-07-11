@@ -1,0 +1,14 @@
+{
+    "database": {
+        "type": "sysdirfile",
+        "sysdirfile": {
+            "path": "../../docker-compose/2data1inv/InventoryService/data"
+        }
+    },
+    "http": {
+        "type": "http",
+        "dns": "localhost",
+        "port": "8005",
+        "id": "Inventory"
+    }
+}
