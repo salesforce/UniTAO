@@ -204,7 +204,11 @@ func (a *Admin) syncSchemaWithId(dsId string) error {
 	if err != nil {
 		return fmt.Errorf("format error, failed to parse DS record [%s]=[%s] to DataServiceInfo, Error:%s", Record.DataId, a.args.ops.id, err)
 	}
-	schemaUrl, err := Util.URLPathJoin(ds.URL, JsonKey.Schema)
+	dsUrl, err := ds.GetUrl()
+	if err != nil {
+		return err
+	}
+	schemaUrl, err := Util.URLPathJoin(dsUrl, JsonKey.Schema)
 	if err != nil {
 		return fmt.Errorf("failed to parse url from DS record [%s]=[%s], Err:%s", Record.DataId, a.args.ops.id, err)
 	}

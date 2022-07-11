@@ -235,7 +235,7 @@ func (h *Handler) validateCmtRefs(doc *SchemaDoc.SchemaDoc, data map[string]inte
 	return http.StatusAccepted, nil
 }
 
-func (h *Handler) validateCmtRefValue(ref *SchemaDoc.SchemaDocRef, value string) (bool, error) {
+func (h *Handler) validateCmtRefValue(ref *SchemaDoc.CMTDocRef, value string) (bool, error) {
 	typePath, dataType := Util.ParsePath(ref.ContentType)
 	if typePath != Schema.Inventory {
 		// ContentMediaType not start with inventory, we don't understand

@@ -37,6 +37,7 @@ import (
 	"path"
 	"reflect"
 	"strings"
+	"time"
 )
 
 type HttpConfig struct {
@@ -153,6 +154,19 @@ func PostRestData(dataUrl string, payload interface{}) (int, error) {
 		return resp.StatusCode, fmt.Errorf("failed to post data to [url]=[%s], Error:%s", dataUrl, err)
 	}
 	return http.StatusAccepted, nil
+}
+
+func SiteReachable(url string) bool {
+	timeout := 1 * time.Second
+	client := http.Client{
+		Timeout: timeout,
+	}
+	_, err := client.Get(url)
+	if err != nil {
+		log.Println("Site unreachable, error: ", err)
+		return false
+	}
+	return true
 }
 
 func SearchStrList(searchAry []string, value string) bool {
