@@ -44,7 +44,7 @@ type SchemaDoc struct {
 	Definitions map[string]*SchemaDoc
 	CmtRefs     map[string]*CMTDocRef
 	SubDocs     map[string]*SchemaDoc
-	RAW         interface{}
+	RAW         map[string]interface{}
 }
 
 type CMTDocRef struct {
@@ -79,7 +79,7 @@ func create(data map[string]interface{}, id string, parent *SchemaDoc) (*SchemaD
 		KeyAttrs:    ParseTemplateVars(keyTemplate),
 		CmtRefs:     map[string]*CMTDocRef{},
 		SubDocs:     map[string]*SchemaDoc{},
-		RAW:         rawData,
+		RAW:         rawData.(map[string]interface{}),
 	}
 	docDefs, ok := data[JsonKey.Definitions]
 	if ok {
