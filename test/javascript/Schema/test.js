@@ -23,25 +23,8 @@ This copyright notice and license applies to all files in this directory or sub-
 ************************************************************************************************************
 */
 
-package JsonKey
+function main(){
+    console.log("test")
+}
 
-const (
-	AdditionalProperties = "additionalProperties"
-	Array                = "array"
-	ContentMediaType     = "contentMediaType"
-	Definitions          = "definitions"
-	DefinitionPrefix     = "#/definitions/"
-	DocRoot              = "*"
-	Items                = "items"
-	Inventory            = "inventory"
-	Key                  = "key"
-	Name                 = "name"
-	Map                  = "map"
-	Object               = "object"
-	Properties           = "properties"
-	Ref                  = "$ref"
-	Required             = "required"
-	Schema               = "schema"
-	String               = "string"
-	Type                 = "type"
-)
+main()

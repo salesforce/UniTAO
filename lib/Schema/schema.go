@@ -75,7 +75,7 @@ func (schema *SchemaOps) init() error {
 	if err != nil {
 		return fmt.Errorf("copy schema.Record.Data failed. Error: %s", err)
 	}
-	doc, err := SchemaDoc.NewSchemaDoc(schemaData.(map[string]interface{}), schema.Record.Id, nil)
+	doc, err := SchemaDoc.New(schemaData.(map[string]interface{}), schema.Record.Id, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create Schema Doc, err: %s", err)
 	}

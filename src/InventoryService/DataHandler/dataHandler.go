@@ -38,15 +38,20 @@ import (
 	"github.com/salesforce/UniTAO/lib/Schema"
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
+	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
+	"github.com/salesforce/UniTAO/lib/SchemaPath"
 	"github.com/salesforce/UniTAO/lib/Util"
 )
 
 type Handler struct {
-	Db DbIface.Database
+	Db          DbIface.Database
+	DsInfoCache map[string]*InvRecord.DataServiceInfo
 }
 
 func New(config DbConfig.DatabaseConfig) (*Handler, error) {
-	handler := Handler{}
+	handler := Handler{
+		DsInfoCache: map[string]*InvRecord.DataServiceInfo{},
+	}
 	db, err := Data.ConnectDb(config)
 	if err != nil {
 		return nil, err
@@ -103,7 +108,11 @@ func (h *Handler) List(dataType string) ([]string, int, error) {
 	if err != nil {
 		return nil, code, err
 	}
-	urlPath, err := Util.URLPathJoin(dsInfo.URL, dataType)
+	dsUrl, err := dsInfo.GetUrl()
+	if err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+	urlPath, err := Util.URLPathJoin(dsUrl, dataType)
 	if err != nil {
 		return nil, http.StatusInternalServerError, fmt.Errorf("failed to parse url from data service [%s]=[%s], url=[%s], Error:%s", Record.DataId, dsInfo.Id, dsInfo.URL, err)
 	}
@@ -118,13 +127,20 @@ func (h *Handler) List(dataType string) ([]string, int, error) {
 	return idList, http.StatusOK, nil
 }
 
-func (h *Handler) Get(dataType string, dataId string) (interface{}, int, error) {
+func (h *Handler) Get(dataType string, dataPath string) (interface{}, int, error) {
+	dataId, nextPath := Util.ParsePath(dataPath)
 	if dataType == JsonKey.Schema {
-		return h.GetData(JsonKey.Schema, dataId)
+		if nextPath != "" {
+			return nil, http.StatusBadRequest, fmt.Errorf("path=[%s] not supported on type=[%s]", dataPath, dataType)
+		}
+		return h.GetData(JsonKey.Schema, dataPath)
 	}
 	if dataType == Schema.Inventory {
+		if nextPath != "" {
+			return nil, http.StatusBadRequest, fmt.Errorf("path=[%s] not supported on type=[%s]", dataPath, dataType)
+		}
 		// retrieve data service record from Inventory
-		inv, code, err := h.GetData(Schema.Inventory, dataId)
+		inv, code, err := h.GetData(Schema.Inventory, dataPath)
 		if err != nil {
 			return nil, code, err
 		}
@@ -135,11 +151,78 @@ func (h *Handler) Get(dataType string, dataId string) (interface{}, int, error) 
 		err = fmt.Errorf("failed to get schema for type [%s], Err:%s", dataType, err)
 		return nil, code, err
 	}
+	if nextPath == "" {
+		return h.GetDataServiceData(dataType, dataId)
+	}
+	return h.GetDataByPath(fmt.Sprintf("%s/%s", dataType, dataPath))
+}
+
+func (h *Handler) ListData(dataType string) ([]map[string]interface{}, int, error) {
+	if dataType != JsonKey.Schema && dataType != Schema.Inventory {
+		return nil, http.StatusBadRequest, fmt.Errorf("[type]=[%s] is not supported", dataType)
+	}
+	args := make(map[string]interface{})
+	args[DbIface.Table] = dataType
+	result, err := h.Db.Get(args)
+	if err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+	return result, http.StatusOK, nil
+}
+
+func (h *Handler) GetSchema(dataType string) (*SchemaDoc.SchemaDoc, error) {
+	data, _, err := h.GetData(JsonKey.Schema, dataType)
+	if err != nil {
+		return nil, err
+	}
+	record, err := Record.LoadMap(data.(map[string]interface{}))
+	if err != nil {
+		return nil, fmt.Errorf("failed to load schema record data. [type]=[%s], Error: %s", dataType, err)
+	}
+	return SchemaDoc.New(record.Data, dataType, nil)
+}
+
+func (h *Handler) GetDataServiceRecord(dataType string, dataId string) (*Record.Record, error) {
+	data, _, err := h.GetDataServiceData(dataType, dataId)
+	if err != nil {
+		return nil, err
+	}
+	record, err := Record.LoadMap(data.(map[string]interface{}))
+	if err != nil {
+		return nil, fmt.Errorf("failed to load data as Record. Error:%s", err)
+	}
+	return record, nil
+}
+
+func (h *Handler) GetDataByPath(dataPath string) (interface{}, int, error) {
+	conn := SchemaPath.Connection{
+		GetSchema: h.GetSchema,
+		GetRecord: h.GetDataServiceRecord,
+	}
+	schemaPath, err := SchemaPath.NewFromPath(&conn, dataPath, nil)
+	if err != nil {
+		return nil, http.StatusBadRequest, fmt.Errorf("failed to generate SchemaPath. from [path]=[%s], Error: %s", dataPath, err)
+	}
+	result, err := schemaPath.WalkValue()
+	if err != nil {
+		return nil, http.StatusBadRequest, fmt.Errorf("failed to walk SchemaPath. from [path]=[%s], Error: %s", dataPath, err)
+	}
+	if result == nil {
+		return nil, http.StatusNotFound, fmt.Errorf("walk SchemaPath with no value.from [path]=[%s]", dataPath)
+	}
+	return result, http.StatusOK, nil
+}
+
+func (h *Handler) GetDataServiceData(dataType string, dataId string) (interface{}, int, error) {
 	dsInfo, code, err := h.GetDataServiceInfo(dataType)
 	if err != nil {
 		return nil, code, err
 	}
-	idPath, err := Util.URLPathJoin(dsInfo.URL, dataType, dataId)
+	dsUrl, err := dsInfo.GetUrl()
+	if err != nil {
+		return nil, http.StatusInternalServerError, fmt.Errorf("no good url for DataService=[%s], Error: %s", dsInfo.Id, err)
+	}
+	idPath, err := Util.URLPathJoin(dsUrl, dataType, dataId)
 	if err != nil {
 		return nil, http.StatusInternalServerError, fmt.Errorf("failed to parse url from data service [%s]=[%s], url=[%s], Error:%s", Record.DataId, dsInfo.Id, dsInfo.URL, err)
 	}
@@ -153,19 +236,6 @@ func (h *Handler) Get(dataType string, dataId string) (interface{}, int, error) 
 	result, ok := data.(map[string]interface{})
 	if !ok {
 		err = fmt.Errorf("data from [%s] is not a validate record data map[string]interface{}", *idPath)
-		return nil, http.StatusInternalServerError, err
-	}
-	return result, http.StatusOK, nil
-}
-
-func (h *Handler) ListData(dataType string) ([]map[string]interface{}, int, error) {
-	if dataType != JsonKey.Schema && dataType != Schema.Inventory {
-		return nil, http.StatusBadRequest, fmt.Errorf("[type]=[%s] is not supported", dataType)
-	}
-	args := make(map[string]interface{})
-	args[DbIface.Table] = dataType
-	result, err := h.Db.Get(args)
-	if err != nil {
 		return nil, http.StatusInternalServerError, err
 	}
 	return result, http.StatusOK, nil
@@ -186,21 +256,32 @@ func (h *Handler) GetData(dataType string, dataId string) (interface{}, int, err
 }
 
 func (h *Handler) GetDataServiceInfo(dataType string) (*InvRecord.DataServiceInfo, int, error) {
-	invList, code, err := h.ListData(Schema.Inventory)
-	if err != nil {
-		return nil, code, err
-	}
-	for _, inv := range invList {
-		dsInfo, err := InvRecord.CreateDsInfo(inv)
+	if len(h.DsInfoCache) == 0 {
+		invList, code, err := h.ListData(Schema.Inventory)
 		if err != nil {
-			log.Printf("Failed to load record [%s]=[%s]", Record.DataId, inv[Record.DataId])
-			continue
+			return nil, code, err
 		}
-		for _, dsDataType := range dsInfo.TypeList {
-			if dsDataType == dataType {
-				return dsInfo, http.StatusOK, nil
+		for _, inv := range invList {
+			err := h.RefreshDsCache(inv)
+			if err != nil {
+				return nil, http.StatusInternalServerError, err
 			}
 		}
 	}
+	dsInfo, ok := h.DsInfoCache[dataType]
+	if ok {
+		return dsInfo, http.StatusOK, nil
+	}
 	return nil, http.StatusNotFound, fmt.Errorf("failed to find Data Service for [type]=[%s]", dataType)
+}
+
+func (h *Handler) RefreshDsCache(inv map[string]interface{}) error {
+	dsInfo, err := InvRecord.CreateDsInfo(inv)
+	if err != nil {
+		return fmt.Errorf("failed to load record [%s]=[%s], Error: %s", Record.DataId, inv[Record.DataId], err)
+	}
+	for _, dsDataType := range dsInfo.TypeList {
+		h.DsInfoCache[dsDataType] = dsInfo
+	}
+	return nil
 }

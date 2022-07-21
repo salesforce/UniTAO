@@ -23,25 +23,18 @@ This copyright notice and license applies to all files in this directory or sub-
 ************************************************************************************************************
 */
 
-package JsonKey
+package SchemaPath
 
-const (
-	AdditionalProperties = "additionalProperties"
-	Array                = "array"
-	ContentMediaType     = "contentMediaType"
-	Definitions          = "definitions"
-	DefinitionPrefix     = "#/definitions/"
-	DocRoot              = "*"
-	Items                = "items"
-	Inventory            = "inventory"
-	Key                  = "key"
-	Name                 = "name"
-	Map                  = "map"
-	Object               = "object"
-	Properties           = "properties"
-	Ref                  = "$ref"
-	Required             = "required"
-	Schema               = "schema"
-	String               = "string"
-	Type                 = "type"
+import (
+	"github.com/salesforce/UniTAO/lib/Schema/Record"
+	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
 )
+
+type FuncSchema func(dataType string) (*SchemaDoc.SchemaDoc, error)
+
+type FuncRecord func(dataType string, dataId string) (*Record.Record, error)
+
+type Connection struct {
+	GetSchema FuncSchema
+	GetRecord FuncRecord
+}

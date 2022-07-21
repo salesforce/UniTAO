@@ -1,6 +1,11 @@
 {
  "__id": "DataService_01",
  "lastSynctime": "",
- "typeList": [],
- "url": "http://unitao-data-service01"
+ "typeList": [
+  "NETSEC-SOT-EIP"
+ ],
+ "url": [
+    "http://unitao-data-service01",
+    "http://localhost:8002"
+]
 }

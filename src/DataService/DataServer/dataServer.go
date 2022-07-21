@@ -122,6 +122,7 @@ func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 
 func (srv *Server) handleGet(w http.ResponseWriter, dataType string, dataId string) {
 	if dataId == "" {
+		log.Printf("list datatype=[%s]", dataType)
 		idList, code, err := srv.data.List(dataType)
 		if err != nil {
 			http.Error(w, err.Error(), code)
@@ -130,6 +131,7 @@ func (srv *Server) handleGet(w http.ResponseWriter, dataType string, dataId stri
 		Util.ResponseJson(w, idList, code)
 		return
 	}
+	log.Printf("get data type=[%s], id=[%s]", dataType, dataId)
 	result, code, err := srv.data.Get(dataType, dataId)
 	if err != nil {
 		http.Error(w, err.Error(), code)
@@ -157,6 +159,7 @@ func (srv *Server) ParseRecord(noRecordList []string, payload map[string]interfa
 }
 
 func (srv *Server) handlePost(w http.ResponseWriter, r *http.Request, dataType string, dataId string) {
+	log.Printf("post data type=[%s] id=[%s]", dataType, dataId)
 	payload := make(map[string]interface{})
 	code, err := Util.LoadJSONPayload(r, payload)
 	if err != nil {
