@@ -44,6 +44,7 @@ type SchemaDoc struct {
 	Definitions map[string]*SchemaDoc
 	CmtRefs     map[string]*CMTDocRef
 	SubDocs     map[string]*SchemaDoc
+	RAW         interface{}
 }
 
 type CMTDocRef struct {
@@ -66,6 +67,10 @@ func create(data map[string]interface{}, id string, parent *SchemaDoc) (*SchemaD
 	if !ok {
 		keyTemplate = ""
 	}
+	rawData, err := Util.JsonCopy(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to copy SchemaDoc Data. @path=[%s], Error:%s", parentPath, err)
+	}
 	doc := SchemaDoc{
 		Id:          id,
 		Parent:      parent,
@@ -74,6 +79,7 @@ func create(data map[string]interface{}, id string, parent *SchemaDoc) (*SchemaD
 		KeyAttrs:    ParseTemplateVars(keyTemplate),
 		CmtRefs:     map[string]*CMTDocRef{},
 		SubDocs:     map[string]*SchemaDoc{},
+		RAW:         rawData,
 	}
 	docDefs, ok := data[JsonKey.Definitions]
 	if ok {

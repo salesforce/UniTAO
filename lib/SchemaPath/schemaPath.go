@@ -35,6 +35,14 @@ import (
 	"github.com/salesforce/UniTAO/lib/Util"
 )
 
+const (
+	Ref       = "$"
+	CmdPrefix = "?"
+	CmdRef    = "?ref"
+	CmdSchema = "?schema"
+	CmdFlat   = "?flat"
+)
+
 type SchemaPath struct {
 	conn     *Connection
 	schema   *SchemaDoc.SchemaDoc
@@ -72,6 +80,14 @@ func NewFromPath(conn *Connection, path string, prev *SchemaPath) (*SchemaPath, 
 	fullPath = fmt.Sprintf("%s/%s", fullPath, dataType)
 
 	dataId, nextPath := Util.ParsePath(nextPath)
+	dataId, pathCmd, err := ParsePathCmd(dataId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse Path Cmd on path=[%s], Error: %s", path, err)
+	}
+	nextPath, err = ValidatePathCmd(nextPath, pathCmd)
+	if err != nil {
+		return nil, fmt.Errorf("invalid PathCmd format path=[%s], Error: %s", path, err)
+	}
 	record, err := conn.GetRecord(dataType, dataId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get record [type/id]=[%s/%s] @[path]=[%s]", dataType, dataId, fullPath)
@@ -94,12 +110,58 @@ func ParseArrayPath(path string) (string, string) {
 	return attrName, key
 }
 
+func ParsePathCmd(path string) (string, string, error) {
+	qIdx := strings.Index(path, CmdPrefix)
+	if qIdx < 0 {
+		return path, "", nil
+	}
+	attrName := path[:qIdx]
+	qPath := path[qIdx+1:]
+	dupIdx := strings.Index(qPath[1:], CmdPrefix)
+	if dupIdx > -1 {
+		return "", "", fmt.Errorf("invalid format of PathCmd, more than 1 ? in path. path=[%s]", path)
+	}
+	return attrName, fmt.Sprintf("%s%s", CmdPrefix, qPath), nil
+}
+
+func ValidatePathCmd(nextPath string, cmd string) (string, error) {
+	if nextPath != "" && cmd != "" {
+		return "", fmt.Errorf("invalid path=[%s/%s],Path Command has to be end of path as query", cmd, nextPath)
+	}
+	if cmd == "" {
+		return nextPath, nil
+	}
+	for _, c := range []string{CmdRef, CmdFlat, CmdSchema} {
+		if c == cmd {
+			return cmd, nil
+		}
+	}
+	return "", fmt.Errorf("unknown path cmd=[%s]", cmd)
+}
+
 func (p *SchemaPath) WalkValue() (interface{}, error) {
 	// no more path to walk. return current value
 	if p.nextPath == "" {
 		return p.data, nil
 	}
+	if p.nextPath[:1] == CmdPrefix {
+		switch p.nextPath {
+		case CmdSchema:
+			return p.schema.RAW, nil
+		default:
+			return nil, fmt.Errorf("unknown Path command: %s", p.nextPath)
+		}
+	}
 	attrPath, nextPath := Util.ParsePath(p.nextPath)
+	attrPath, pathCmd, err := ParsePathCmd(attrPath)
+	if err != nil {
+		return nil, err
+	}
+	nextPath, err = ValidatePathCmd(nextPath, pathCmd)
+	if err != nil {
+		return nil, err
+	}
+
 	attrName, attrIdx := ParseArrayPath(attrPath)
 	attrDef, ok := p.schema.Data[JsonKey.Properties].(map[string]interface{})[attrName].(map[string]interface{})
 	if !ok {
@@ -206,10 +268,13 @@ func (p *SchemaPath) WalkCMTIdx(attrName string, attrValue string, nextPath stri
 		log.Printf("[attr]=[%s] has no Cmt Ref @[path]=[%s]", attrName, p.fullPath)
 		return attrValue, nil
 	}
-	if nextPath == "" {
+	// if query path ends with /.
+	// then return current CMT reference value
+	if nextPath == "$" || nextPath == CmdRef {
 		// if no further path to walk
 		return attrValue, nil
 	}
+	// otherwise we see the CMT as direct to the real object
 	cmtPath := fmt.Sprintf("%s/%s", cmtRef.ContentType, attrValue)
 	if nextPath != JsonKey.DocRoot {
 		cmtPath = fmt.Sprintf("%s/%s", cmtPath, nextPath)

@@ -128,7 +128,7 @@ func (h *Handler) List(dataType string) ([]string, int, error) {
 }
 
 func (h *Handler) Get(dataType string, dataPath string) (interface{}, int, error) {
-	dataId, nextPath := Util.ParsePath(dataPath)
+	_, nextPath := Util.ParsePath(dataPath)
 	if dataType == JsonKey.Schema {
 		if nextPath != "" {
 			return nil, http.StatusBadRequest, fmt.Errorf("path=[%s] not supported on type=[%s]", dataPath, dataType)
@@ -145,14 +145,6 @@ func (h *Handler) Get(dataType string, dataPath string) (interface{}, int, error
 			return nil, code, err
 		}
 		return inv, code, err
-	}
-	_, code, err := h.GetData(JsonKey.Schema, dataType)
-	if err != nil {
-		err = fmt.Errorf("failed to get schema for type [%s], Err:%s", dataType, err)
-		return nil, code, err
-	}
-	if nextPath == "" {
-		return h.GetDataServiceData(dataType, dataId)
 	}
 	return h.GetDataByPath(fmt.Sprintf("%s/%s", dataType, dataPath))
 }
