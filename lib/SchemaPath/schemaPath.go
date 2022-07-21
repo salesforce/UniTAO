@@ -28,11 +28,20 @@ package SchemaPath
 import (
 	"fmt"
 	"log"
+	"reflect"
 	"strings"
 
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
 	"github.com/salesforce/UniTAO/lib/Util"
+)
+
+const (
+	Ref       = "$"
+	CmdPrefix = "?"
+	CmdRef    = "?ref"
+	CmdSchema = "?schema"
+	CmdFlat   = "?flat"
 )
 
 type SchemaPath struct {
@@ -72,6 +81,14 @@ func NewFromPath(conn *Connection, path string, prev *SchemaPath) (*SchemaPath, 
 	fullPath = fmt.Sprintf("%s/%s", fullPath, dataType)
 
 	dataId, nextPath := Util.ParsePath(nextPath)
+	dataId, pathCmd, err := ParsePathCmd(dataId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse Path Cmd on path=[%s], Error: %s", path, err)
+	}
+	nextPath, err = ValidatePathCmd(nextPath, pathCmd)
+	if err != nil {
+		return nil, fmt.Errorf("invalid PathCmd format path=[%s], Error: %s", path, err)
+	}
 	record, err := conn.GetRecord(dataType, dataId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get record [type/id]=[%s/%s] @[path]=[%s]", dataType, dataId, fullPath)
@@ -94,12 +111,91 @@ func ParseArrayPath(path string) (string, string) {
 	return attrName, key
 }
 
+func ParsePathCmd(path string) (string, string, error) {
+	qIdx := strings.Index(path, CmdPrefix)
+	if qIdx < 0 {
+		return path, "", nil
+	}
+	attrName := path[:qIdx]
+	qPath := path[qIdx+1:]
+	dupIdx := strings.Index(qPath[1:], CmdPrefix)
+	if dupIdx > -1 {
+		return "", "", fmt.Errorf("invalid format of PathCmd, more than 1 ? in path. path=[%s]", path)
+	}
+	return attrName, fmt.Sprintf("%s%s", CmdPrefix, qPath), nil
+}
+
+func ValidatePathCmd(nextPath string, cmd string) (string, error) {
+	if nextPath != "" && cmd != "" {
+		return "", fmt.Errorf("invalid path=[%s/%s],Path Command has to be end of path as query", cmd, nextPath)
+	}
+	if cmd == "" {
+		return nextPath, nil
+	}
+	for _, c := range []string{CmdRef, CmdFlat, CmdSchema} {
+		if c == cmd {
+			return cmd, nil
+		}
+	}
+	return "", fmt.Errorf("unknown path cmd=[%s]", cmd)
+}
+
+func (p *SchemaPath) FlatValue() (interface{}, error) {
+	flat := map[string]interface{}{}
+	for attrName, val := range p.data {
+		attrDef, ok := p.schema.Data[JsonKey.Properties].(map[string]interface{})[attrName].(map[string]interface{})
+		if !ok {
+			if reflect.TypeOf(val).Kind() == reflect.Slice {
+				return val, nil
+			}
+		}
+		attrType := attrDef[JsonKey.Type].(string)
+		switch attrType {
+		case JsonKey.Array:
+			itemDef := attrDef[JsonKey.Items].(map[string]interface{})
+			flatVal, err := p.WalkArray(attrName, "", itemDef, val, CmdFlat)
+			if err != nil {
+				return nil, err
+			}
+			flat[attrName] = flatVal
+		case JsonKey.Object:
+			keyMap := val.(map[string]interface{})
+			keyList := make([]string, 0, len(keyMap))
+			for key, _ := range keyMap {
+				keyList = append(keyList, key)
+			}
+			flat[attrName] = keyList
+		default:
+			flat[attrName] = val
+		}
+	}
+	return flat, nil
+}
+
 func (p *SchemaPath) WalkValue() (interface{}, error) {
 	// no more path to walk. return current value
 	if p.nextPath == "" {
 		return p.data, nil
 	}
+	if p.nextPath[:1] == CmdPrefix {
+		switch p.nextPath {
+		case CmdSchema:
+			return p.schema.RAW, nil
+		case CmdFlat:
+			return p.FlatValue()
+		default:
+			return nil, fmt.Errorf("unknown Path command: %s", p.nextPath)
+		}
+	}
 	attrPath, nextPath := Util.ParsePath(p.nextPath)
+	attrPath, pathCmd, err := ParsePathCmd(attrPath)
+	if err != nil {
+		return nil, err
+	}
+	nextPath, err = ValidatePathCmd(nextPath, pathCmd)
+	if err != nil {
+		return nil, err
+	}
 	attrName, attrIdx := ParseArrayPath(attrPath)
 	attrDef, ok := p.schema.Data[JsonKey.Properties].(map[string]interface{})[attrName].(map[string]interface{})
 	if !ok {
@@ -133,7 +229,15 @@ func (p *SchemaPath) WalkValue() (interface{}, error) {
 		return attrValue, nil
 	default:
 		if nextPath != "" {
-			return nil, fmt.Errorf("[type]=[%s] does not support ref work, @[path]=[%s/%s]", attrType, p.fullPath, attrName)
+			switch nextPath {
+			case CmdFlat:
+				return attrValue, nil
+			case CmdSchema:
+				return p.schema.RAW[JsonKey.Properties].(map[string]interface{})[attrName], nil
+			case CmdRef:
+				return nil, fmt.Errorf("[type]=[%s] does not support ref work, @[path]=[%s/%s]", attrType, p.fullPath, attrName)
+			}
+			return nil, fmt.Errorf("[type]=[%s] does not support walk further, @[path]=[%s/%s]", attrType, p.fullPath, attrName)
 		}
 		return attrValue, nil
 	}
@@ -141,6 +245,9 @@ func (p *SchemaPath) WalkValue() (interface{}, error) {
 
 func (p *SchemaPath) WalkArray(attrName string, attrIdx string, attrDef map[string]interface{}, attrValue interface{}, nextPath string) (interface{}, error) {
 	itemType := attrDef[JsonKey.Type].(string)
+	if nextPath == CmdSchema && attrIdx == "" {
+		return p.schema.RAW[JsonKey.Properties].(map[string]interface{})[attrName], nil
+	}
 	valueList := []interface{}{}
 	switch itemType {
 	case JsonKey.Object:
@@ -150,6 +257,9 @@ func (p *SchemaPath) WalkArray(attrName string, attrIdx string, attrDef map[stri
 				return attrValue, nil
 			}
 			return nil, fmt.Errorf("failed to load item object schema. @[path]=[%s/%s]", p.fullPath, attrName)
+		}
+		if nextPath == CmdSchema {
+			return itemDoc.RAW, nil
 		}
 		if attrIdx != "" && itemDoc.KeyTemplate == "" {
 			return nil, fmt.Errorf(`
@@ -163,6 +273,10 @@ func (p *SchemaPath) WalkArray(attrName string, attrIdx string, attrDef map[stri
 			if attrIdx != "" && attrIdx != itemKey {
 				continue
 			}
+			if attrIdx == "" && nextPath == CmdFlat {
+				valueList = append(valueList, itemKey)
+				continue
+			}
 			itemValue, err := p.WalkObject(attrName, item, nextPath)
 			if err != nil {
 				return nil, err
@@ -171,6 +285,9 @@ func (p *SchemaPath) WalkArray(attrName string, attrIdx string, attrDef map[stri
 				return itemValue, nil
 			}
 			valueList = append(valueList, itemValue)
+		}
+		if attrIdx != "" {
+			return nil, fmt.Errorf("data not exists. @[path]=[%s/%s[%s]", p.fullPath, attrName, attrIdx)
 		}
 		return valueList, nil
 	case JsonKey.String:
@@ -188,15 +305,24 @@ func (p *SchemaPath) WalkArray(attrName string, attrIdx string, attrDef map[stri
 			}
 			valueList = append(valueList, cmtValue)
 		}
+		if attrIdx != "" {
+			return nil, fmt.Errorf("data not exists. @[path]=[%s/%s[%s]", p.fullPath, attrName, attrIdx)
+		}
 		return valueList, nil
 	default:
 		if attrIdx != "" {
 			return nil, fmt.Errorf("type []%s does not support idx, @[path]=[%s/%s]", itemType, p.fullPath, attrName)
 		}
-		if nextPath != "" {
+		switch nextPath {
+		case CmdSchema:
+			return p.schema.RAW[JsonKey.Properties].(map[string]interface{})[attrName], nil
+		case CmdFlat:
+			return attrValue, nil
+		case "":
+			return attrValue, nil
+		default:
 			return nil, fmt.Errorf("type []%s does not support walk in, @[path]=[%s/%s]", itemType, p.fullPath, attrName)
 		}
-		return attrValue, nil
 	}
 }
 
@@ -204,12 +330,18 @@ func (p *SchemaPath) WalkCMTIdx(attrName string, attrValue string, nextPath stri
 	cmtRef, ok := p.schema.CmtRefs[attrName]
 	if !ok {
 		log.Printf("[attr]=[%s] has no Cmt Ref @[path]=[%s]", attrName, p.fullPath)
+		if nextPath == CmdSchema {
+			return p.schema.RAW[JsonKey.Properties].(map[string]interface{})[attrName], nil
+		}
 		return attrValue, nil
 	}
-	if nextPath == "" {
+	// if query path ends with /.
+	// then return current CMT reference value
+	if nextPath == "$" || nextPath == CmdRef {
 		// if no further path to walk
 		return attrValue, nil
 	}
+	// otherwise we see the CMT as direct to the real object
 	cmtPath := fmt.Sprintf("%s/%s", cmtRef.ContentType, attrValue)
 	if nextPath != JsonKey.DocRoot {
 		cmtPath = fmt.Sprintf("%s/%s", cmtPath, nextPath)
