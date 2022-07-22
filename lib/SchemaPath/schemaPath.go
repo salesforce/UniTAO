@@ -143,6 +143,10 @@ func ValidatePathCmd(nextPath string, cmd string) (string, error) {
 func (p *SchemaPath) FlatValue() (interface{}, error) {
 	flat := map[string]interface{}{}
 	for attrName, val := range p.data {
+		if val == nil {
+			flat[attrName] = nil
+			continue
+		}
 		attrDef, ok := p.schema.Data[JsonKey.Properties].(map[string]interface{})[attrName].(map[string]interface{})
 		if !ok {
 			if reflect.TypeOf(val).Kind() == reflect.Slice {
@@ -203,6 +207,9 @@ func (p *SchemaPath) WalkValue() (interface{}, error) {
 	}
 	attrValue, ok := p.data[attrName]
 	if !ok || attrValue == nil {
+		if nextPath == CmdSchema {
+			return attrDef, nil
+		}
 		log.Printf("data does not exists or is nil. @[path]=[%s/%s]", p.fullPath, attrName)
 		return nil, nil
 	}
@@ -244,6 +251,10 @@ func (p *SchemaPath) WalkValue() (interface{}, error) {
 }
 
 func (p *SchemaPath) WalkArray(attrName string, attrIdx string, attrDef map[string]interface{}, attrValue interface{}, nextPath string) (interface{}, error) {
+	itemList, ok := attrValue.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("failed to convert value to []string")
+	}
 	itemType := attrDef[JsonKey.Type].(string)
 	if nextPath == CmdSchema && attrIdx == "" {
 		return p.schema.RAW[JsonKey.Properties].(map[string]interface{})[attrName], nil
@@ -268,7 +279,8 @@ func (p *SchemaPath) WalkArray(attrName string, attrIdx string, attrDef map[stri
 				attrName, itemDoc.Id, JsonKey.Key,
 				p.fullPath, attrName, attrIdx)
 		}
-		for _, item := range attrValue.([]interface{}) {
+
+		for _, item := range itemList {
 			itemKey := itemDoc.BuildKey(item.(map[string]interface{}))
 			if attrIdx != "" && attrIdx != itemKey {
 				continue
