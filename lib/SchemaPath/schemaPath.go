@@ -37,6 +37,7 @@ import (
 )
 
 const (
+	All       = "*"
 	Ref       = "$"
 	CmdPrefix = "?"
 	CmdRef    = "?ref"
@@ -98,17 +99,20 @@ func NewFromPath(conn *Connection, path string, prev *SchemaPath) (*SchemaPath, 
 	return New(conn, schema, fullPath, nextPath, prev, record.Data), nil
 }
 
-func ParseArrayPath(path string) (string, string) {
+func ParseArrayPath(path string) (string, string, error) {
 	if path[len(path)-1:] != "]" {
-		return path, ""
+		return path, "", nil
 	}
 	keyIdx := strings.Index(path, "[")
 	if keyIdx < 1 {
-		return path, ""
+		return path, "", nil
 	}
 	attrName := path[:keyIdx]
 	key := path[keyIdx+1 : len(path)-1]
-	return attrName, key
+	if key == "" {
+		return "", "", fmt.Errorf("invalid array path=[%s], key empty", path)
+	}
+	return attrName, key, nil
 }
 
 func ParsePathCmd(path string) (string, string, error) {
@@ -200,7 +204,10 @@ func (p *SchemaPath) WalkValue() (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	attrName, attrIdx := ParseArrayPath(attrPath)
+	attrName, attrIdx, err := ParseArrayPath(attrPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse ArrayPath @[path]=[%s]", p.fullPath)
+	}
 	attrDef, ok := p.schema.Data[JsonKey.Properties].(map[string]interface{})[attrName].(map[string]interface{})
 	if !ok {
 		return nil, fmt.Errorf("attr=[%s] is not a defined attribute. @[path]=[%s/%s]", attrName, p.fullPath, attrPath)
@@ -282,7 +289,7 @@ func (p *SchemaPath) WalkArray(attrName string, attrIdx string, attrDef map[stri
 
 		for _, item := range itemList {
 			itemKey := itemDoc.BuildKey(item.(map[string]interface{}))
-			if attrIdx != "" && attrIdx != itemKey {
+			if attrIdx != "" && attrIdx != itemKey && attrIdx != All {
 				continue
 			}
 			if attrIdx == "" && nextPath == CmdFlat {
@@ -291,15 +298,29 @@ func (p *SchemaPath) WalkArray(attrName string, attrIdx string, attrDef map[stri
 			}
 			itemValue, err := p.WalkObject(attrName, item, nextPath)
 			if err != nil {
+				if attrIdx == All {
+					// if failed to walk next path, skip when idx=*
+					continue
+				}
 				return nil, err
 			}
 			if itemKey == attrIdx {
 				return itemValue, nil
 			}
+			if attrIdx == All {
+				if itemValue == nil {
+					// if return value is nil, skip when idx=*
+					continue
+				}
+			}
 			valueList = append(valueList, itemValue)
 		}
-		if attrIdx != "" {
+		if attrIdx != "" && attrIdx != All {
 			return nil, fmt.Errorf("data not exists. @[path]=[%s/%s[%s]", p.fullPath, attrName, attrIdx)
+		}
+		if len(valueList) == 0 && attrIdx == All && len(itemList) > 0 {
+			// only return empty array, when the array is really empty
+			return nil, fmt.Errorf("no existing path match query path @[path]=[%s/%s[%s], nextPath=[%s]", p.fullPath, attrName, attrIdx, nextPath)
 		}
 		return valueList, nil
 	case JsonKey.String:

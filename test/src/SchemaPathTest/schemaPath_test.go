@@ -37,6 +37,25 @@ import (
 	"github.com/salesforce/UniTAO/lib/SchemaPath"
 )
 
+func TestParseArrayPath(t *testing.T) {
+	arrayPath := "abc[1]"
+	attrName, attrIdx, err := SchemaPath.ParseArrayPath(arrayPath)
+	if err != nil {
+		t.Errorf("failed to parse array attr: %s, Error:%s", arrayPath, err)
+	}
+	if attrName != "abc" {
+		t.Errorf("parse path failed, expect [abc]!=[%s]", attrName)
+	}
+	if attrIdx != "1" {
+		t.Errorf("parse path failed, expect [1]!=[%s]", attrIdx)
+	}
+	arrayPath = "abc[]"
+	_, _, err = SchemaPath.ParseArrayPath(arrayPath)
+	if err == nil {
+		t.Errorf("failed to caught array path error=[empty idx]. %s", arrayPath)
+	}
+}
+
 func PrepareConn(schemaStr string, recordStr string) *SchemaPath.Connection {
 	getSchema := func(dataType string) (*SchemaDoc.SchemaDoc, error) {
 		schemaMap := map[string]interface{}{}
@@ -119,6 +138,18 @@ func TestConn(t *testing.T) {
 	}
 }
 
+func QueryPath(conn *SchemaPath.Connection, path string) (interface{}, error) {
+	schemaPath, err := SchemaPath.NewFromPath(conn, path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate SchemaPath. from [path]=[%s], Error: %s", path, err)
+	}
+	value, err := schemaPath.WalkValue()
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse value from [path]=[%s], Error: %s", path, err)
+	}
+	return value, nil
+}
+
 func TestWalkInObjectAndMap(t *testing.T) {
 	schemaStr := `
 	{
@@ -176,40 +207,28 @@ func TestWalkInObjectAndMap(t *testing.T) {
 	}`
 	conn := PrepareConn(schemaStr, recordStr)
 	queryPath := "schema1/data1/value/value1"
-	schemaPath, err := SchemaPath.NewFromPath(conn, queryPath, nil)
+	value, err := QueryPath(conn, queryPath)
 	if err != nil {
-		t.Errorf("failed to generate SchemaPath. from [path]=[%s], Error: %s", queryPath, err)
+		t.Fatal(err)
 	}
-	value1, err := schemaPath.WalkValue()
-	if err != nil {
-		t.Errorf("failed to parse value from [path]=[%s], Error: %s", queryPath, err)
-	}
-	if value1.(string) != "01" {
-		t.Errorf("invalid value from [path]=[%s], [%s]!=[01]", queryPath, value1.(string))
+	if value.(string) != "01" {
+		t.Fatalf("invalid value from [path]=[%s], [%s]!=[01]", queryPath, value.(string))
 	}
 	queryPath = "schema1/data1/mapStr/keyExists"
-	schemaPath, err = SchemaPath.NewFromPath(conn, queryPath, nil)
+	value, err = QueryPath(conn, queryPath)
 	if err != nil {
-		t.Errorf("failed to generate SchemaPath. from [path]=[%s], Error: %s", queryPath, err)
+		t.Fatal(err)
 	}
-	valueExists, err := schemaPath.WalkValue()
-	if err != nil {
-		t.Errorf("failed to parse value from [path]=[%s], Error: %s", queryPath, err)
-	}
-	if valueExists.(string) != "exists" {
-		t.Errorf("invalid value from [path]=[%s], [%s]!=[exists]", queryPath, valueExists.(string))
+	if value.(string) != "exists" {
+		t.Errorf("invalid value from [path]=[%s], [%s]!=[exists]", queryPath, value.(string))
 	}
 	queryPath = "schema1/data1/mapStr/keyNotExists"
-	schemaPath, err = SchemaPath.NewFromPath(conn, queryPath, nil)
+	value, err = QueryPath(conn, queryPath)
 	if err != nil {
-		t.Errorf("failed to generate SchemaPath. from [path]=[%s], Error: %s", queryPath, err)
+		t.Fatal(err)
 	}
-	valueNotExists, err := schemaPath.WalkValue()
-	if err != nil {
-		t.Errorf("failed to parse value from [path]=[%s], Error: %s", queryPath, err)
-	}
-	if valueNotExists != nil {
-		t.Errorf("invalid value from [path]=[%s], [%s]!=[nil]", queryPath, valueNotExists.(string))
+	if value != nil {
+		t.Errorf("invalid value from [path]=[%s], [%s]!=[nil]", queryPath, value.(string))
 	}
 }
 
@@ -269,46 +288,34 @@ func TestWalkInArray(t *testing.T) {
 	}`
 	conn := PrepareConn(schemaStr, recordStr)
 	queryPath := "schemaWitArray/testArray01/attrArray"
-	schemaPath, err := SchemaPath.NewFromPath(conn, queryPath, nil)
+	value, err := QueryPath(conn, queryPath)
 	if err != nil {
-		t.Errorf("failed to generate SchemaPath. from [path]=[%s], Error: %s", queryPath, err)
+		t.Fatal(err)
 	}
-	arrayValue, err := schemaPath.WalkValue()
-	if err != nil {
-		t.Errorf("failed to parse value from [path]=[%s], Error: %s", queryPath, err)
-	}
-	if reflect.TypeOf(arrayValue).Kind() != reflect.Slice {
+	if reflect.TypeOf(value).Kind() != reflect.Slice {
 		t.Errorf("failed to get array from path=[%s]", queryPath)
 	}
-	queryPath = "sch emaWitArray/testArray01/attrArray[01_01]"
-	schemaPath, err = SchemaPath.NewFromPath(conn, queryPath, nil)
+	queryPath = "schemaWitArray/testArray01/attrArray[01_01]"
+	value, err = QueryPath(conn, queryPath)
 	if err != nil {
-		t.Errorf("failed to generate SchemaPath. from [path]=[%s], Error: %s", queryPath, err)
+		t.Fatal(err)
 	}
-	itemValue, err := schemaPath.WalkValue()
-	if err != nil {
-		t.Errorf("failed to parse value from [path]=[%s], Error: %s", queryPath, err)
-	}
-	if itemValue == nil {
+	if value == nil {
 		t.Errorf("failed to get the value of idx=[01_01], @[path]=[%s]", queryPath)
 	}
-	if itemValue.(map[string]interface{})["key2"] != "01" {
+	if value.(map[string]interface{})["key2"] != "01" {
 		t.Errorf("failed to get the correct value from [path]=[%s]", queryPath)
 	}
 	queryPath = "schemaWitArray/testArray01/attrArray[01_02]/key2"
-	schemaPath, err = SchemaPath.NewFromPath(conn, queryPath, nil)
+	value, err = QueryPath(conn, queryPath)
 	if err != nil {
-		t.Errorf("failed to generate SchemaPath. from [path]=[%s], Error: %s", queryPath, err)
+		t.Fatal(err)
 	}
-	keyValue, err := schemaPath.WalkValue()
-	if err != nil {
-		t.Errorf("failed to parse value from [path]=[%s], Error: %s", queryPath, err)
-	}
-	if keyValue == nil {
+	if value == nil {
 		t.Errorf("failed to get the value of idx=[01_01], @[path]=[%s]", queryPath)
 	}
-	if keyValue.(string) != "02" {
-		t.Errorf("failed to get the correct value=[%s] from [path]=[%s]", keyValue.(string), queryPath)
+	if value.(string) != "02" {
+		t.Errorf("failed to get the correct value=[%s] from [path]=[%s]", value.(string), queryPath)
 	}
 }
 
@@ -446,49 +453,37 @@ func TestWalkInRef(t *testing.T) {
 	}`
 	conn := PrepareConn(schemaStr, recordStr)
 	queryPath := "schemaWithRef/refData01/itemArray[01_01]/refIdx"
-	schemaPath, err := SchemaPath.NewFromPath(conn, queryPath, nil)
+	value, err := QueryPath(conn, queryPath)
 	if err != nil {
-		t.Errorf("failed to generate SchemaPath. from [path]=[%s], Error: %s", queryPath, err)
+		t.Fatal(err)
 	}
-	refValue, err := schemaPath.WalkValue()
-	if err != nil {
-		t.Errorf("failed to parse value from [path]=[%s], Error: %s", queryPath, err)
-	}
-	if refValue == nil {
+	if value == nil {
 		t.Errorf("failed to get the value of idx=[01_01], @[path]=[%s]", queryPath)
 	}
-	if refValue.(string) != "value01-01-01" {
-		t.Errorf("expect [value01-01-01]!=[%s] from [path]=[%s]", refValue.(string), queryPath)
+	if value.(string) != "value01-01-01" {
+		t.Errorf("expect [value01-01-01]!=[%s] from [path]=[%s]", value.(string), queryPath)
 	}
 	queryPath = "schemaWithRef/refData01/itemArray[01_01]/refIdx/$"
-	schemaPath, err = SchemaPath.NewFromPath(conn, queryPath, nil)
+	value, err = QueryPath(conn, queryPath)
 	if err != nil {
-		t.Errorf("failed to generate SchemaPath. from [path]=[%s], Error: %s", queryPath, err)
+		t.Fatal(err)
 	}
-	refPath, err := schemaPath.WalkValue()
-	if err != nil {
-		t.Errorf("failed to parse value from [path]=[%s], Error: %s", queryPath, err)
-	}
-	if refPath == nil {
+	if value == nil {
 		t.Errorf("failed to get the value of idx=[01_01], @[path]=[%s]", queryPath)
 	}
-	if refPath.(string) != "ref01/data/items/item01/attr01" {
-		t.Errorf("failed to get the correct value. [%s]!=[ref01/data/items/item01/attr01]", refPath.(string))
+	if value.(string) != "ref01/data/items/item01/attr01" {
+		t.Errorf("failed to get the correct value. [%s]!=[ref01/data/items/item01/attr01]", value.(string))
 	}
 	queryPath = "schemaWithRef/refData01/itemArray[01_01]/refIdx?ref"
-	schemaPath, err = SchemaPath.NewFromPath(conn, queryPath, nil)
+	value, err = QueryPath(conn, queryPath)
 	if err != nil {
-		t.Errorf("failed to generate SchemaPath. from [path]=[%s], Error: %s", queryPath, err)
+		t.Fatal(err)
 	}
-	refPath, err = schemaPath.WalkValue()
-	if err != nil {
-		t.Errorf("failed to parse value from [path]=[%s], Error: %s", queryPath, err)
-	}
-	if refPath == nil {
+	if value == nil {
 		t.Errorf("failed to get the value of idx=[01_01], @[path]=[%s]", queryPath)
 	}
-	if refPath.(string) != "ref01/data/items/item01/attr01" {
-		t.Errorf("failed to get the correct value. [%s]!=[ref01/data/items/item01/attr01]", refPath.(string))
+	if value.(string) != "ref01/data/items/item01/attr01" {
+		t.Errorf("failed to get the correct value. [%s]!=[ref01/data/items/item01/attr01]", value.(string))
 	}
 }
 
@@ -557,51 +552,35 @@ func TestWalkSchema(t *testing.T) {
 	}`
 	conn := PrepareConn(schemaStr, recordStr)
 	queryPath := "schemaWitArray/testArray01?schema"
-	schemaPath, err := SchemaPath.NewFromPath(conn, queryPath, nil)
+	value, err := QueryPath(conn, queryPath)
 	if err != nil {
-		t.Errorf("failed to generate SchemaPath. from [path]=[%s], Error: %s", queryPath, err)
+		t.Fatal(err)
 	}
-	schema, err := schemaPath.WalkValue()
-	if err != nil {
-		t.Errorf("failed to walk path and return schema on record. Error: %s", err)
-	}
-	if schema.(map[string]interface{})[JsonKey.Name].(string) != "schemaWitArray" {
+	if value.(map[string]interface{})[JsonKey.Name].(string) != "schemaWitArray" {
 		t.Errorf("got invalid shema data")
 	}
 	queryPath = "schemaWitArray/testArray01/attrArray?schema"
-	schemaPath, err = SchemaPath.NewFromPath(conn, queryPath, nil)
+	value, err = QueryPath(conn, queryPath)
 	if err != nil {
-		t.Errorf("failed to generate SchemaPath. from [path]=[%s], Error: %s", queryPath, err)
+		t.Fatal(err)
 	}
-	schema, err = schemaPath.WalkValue()
-	if err != nil {
-		t.Errorf("failed to walk path and return schema on record. Error: %s", err)
-	}
-	if schema.(map[string]interface{})[JsonKey.Type].(string) != JsonKey.Array {
+	if value.(map[string]interface{})[JsonKey.Type].(string) != JsonKey.Array {
 		t.Errorf("got invalid shema data")
 	}
 	queryPath = "schemaWitArray/testArray01/attrArray[01_02]?schema"
-	schemaPath, err = SchemaPath.NewFromPath(conn, queryPath, nil)
+	value, err = QueryPath(conn, queryPath)
 	if err != nil {
-		t.Errorf("failed to generate SchemaPath. from [path]=[%s], Error: %s", queryPath, err)
+		t.Fatal(err)
 	}
-	schema, err = schemaPath.WalkValue()
-	if err != nil {
-		t.Errorf("failed to walk path and return schema on record. Error: %s", err)
-	}
-	if schema.(map[string]interface{})[JsonKey.Name].(string) != "itemObj" {
+	if value.(map[string]interface{})[JsonKey.Name].(string) != "itemObj" {
 		t.Errorf("got invalid shema data")
 	}
 	queryPath = "schemaWitArray/testArray02/attrArray?schema"
-	schemaPath, err = SchemaPath.NewFromPath(conn, queryPath, nil)
+	value, err = QueryPath(conn, queryPath)
 	if err != nil {
-		t.Errorf("failed to generate SchemaPath. from [path]=[%s], Error: %s", queryPath, err)
+		t.Fatal(err)
 	}
-	schema, err = schemaPath.WalkValue()
-	if err != nil {
-		t.Errorf("failed to walk path and return schema on record. Error: %s", err)
-	}
-	if schema.(map[string]interface{})[JsonKey.Type].(string) != JsonKey.Array {
+	if value.(map[string]interface{})[JsonKey.Type].(string) != JsonKey.Array {
 		t.Errorf("got invalid shema data")
 	}
 }
@@ -740,18 +719,14 @@ func TestWalkFlat(t *testing.T) {
 	}`
 	conn := PrepareConn(schemaStr, recordStr)
 	queryPath := "schemaWithRef/refData01?flat"
-	flatPath, err := SchemaPath.NewFromPath(conn, queryPath, nil)
+	value, err := QueryPath(conn, queryPath)
 	if err != nil {
-		t.Errorf("failed to generate SchemaPath. from [path]=[%s], Error: %s", queryPath, err)
+		t.Fatal(err)
 	}
-	flatVal, err := flatPath.WalkValue()
-	if err != nil {
-		t.Errorf("failed to parse value from [path]=[%s], Error: %s", queryPath, err)
-	}
-	if flatVal == nil {
+	if value == nil {
 		t.Errorf("failed to get the value of idx=[01_01], @[path]=[%s]", queryPath)
 	}
-	flatMap, ok := flatVal.(map[string]interface{})
+	flatMap, ok := value.(map[string]interface{})
 	if !ok {
 		t.Errorf("return value is not map. @[path]=[%s]", queryPath)
 	}

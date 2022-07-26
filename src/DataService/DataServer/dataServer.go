@@ -26,6 +26,7 @@ This copyright notice and license applies to all files in this directory or sub-
 package DataServer
 
 import (
+	"Data"
 	"flag"
 	"fmt"
 	"log"
@@ -65,7 +66,7 @@ func New() (Server, error) {
 }
 
 func (srv *Server) Run() {
-	handler, err := DataHandler.New(srv.config)
+	handler, err := DataHandler.New(srv.config, Data.ConnectDb)
 	if err != nil {
 		log.Fatalf("failed to initialize data layer, Err:%s", err)
 	}
