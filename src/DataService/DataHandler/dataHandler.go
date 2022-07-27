@@ -31,7 +31,7 @@ import (
 	"path"
 	"reflect"
 
-	"Data"
+	"Data/DbConfig"
 	"Data/DbIface"
 	"DataService/Config"
 
@@ -48,8 +48,8 @@ type Handler struct {
 	config    Config.Confuguration
 }
 
-func New(config Config.Confuguration) (*Handler, error) {
-	db, err := Data.ConnectDb(config.Database)
+func New(config Config.Confuguration, connectDb func(db DbConfig.DatabaseConfig) (DbIface.Database, error)) (*Handler, error) {
+	db, err := connectDb(config.Database)
 	if err != nil {
 		return nil, err
 	}
@@ -236,29 +236,28 @@ func (h *Handler) validateCmtRefs(doc *SchemaDoc.SchemaDoc, data map[string]inte
 }
 
 func (h *Handler) validateCmtRefValue(ref *SchemaDoc.CMTDocRef, value string) (bool, error) {
-	typePath, dataType := Util.ParsePath(ref.ContentType)
-	if typePath != Schema.Inventory {
+	if ref.CmtType != Schema.Inventory {
 		// ContentMediaType not start with inventory, we don't understand
 		return true, nil
 	}
-	if dataType == JsonKey.Schema {
+	if ref.ContentType == JsonKey.Schema {
 		return false, fmt.Errorf("should not refer to schema of schema as data type")
 	}
-	_, code, err := h.localSchema(dataType)
+	_, code, err := h.localSchema(ref.ContentType)
 	if err != nil && code != http.StatusNotFound {
 		return false, err
 	}
 	if code == http.StatusNotFound {
-		_, code, err := h.inventoryData(dataType, value)
+		_, code, err := h.inventoryData(ref.ContentType, value)
 		if err != nil && code != http.StatusNotFound {
-			return false, fmt.Errorf("failed to query data from inventory, [type/id]=[%s/%s]", dataType, value)
+			return false, fmt.Errorf("failed to query data from inventory, [type/id]=[%s/%s]", ref.ContentType, value)
 		}
 		if code == http.StatusNotFound {
 			return false, nil
 		}
 		return true, nil
 	}
-	_, code, err = h.GetData(dataType, value)
+	_, code, err = h.GetData(ref.ContentType, value)
 	if err != nil {
 		if code == http.StatusNotFound {
 			return false, nil

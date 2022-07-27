@@ -26,6 +26,9 @@ This copyright notice and license applies to all files in this directory or sub-
 package DataServiceTest
 
 import (
+	"Data/DbConfig"
+	"Data/DbIface"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -37,25 +40,145 @@ import (
 	"DataService/DataServer"
 
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
-	"github.com/salesforce/UniTAO/lib/Util"
 )
 
 // Make sure both data service and inventory Service are running before running the test
 func TestDataHander(t *testing.T) {
-	log.Print("test start")
-	config, err := loadConfig()
+	configStr := `
+	{
+		"database": {
+			"type": "dynamodb",
+			"dynamodb": {
+				"region": "us-west-2",
+				"endpoint": "http://localhost:8000"
+			}
+		},
+		"table": {
+			"data": "DataService01"
+		},
+		"http": {
+			"type": "http",
+			"dns": "localhost",
+			"port": "8002",
+			"id": "DataService_01"
+		},
+		"inventory": {
+			"url": "http://localhost:8004"
+		}
+	}
+	`
+	config := Config.Confuguration{}
+	err := json.Unmarshal([]byte(configStr), &config)
 	if err != nil {
-		t.Fatalf("failed to read config file. Error:%s", err)
+		t.Fatalf("faild to load config str. invalid format. Error:%s", err)
 	}
 	log.Print("config loaded")
-	handler, err := DataHandler.New(*config)
-	if err != nil {
-		t.Fatalf("failed to create DataHandler from config, Error:%s", err)
+	schemaStr := `
+	{
+		"region": {
+			"__id": "region",
+			"__type": "schema",
+			"__ver": "0.0.1",
+			"data": {
+				"name": "region",
+				"description": "geographical regions Schema",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"description": {
+						"type": "string"
+					},
+					"data_centers": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"contentMediaType": "inventory/data_center"
+						}
+					}
+				}
+			}
+		},
+		"data_center": {
+			"__id": "data_center",
+			"__type": "schema",
+			"__ver": "0.0.1",
+			"data": {
+				"name": "data_center",
+				"description": "geographical regions Schema",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"description": {
+						"type": "string"
+					}
+				}
+			}
+		},
+		"SEA1": {
+			"__id": "SEA1",
+			"__type": "data_center",
+			"__ver": "0.0.1",
+			"data": {
+				"name": "Seattle",
+				"description": "Data Center in Seattle"
+			}
+		}
 	}
-	filePath := "data/region.json"
-	testData, err := Util.LoadJSONMap(filePath)
+	`
+	schemaData := map[string]interface{}{}
+	err = json.Unmarshal([]byte(schemaStr), &schemaData)
 	if err != nil {
-		t.Fatalf("failed loading data from [path]=[%s], Err:%s", filePath, err)
+		t.Fatalf("Failed to load schema data for region. Error:%s", err)
+	}
+	connectDb := func(config DbConfig.DatabaseConfig) (DbIface.Database, error) {
+		mockDb := MockDatabase{
+			config: config,
+		}
+		mockDb.get = func(queryArgs map[string]interface{}) ([]map[string]interface{}, error) {
+			result := []map[string]interface{}{}
+			data, ok := schemaData[queryArgs[Record.DataId].(string)]
+			if ok {
+				result = append(result, data.(map[string]interface{}))
+			}
+			return result, nil
+		}
+		return mockDb, nil
+	}
+	handler, err := DataHandler.New(config, connectDb)
+	if err != nil {
+		t.Fatalf("failed to create handler")
+	}
+
+	regionStr := `
+	{
+		"data": {
+			"__id": "North_America",
+			"__type": "region",
+			"__ver": "1_01_01",
+			"data": {
+				"id": "North_America",
+				"description": "North America Infrastructure",
+				"data_centers": ["SEA1"]
+			}
+		},
+		"negativeData": {
+			"__id": "North_America",
+			"__type": "region",
+			"__ver": "1_01_01",
+			"data": {
+				"id": "North_America",
+				"description": "North America Infrastructure",
+				"data_centers": ["SEA1", "DFW4", "LAX2"]
+			}
+		}
+	}
+	`
+	testData := map[string]interface{}{}
+	err = json.Unmarshal([]byte(regionStr), &testData)
+	if err != nil {
+		t.Fatalf("failed loading test data Err:%s", err)
 	}
 	log.Print("get positive data for test")
 	record, err := Record.LoadMap(testData["data"].(map[string]interface{}))
