@@ -102,7 +102,10 @@ func TestObjectKey(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to load recordStr as Record")
 	}
-	recordKey := schema.BuildKey(record.Data)
+	recordKey, err := schema.BuildKey(record.Data)
+	if err != nil {
+		t.Errorf("failed to build record key. Error:%s", err)
+	}
 	if recordKey != record.Id {
 		t.Errorf("build the wrong key. [%s]!=[%s]", recordKey, record.Id)
 	}

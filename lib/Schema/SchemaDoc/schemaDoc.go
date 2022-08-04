@@ -295,22 +295,34 @@ func (d *SchemaDoc) getCmtRef(pname string, prop map[string]interface{}) error {
 	}
 }
 
-// get referenced sub definition
-func (d *SchemaDoc) getRefDoc(pname string, prop map[string]interface{}) error {
+func ParseRefName(prop map[string]interface{}) (string, error) {
 	ref, ok := prop[JsonKey.Ref].(string)
 	if !ok {
-		return nil
+		return "", nil
 	}
 	if !strings.HasPrefix(ref, JsonKey.DefinitionPrefix) {
-		return fmt.Errorf("unknown ref value=[%s], path=[%s/%s/%s]", ref, d.Path(), pname, JsonKey.Ref)
+		return "", fmt.Errorf("unknown ref value=[%s]", ref)
 	}
-	docType := ref[len(JsonKey.DefinitionPrefix):]
-	doc, err := d.GetDefinition(docType)
+	refName := ref[len(JsonKey.DefinitionPrefix):]
+	return refName, nil
+}
+
+// get referenced sub definition
+func (d *SchemaDoc) getRefDoc(pname string, prop map[string]interface{}) error {
+	refType, err := ParseRefName(prop)
 	if err != nil {
-		return fmt.Errorf("failed to get Definition=[%s], path=[%s/%s/%s], Error:%s", docType, d.Path(), pname, JsonKey.Ref, err)
+		return fmt.Errorf("failed to parse ref. @path=[%s/%s/%s], Error: %s", d.Path(), pname, JsonKey.Ref, err)
+	}
+	if refType == "" {
+		// if no ref, then do nothing
+		return nil
+	}
+	doc, err := d.GetDefinition(refType)
+	if err != nil {
+		return fmt.Errorf("failed to get Definition=[%s], path=[%s/%s/%s], Error:%s", refType, d.Path(), pname, JsonKey.Ref, err)
 	}
 	if doc == nil {
-		return fmt.Errorf("cannot find definition=[%s], path=[%s/%s/%s], no error", docType, d.Path(), pname, JsonKey.Ref)
+		return fmt.Errorf("cannot find definition=[%s], path=[%s/%s/%s], no error", refType, d.Path(), pname, JsonKey.Ref)
 	}
 	d.SubDocs[pname] = doc
 	return nil
@@ -333,17 +345,8 @@ func (d *SchemaDoc) GetDefinition(dataType string) (*SchemaDoc, error) {
 	return nil, nil
 }
 
-func (d *SchemaDoc) BuildKey(data map[string]interface{}) string {
-	key := d.KeyTemplate
-	for _, attrName := range d.KeyAttrs {
-		attrValue, ok := data[attrName]
-		if !ok {
-			return ""
-		}
-		tempStr := fmt.Sprintf("{%s}", attrName)
-		key = strings.ReplaceAll(key, tempStr, attrValue.(string))
-	}
-	return key
+func (d *SchemaDoc) BuildKey(data map[string]interface{}) (string, error) {
+	return BuildTemplateValue(d.KeyTemplate, d.KeyAttrs, data)
 }
 
 func IsMap(attrDef map[string]interface{}) bool {
@@ -370,4 +373,41 @@ func ParseTemplateVars(template string) []string {
 		}
 	}
 	return attrList
+}
+
+func BuildTemplateValue(template string, attrList []string, data interface{}) (string, error) {
+	dataList := []map[string]interface{}{}
+	if reflect.TypeOf(data).Kind() == reflect.Slice {
+		for idx, d := range data.([]interface{}) {
+			dMap, ok := d.(map[string]interface{})
+			if !ok {
+				return "", fmt.Errorf("invalid param=[data], idx=[%d] cannot convert to map", idx)
+			}
+			dataList = append(dataList, dMap)
+		}
+	} else {
+		dMap, ok := data.(map[string]interface{})
+		if !ok {
+			return "", fmt.Errorf("invalid param=[data], is not list or map")
+		}
+		dataList = append(dataList, dMap)
+	}
+
+	key := template
+	for _, attrName := range attrList {
+		hasAttr := false
+		for _, dMap := range dataList {
+			attrValue, ok := dMap[attrName]
+			if ok {
+				tempStr := fmt.Sprintf("{%s}", attrName)
+				key = strings.ReplaceAll(key, tempStr, attrValue.(string))
+				hasAttr = true
+				break
+			}
+		}
+		if !hasAttr {
+			return "", fmt.Errorf("attr=[%s] does not exists in data", attrName)
+		}
+	}
+	return key, nil
 }

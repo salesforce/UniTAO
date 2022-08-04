@@ -175,9 +175,12 @@ func (h *Handler) GetSchema(dataType string) (*SchemaDoc.SchemaDoc, error) {
 }
 
 func (h *Handler) GetDataServiceRecord(dataType string, dataId string) (*Record.Record, error) {
-	data, _, err := h.GetDataServiceData(dataType, dataId)
+	data, code, err := h.GetDataServiceData(dataType, dataId)
 	if err != nil {
-		return nil, err
+		return nil, &SchemaPath.SchemaPathErr{
+			Code:    code,
+			PathErr: err,
+		}
 	}
 	record, err := Record.LoadMap(data.(map[string]interface{}))
 	if err != nil {
@@ -188,11 +191,15 @@ func (h *Handler) GetDataServiceRecord(dataType string, dataId string) (*Record.
 
 func (h *Handler) GetDataByPath(dataPath string) (interface{}, int, error) {
 	conn := SchemaPath.Connection{
-		GetSchema: h.GetSchema,
-		GetRecord: h.GetDataServiceRecord,
+		FuncSchema: h.GetSchema,
+		FuncRecord: h.GetDataServiceRecord,
 	}
 	schemaPath, err := SchemaPath.NewFromPath(&conn, dataPath, nil)
 	if err != nil {
+		pathErr, ok := err.(*SchemaPath.SchemaPathErr)
+		if ok && pathErr.Code == http.StatusNotFound {
+			return nil, http.StatusNotFound, pathErr
+		}
 		return nil, http.StatusBadRequest, fmt.Errorf("failed to generate SchemaPath. from [path]=[%s], Error: %s", dataPath, err)
 	}
 	result, err := schemaPath.WalkValue()

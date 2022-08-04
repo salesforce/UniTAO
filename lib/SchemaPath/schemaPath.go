@@ -37,14 +37,16 @@ import (
 )
 
 const (
-	All       = "*"
-	Ref       = "$"
-	CmdPrefix = "?"
-	CmdRef    = "?ref"
-	CmdSchema = "?schema"
-	CmdFlat   = "?flat"
+	All          = "*"
+	Ref          = "$"
+	CmdPrefix    = "?"
+	CmdRef       = "?ref"
+	CmdSchema    = "?schema"
+	CmdFlat      = "?flat"
+	SchemaFakeId = "#SchemaFakeId#"
 )
 
+// TODO: [Optimization] store pathCmd in SchemaPath instead of put it back to nextPath.
 type SchemaPath struct {
 	conn     *Connection
 	schema   *SchemaDoc.SchemaDoc
@@ -52,6 +54,15 @@ type SchemaPath struct {
 	nextPath string
 	prev     *SchemaPath
 	data     map[string]interface{}
+}
+
+type SchemaPathErr struct {
+	Code    int
+	PathErr error
+}
+
+func (e *SchemaPathErr) Error() string {
+	return fmt.Sprintf("Code=[%d], Error: %s", e.Code, e.PathErr)
 }
 
 func New(conn *Connection, schema *SchemaDoc.SchemaDoc, fullPath string, nextPath string, prev *SchemaPath, data map[string]interface{}) *SchemaPath {
@@ -66,12 +77,28 @@ func New(conn *Connection, schema *SchemaDoc.SchemaDoc, fullPath string, nextPat
 	return &schemaPath
 }
 
+func AppendErr(err error, newMsg string) error {
+	newErr := fmt.Errorf("%s Error: %s", newMsg, err)
+	pathErr, ok := err.(*SchemaPathErr)
+	if ok {
+		newErr = &SchemaPathErr{
+			Code:    pathErr.Code,
+			PathErr: newErr,
+		}
+	}
+	return newErr
+}
+
 func NewFromPath(conn *Connection, path string, prev *SchemaPath) (*SchemaPath, error) {
 	fullPath := ""
 	if prev != nil {
 		fullPath = prev.fullPath
 	}
-	dataType, nextPath := Util.ParsePath(path)
+	nextPath, pathCmd, err := ParsePathCmd(path)
+	if err != nil {
+		return nil, err
+	}
+	dataType, nextPath := Util.ParsePath(nextPath)
 	if nextPath == "" {
 		return nil, fmt.Errorf("missing id from path=[%s/%s]", fullPath, dataType)
 	}
@@ -80,22 +107,17 @@ func NewFromPath(conn *Connection, path string, prev *SchemaPath) (*SchemaPath, 
 		return nil, fmt.Errorf("failed to get schema [type]=[%s] @[path]=[%s]", dataType, fullPath)
 	}
 	fullPath = fmt.Sprintf("%s/%s", fullPath, dataType)
-
 	dataId, nextPath := Util.ParsePath(nextPath)
-	dataId, pathCmd, err := ParsePathCmd(dataId)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse Path Cmd on path=[%s], Error: %s", path, err)
-	}
-	nextPath, err = ValidatePathCmd(nextPath, pathCmd)
-	if err != nil {
-		return nil, fmt.Errorf("invalid PathCmd format path=[%s], Error: %s", path, err)
+	fullPath = fmt.Sprintf("%s/%s", fullPath, dataId)
+	nextPath = fmt.Sprintf("%s%s", nextPath, pathCmd)
+	if pathCmd == CmdSchema {
+		fakeData := make(map[string]interface{})
+		return New(conn, schema, fullPath, nextPath, prev, fakeData), nil
 	}
 	record, err := conn.GetRecord(dataType, dataId)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get record [type/id]=[%s/%s] @[path]=[%s]", dataType, dataId, fullPath)
+		return nil, AppendErr(err, fmt.Sprintf("failed to get record [type/id]=[%s/%s] @[path]=[%s]", dataType, dataId, fullPath))
 	}
-	fullPath = fmt.Sprintf("%s/%s", fullPath, dataId)
-
 	return New(conn, schema, fullPath, nextPath, prev, record.Data), nil
 }
 
@@ -120,28 +142,26 @@ func ParsePathCmd(path string) (string, string, error) {
 	if qIdx < 0 {
 		return path, "", nil
 	}
-	attrName := path[:qIdx]
-	qPath := path[qIdx+1:]
-	dupIdx := strings.Index(qPath[1:], CmdPrefix)
+	qPath := path[:qIdx]
+	qCmd := path[qIdx:]
+	dupIdx := strings.Index(qCmd[1:], CmdPrefix)
 	if dupIdx > -1 {
 		return "", "", fmt.Errorf("invalid format of PathCmd, more than 1 ? in path. path=[%s]", path)
 	}
-	return attrName, fmt.Sprintf("%s%s", CmdPrefix, qPath), nil
+	err := ValidatePathCmd(qCmd)
+	if err != nil {
+		return "", "", fmt.Errorf("path command validate failed. Error: %s, @path=[%s]", err, path)
+	}
+	return qPath, qCmd, nil
 }
 
-func ValidatePathCmd(nextPath string, cmd string) (string, error) {
-	if nextPath != "" && cmd != "" {
-		return "", fmt.Errorf("invalid path=[%s/%s],Path Command has to be end of path as query", cmd, nextPath)
-	}
-	if cmd == "" {
-		return nextPath, nil
-	}
+func ValidatePathCmd(cmd string) error {
 	for _, c := range []string{CmdRef, CmdFlat, CmdSchema} {
 		if c == cmd {
-			return cmd, nil
+			return nil
 		}
 	}
-	return "", fmt.Errorf("unknown path cmd=[%s]", cmd)
+	return fmt.Errorf("unknown path cmd=[%s]", cmd)
 }
 
 func (p *SchemaPath) FlatValue() (interface{}, error) {
@@ -195,15 +215,11 @@ func (p *SchemaPath) WalkValue() (interface{}, error) {
 			return nil, fmt.Errorf("unknown Path command: %s", p.nextPath)
 		}
 	}
-	attrPath, nextPath := Util.ParsePath(p.nextPath)
-	attrPath, pathCmd, err := ParsePathCmd(attrPath)
+	nextPath, pathCmd, err := ParsePathCmd(p.nextPath)
 	if err != nil {
 		return nil, err
 	}
-	nextPath, err = ValidatePathCmd(nextPath, pathCmd)
-	if err != nil {
-		return nil, err
-	}
+	attrPath, nextPath := Util.ParsePath(nextPath)
 	attrName, attrIdx, err := ParseArrayPath(attrPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse ArrayPath @[path]=[%s]", p.fullPath)
@@ -214,12 +230,13 @@ func (p *SchemaPath) WalkValue() (interface{}, error) {
 	}
 	attrValue, ok := p.data[attrName]
 	if !ok || attrValue == nil {
-		if nextPath == CmdSchema {
-			return attrDef, nil
+		if pathCmd != CmdSchema {
+			log.Printf("data does not exists or is nil. @[path]=[%s/%s]", p.fullPath, attrName)
+			return nil, nil
 		}
-		log.Printf("data does not exists or is nil. @[path]=[%s/%s]", p.fullPath, attrName)
-		return nil, nil
+		attrValue = nil
 	}
+	nextPath = fmt.Sprintf("%s%s", nextPath, pathCmd)
 	attrType := attrDef[JsonKey.Type].(string)
 	if attrIdx != "" && attrType != JsonKey.Array {
 		return nil, fmt.Errorf("only [%s] support idx path, attr [%s] type=[%s], @[path]=[%s]", JsonKey.Array, attrName, attrType, p.fullPath)
@@ -227,15 +244,24 @@ func (p *SchemaPath) WalkValue() (interface{}, error) {
 	switch attrType {
 	case JsonKey.Array:
 		log.Printf("walk into array")
+		if attrValue == nil {
+			attrValue = []interface{}{}
+		}
 		return p.WalkArray(attrName, attrIdx, attrDef[JsonKey.Items].(map[string]interface{}), attrValue, nextPath)
 	case JsonKey.Object:
 		log.Printf("walk into object @[path]=[%s/%s]", p.fullPath, attrName)
+		if attrValue == nil {
+			attrValue = map[string]interface{}{}
+		}
 		if SchemaDoc.IsMap(attrDef) {
 			return p.WalkMap(attrName, attrDef[JsonKey.AdditionalProperties].(map[string]interface{}), attrValue, nextPath)
 		}
 		return p.WalkObject(attrName, attrValue, nextPath)
 	case JsonKey.String:
 		log.Printf("walk into CMT ref")
+		if attrValue == nil {
+			attrValue = ""
+		}
 		attrValue, err := p.WalkCMTIdx(attrName, attrValue.(string), nextPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get CMDIdx. [%s]=[%s], @[path]=[%s]", attrName, attrValue, p.fullPath)
@@ -286,9 +312,19 @@ func (p *SchemaPath) WalkArray(attrName string, attrIdx string, attrDef map[stri
 				attrName, itemDoc.Id, JsonKey.Key,
 				p.fullPath, attrName, attrIdx)
 		}
-
+		if strings.HasSuffix(nextPath, CmdSchema) {
+			item := map[string]interface{}{}
+			itemValue, err := p.WalkObject(attrName, item, nextPath)
+			if err != nil {
+				return nil, err
+			}
+			return itemValue, nil
+		}
 		for _, item := range itemList {
-			itemKey := itemDoc.BuildKey(item.(map[string]interface{}))
+			itemKey, err := itemDoc.BuildKey(item.(map[string]interface{}))
+			if err != nil {
+				return nil, err
+			}
 			if attrIdx != "" && attrIdx != itemKey && attrIdx != All {
 				continue
 			}
@@ -324,6 +360,13 @@ func (p *SchemaPath) WalkArray(attrName string, attrIdx string, attrDef map[stri
 		}
 		return valueList, nil
 	case JsonKey.String:
+		if strings.HasSuffix(nextPath, CmdSchema) {
+			cmtValue, err := p.WalkCMTIdx(attrName, SchemaFakeId, nextPath)
+			if err != nil {
+				return nil, err
+			}
+			return cmtValue, nil
+		}
 		for _, item := range attrValue.([]interface{}) {
 			key := item.(string)
 			if attrIdx != "" && attrIdx != key {
@@ -396,18 +439,27 @@ func (p *SchemaPath) WalkMap(attrName string, mapDef map[string]interface{}, att
 	}
 	itemKey, nextPath := Util.ParsePath(nextPath)
 	itemValue, ok := attrValue.(map[string]interface{})[itemKey]
-	if !ok {
-		log.Printf("map [itemKey]=[%s] does not exists. @[path]=[%s/%s]", itemKey, p.fullPath, attrName)
-		return nil, nil
+	if !ok || itemValue == nil {
+		if !strings.HasSuffix(nextPath, CmdSchema) {
+			log.Printf("map [itemKey]=[%s] does not exists. @[path]=[%s/%s]", itemKey, p.fullPath, attrName)
+			return nil, nil
+		}
+		itemValue = nil
 	}
 	switch mapDef[JsonKey.Type].(string) {
 	case JsonKey.String:
+		if itemValue == nil {
+			itemValue = SchemaFakeId
+		}
 		cmtValue, err := p.WalkCMTIdx(attrName, itemValue.(string), nextPath)
 		if err != nil {
 			return nil, err
 		}
 		return cmtValue, nil
 	case JsonKey.Object:
+		if itemValue == nil {
+			itemValue = make(map[string]interface{})
+		}
 		objValue, err := p.WalkObject(attrName, itemValue.(map[string]interface{}), nextPath)
 		if err != nil {
 			return nil, err
