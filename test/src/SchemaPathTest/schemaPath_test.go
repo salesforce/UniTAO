@@ -86,8 +86,8 @@ func PrepareConn(schemaStr string, recordStr string) *SchemaPath.Connection {
 		return record, nil
 	}
 	conn := SchemaPath.Connection{
-		GetSchema: getSchema,
-		GetRecord: getRecord,
+		FuncSchema: getSchema,
+		FuncRecord: getRecord,
 	}
 	return &conn
 

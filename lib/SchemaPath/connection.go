@@ -26,15 +26,82 @@ This copyright notice and license applies to all files in this directory or sub-
 package SchemaPath
 
 import (
+	"fmt"
+
+	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
 )
 
-type FuncSchema func(dataType string) (*SchemaDoc.SchemaDoc, error)
+type SchemaFunction func(dataType string) (*SchemaDoc.SchemaDoc, error)
 
-type FuncRecord func(dataType string, dataId string) (*Record.Record, error)
+type RecordFunction func(dataType string, dataId string) (*Record.Record, error)
 
 type Connection struct {
-	GetSchema FuncSchema
-	GetRecord FuncRecord
+	FuncSchema SchemaFunction
+	FuncRecord RecordFunction
+	cache      map[string]TypeCache
+}
+
+type TypeCache struct {
+	DataType string
+	IdCache  map[string]interface{}
+}
+
+func (c *Connection) cacheData(dataType string, id string) (interface{}, error) {
+	if c.cache == nil {
+		c.cache = map[string]TypeCache{}
+	}
+	if _, ok := c.cache[dataType]; !ok {
+		c.cache[dataType] = TypeCache{
+			DataType: dataType,
+			IdCache:  make(map[string]interface{}),
+		}
+	}
+	data, ok := c.cache[dataType].IdCache[id]
+	if ok {
+		return data, nil
+	}
+	var err error
+	switch dataType {
+	case JsonKey.Schema:
+		data, err = c.FuncSchema(id)
+	default:
+		data, err = c.FuncRecord(dataType, id)
+	}
+	if err != nil {
+		return nil, err
+	}
+	c.cache[dataType].IdCache[id] = data
+	return data, err
+}
+
+func (c *Connection) GetSchema(dataType string) (*SchemaDoc.SchemaDoc, error) {
+	if c.FuncSchema == nil {
+		return nil, fmt.Errorf("field funcSchema is nil")
+	}
+	data, err := c.cacheData(JsonKey.Schema, dataType)
+	if err != nil {
+		return nil, err
+	}
+	schema, ok := data.(*SchemaDoc.SchemaDoc)
+	if !ok {
+		return nil, fmt.Errorf("function schema return invalid data. failed convert it to SchemaDoc.SchemaDoc. [type]=[%s]", dataType)
+	}
+	return schema, nil
+}
+
+func (c *Connection) GetRecord(dataType string, dataId string) (*Record.Record, error) {
+	if c.FuncRecord == nil {
+		return nil, fmt.Errorf("field funcRecord is nil")
+	}
+	data, err := c.cacheData(dataType, dataId)
+	if err != nil {
+		return nil, err
+	}
+	record, ok := data.(*Record.Record)
+	if !ok {
+		return nil, fmt.Errorf("function schema return invalid data. failed convert it to Record.Record. [type]=[%s], id=[%s]", dataType, dataId)
+	}
+	return record, nil
 }
