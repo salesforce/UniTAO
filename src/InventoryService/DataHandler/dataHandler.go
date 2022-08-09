@@ -255,23 +255,30 @@ func (h *Handler) GetData(dataType string, dataId string) (interface{}, int, err
 }
 
 func (h *Handler) GetDataServiceInfo(dataType string) (*InvRecord.DataServiceInfo, int, error) {
-	if len(h.DsInfoCache) == 0 {
-		invList, code, err := h.ListData(Schema.Inventory)
-		if err != nil {
-			return nil, code, err
-		}
-		for _, inv := range invList {
-			err := h.RefreshDsCache(inv)
-			if err != nil {
-				return nil, http.StatusInternalServerError, err
-			}
-		}
+	code, err := h.RefreshAllDsCache()
+	if err != nil {
+		return nil, code, err
 	}
 	dsInfo, ok := h.DsInfoCache[dataType]
 	if ok {
 		return dsInfo, http.StatusOK, nil
 	}
 	return nil, http.StatusNotFound, fmt.Errorf("failed to find Data Service for [type]=[%s]", dataType)
+}
+
+// TODO: Add last update time, only update if more than a period of time
+func (h *Handler) RefreshAllDsCache() (int, error) {
+	invList, code, err := h.ListData(Schema.Inventory)
+	if err != nil {
+		return code, err
+	}
+	for _, inv := range invList {
+		err := h.RefreshDsCache(inv)
+		if err != nil {
+			return http.StatusInternalServerError, err
+		}
+	}
+	return http.StatusAccepted, nil
 }
 
 func (h *Handler) RefreshDsCache(inv map[string]interface{}) error {
