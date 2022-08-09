@@ -273,7 +273,7 @@ func (p *SchemaPath) WalkValue() (interface{}, error) {
 	case JsonKey.String:
 		log.Printf("walk into CMT ref")
 		if nextPath != "" || p.PathCmd != CmdFlat {
-			attrValue, err := p.WalkCMTIdx(attrName, attrValue.(string), nextPath)
+			attrValue, err = p.WalkCMTIdx(attrName, attrValue.(string), nextPath)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get CMDIdx. [%s]=[%s], @[path]=[%s]", attrName, attrValue, p.FullPath)
 			}
@@ -296,12 +296,13 @@ func (p *SchemaPath) WalkValue() (interface{}, error) {
 
 func (p *SchemaPath) WalkArray(attrName string, attrIdx string, attrDef map[string]interface{}, attrValue interface{}, nextPath string) (interface{}, error) {
 	itemDef := attrDef[JsonKey.Items].(map[string]interface{})
+	var itemList []interface{}
 	if p.PathCmd == CmdSchema {
 		// path is arrayAttrOnly
-		if nextPath == "" && attrIdx == "" {
-			return attrDef, nil
-		}
-		if nextPath == Ref {
+		if nextPath == "" {
+			if attrIdx == "" {
+				return attrDef, nil
+			}
 			return itemDef, nil
 		}
 	}
@@ -318,13 +319,16 @@ func (p *SchemaPath) WalkArray(attrName string, attrIdx string, attrDef map[stri
 	case JsonKey.Object:
 		itemDoc, ok := p.Schema.SubDocs[attrName]
 		if !ok {
+			if p.PathCmd == CmdSchema {
+				return nil, &SchemaPathErr{
+					Code:    http.StatusBadRequest,
+					PathErr: fmt.Errorf("schema attr=[%s] has missing ref field=[%s]. path=[%s]", attrName, JsonKey.Ref, p.FullPath),
+				}
+			}
 			if nextPath == "" && attrIdx == "" {
 				return attrValue, nil
 			}
 			return nil, fmt.Errorf("failed to load item object schema. @[path]=[%s/%s]", p.FullPath, attrName)
-		}
-		if p.PathCmd == CmdSchema {
-			return itemDoc.RAW, nil
 		}
 		if attrIdx != "" && itemDoc.KeyTemplate == "" {
 			return nil, fmt.Errorf(`
