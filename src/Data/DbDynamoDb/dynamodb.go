@@ -182,8 +182,19 @@ func (db *Database) DeleteTable(name string) error {
 	return nil
 }
 
+func MarshalMapWithCustomEncoder(data interface{}) (map[string]*dynamodb.AttributeValue, error) {
+	encoder := dynamodbattribute.NewEncoder(func(e *dynamodbattribute.Encoder) {
+		e.EnableEmptyCollections = true
+	})
+	av, err := encoder.Encode(data)
+	if err != nil || av == nil || av.M == nil {
+		return map[string]*dynamodb.AttributeValue{}, err
+	}
+	return av.M, nil
+}
+
 func (db *Database) Create(table string, data interface{}) error {
-	av, err := dynamodbattribute.MarshalMap(data)
+	av, err := MarshalMapWithCustomEncoder(data)
 	if err != nil {
 		log.Printf("Got error marshalling map: %s", err)
 		return err
