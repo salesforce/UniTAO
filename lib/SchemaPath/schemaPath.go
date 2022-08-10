@@ -402,6 +402,10 @@ func (p *SchemaPath) WalkArray(attrName string, attrIdx string, attrDef map[stri
 			}
 			cmtValue, err := p.WalkCMTIdx(attrName, key, nextPath)
 			if err != nil {
+				if attrIdx == All {
+					// if failed to walk, then keep going to next
+					continue
+				}
 				return nil, err
 			}
 			if key == attrIdx {
@@ -464,6 +468,17 @@ func (p *SchemaPath) WalkMap(attrName string, attrDef map[string]interface{}, at
 		return attrValue, nil
 	}
 	itemKey, nextPath := Util.ParsePath(nextPath)
+	if itemKey == All {
+		itemList := []interface{}{}
+		for key := range attrValue.(map[string]interface{}) {
+			itemPath := fmt.Sprintf("%s/%s", key, nextPath)
+			item, err := p.WalkMap(attrName, attrDef, attrValue, itemPath)
+			if err == nil {
+				itemList = append(itemList, item)
+			}
+		}
+		return itemList, nil
+	}
 	itemValue, ok := attrValue.(map[string]interface{})[itemKey]
 	if !ok || itemValue == nil {
 		if p.PathCmd != CmdSchema {
