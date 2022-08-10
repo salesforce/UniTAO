@@ -35,16 +35,14 @@ import (
 type DataServiceInfo struct {
 	Id           string   `json:"__id"`
 	URL          []string `json:"url"`
-	TypeList     []string `json:"typeList"`
 	LastSyncTime string   `json:"lastSynctime"`
 	goodUrl      string
 }
 
 func NewDsInfo(id string, url string) *DataServiceInfo {
 	dsInfo := DataServiceInfo{
-		Id:       id,
-		URL:      []string{url},
-		TypeList: []string{},
+		Id:  id,
+		URL: []string{url},
 	}
 	return &dsInfo
 }

@@ -296,7 +296,6 @@ func (p *SchemaPath) WalkValue() (interface{}, error) {
 
 func (p *SchemaPath) WalkArray(attrName string, attrIdx string, attrDef map[string]interface{}, attrValue interface{}, nextPath string) (interface{}, error) {
 	itemDef := attrDef[JsonKey.Items].(map[string]interface{})
-	var itemList []interface{}
 	if p.PathCmd == CmdSchema {
 		// path is arrayAttrOnly
 		if nextPath == "" {
@@ -305,6 +304,7 @@ func (p *SchemaPath) WalkArray(attrName string, attrIdx string, attrDef map[stri
 			}
 			return itemDef, nil
 		}
+		attrValue = []interface{}{}
 	}
 	itemList, ok := attrValue.([]interface{})
 	if !ok {
