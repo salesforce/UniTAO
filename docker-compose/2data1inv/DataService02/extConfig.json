@@ -1,0 +1,21 @@
+{
+    "database": {
+        "type": "dynamodb",
+        "dynamodb": {
+            "region": "us-west-2",
+            "endpoint": "http://localhost:8000"
+        }
+    },
+    "table": {
+        "data": "DataService02"
+    },
+    "http": {
+        "type": "http",
+        "dns": "localhost",
+        "port": "8003",
+        "id": "DataService_02"
+    },
+    "inventory": {
+        "url": "http://localhost:8004"
+    }
+}

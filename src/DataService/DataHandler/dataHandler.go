@@ -129,9 +129,6 @@ func (h *Handler) Lock(dataType string, dataId string) (int, error) {
 }
 
 func (h *Handler) localSchema(dataType string) (*Schema.SchemaOps, int, error) {
-	if dataType == JsonKey.Schema {
-		return nil, http.StatusBadRequest, fmt.Errorf("should not validate schema of %s", JsonKey.Schema)
-	}
 	schema, ok := h.schemaMap[dataType]
 	if ok {
 		return schema, http.StatusOK, nil
@@ -173,6 +170,9 @@ func (h *Handler) inventoryData(dataType string, value string) (map[string]inter
 }
 
 func (h *Handler) Validate(record *Record.Record) (int, error) {
+	if record.Type == Record.KeyRecord {
+		return http.StatusBadRequest, fmt.Errorf("should not validate schema of %s", Record.KeyRecord)
+	}
 	schema, code, err := h.localSchema(record.Type)
 	if err != nil {
 		return code, err
@@ -181,9 +181,11 @@ func (h *Handler) Validate(record *Record.Record) (int, error) {
 	if err != nil {
 		return http.StatusBadRequest, fmt.Errorf("failed to validate payload against schema for type %s, Err: \n%s", record.Type, err)
 	}
-	code, err = h.ValidateDataRefs(schema.Schema, record.Data, path.Join(record.Type, record.Id))
-	if err != nil {
-		return code, err
+	if record.Type != JsonKey.Schema {
+		code, err = h.ValidateDataRefs(schema.Schema, record.Data, path.Join(record.Type, record.Id))
+		if err != nil {
+			return code, err
+		}
 	}
 	return code, nil
 }
@@ -303,13 +305,11 @@ func (h *Handler) validateSubDoc(doc *SchemaDoc.SchemaDoc, data map[string]inter
 }
 
 func (h *Handler) Add(record *Record.Record) (int, error) {
-	if record.Type != JsonKey.Schema {
-		code, err := h.Validate(record)
-		if err != nil {
-			return code, err
-		}
+	code, err := h.Validate(record)
+	if err != nil {
+		return code, err
 	}
-	code, err := h.Lock(record.Type, record.Id)
+	code, err = h.Lock(record.Type, record.Id)
 	if err != nil {
 		return code, err
 	}
@@ -328,13 +328,11 @@ func (h *Handler) Add(record *Record.Record) (int, error) {
 }
 
 func (h *Handler) Set(record *Record.Record) (int, error) {
-	if record.Type != JsonKey.Schema {
-		code, err := h.Validate(record)
-		if err != nil {
-			return code, err
-		}
+	code, err := h.Validate(record)
+	if err != nil {
+		return code, err
 	}
-	code, err := h.Lock(record.Type, record.Id)
+	code, err = h.Lock(record.Type, record.Id)
 	if err != nil {
 		return code, err
 	}

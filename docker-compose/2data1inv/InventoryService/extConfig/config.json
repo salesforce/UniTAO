@@ -8,7 +8,7 @@
     "http": {
         "type": "http",
         "dns": "localhost",
-        "port": "8005",
+        "port": "8004",
         "id": "Inventory"
     }
 }

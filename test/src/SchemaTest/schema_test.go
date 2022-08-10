@@ -230,6 +230,133 @@ func TestSchemaCustomTypeMap(t *testing.T) {
 	}
 }
 
+func TestSchema(t *testing.T) {
+	schemaOfSchema := `
+	{
+		"name": "schema",
+		"description": "schema of schema",
+		"additionalProperties": false,
+		"properties": {
+			"name": {
+				"type": "string"
+			},
+			"description": {
+				"type": "string",
+				"required": false
+			},
+			"key": {
+				"type": "string",
+				"required": false
+			},
+			"properties": {
+				"type": "map",
+				"items": {
+					"type": "object",
+					"$ref": "#/definitions/prop"
+				}
+			},
+			"definitions": {
+				"type": "map",
+				"items": {
+					"type": "object",
+					"$ref": "#"
+				},
+				"required": false
+			}
+		},
+		"definitions": {
+			"prop": {
+				"additionalProperties": false,
+				"properties": {
+					"type": {
+						"type": "string"
+					},
+					"items": {
+						"type": "object",
+						"$ref": "#/definitions/prop",
+						"required": false
+					},
+					"$ref": {
+						"type": "string",
+						"required": false
+					},
+					"contentMediaType": {
+						"type": "string",
+						"required": false
+					},
+					"required": {
+						"type": "boolean",
+						"required": false
+					}
+				}
+			}
+		}
+	}
+	`
+	correctSchema := `
+	{
+		"name": "testSchema01",
+		"properties": {
+			"testAttr": {
+				"type": "string"
+			},
+			"testObj": {
+				"type": "object",
+				"$ref": "#/definitions/obj"
+			}
+		},
+		"definitions": {
+			"obj": {
+				"name": "obj",
+				"properties": {
+					"objAttr01": {
+						"type": "string",
+						"contentMediaType": "inventory/testType"
+					}
+				}
+			}
+		}
+	}
+	`
+	badSchma := `
+	{
+		"name": "testSchema01",
+		"properties": {
+			"testAttr": {
+				"type": "string"
+			},
+			"testObj": {
+				"type": "object",
+				"$ref": "#/definitions/obj"
+			}
+		},
+		"definitions": {
+			"obj": {
+				"name": "obj",
+				"properties": {
+					"objAttr01": {
+						"type": "string",
+						"ContentMediaType": "inventory/testType"
+					}
+				}
+			}
+		}
+	}
+	`
+	schema, err := LoadSchema(schemaOfSchema)
+	if err != nil {
+		t.Fatalf("failed load schema of schema. Error:%s", err)
+	}
+	err = validateData(schema, correctSchema)
+	if err != nil {
+		t.Fatalf("Failed on pass positive schema, Error:%s", err)
+	}
+	err = validateData(schema, badSchma)
+	if err == nil {
+		t.Fatal("Failed on negative badSchma, Error")
+	}
+}
+
 func validateData(schema *Schema.SchemaOps, dataStr string) error {
 	var data map[string]interface{}
 	err := json.Unmarshal([]byte(dataStr), &data)

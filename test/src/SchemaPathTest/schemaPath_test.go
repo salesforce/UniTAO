@@ -572,7 +572,7 @@ func TestWalkSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if value.(map[string]interface{})[JsonKey.Name].(string) != "itemObj" {
+	if value.(map[string]interface{})[JsonKey.Type].(string) != JsonKey.Object {
 		t.Errorf("got invalid shema data")
 	}
 	queryPath = "schemaWitArray/testArray02/attrArray?schema"
