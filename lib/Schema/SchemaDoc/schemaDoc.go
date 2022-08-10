@@ -232,7 +232,7 @@ func (d *SchemaDoc) processItemDef(pType string, pname string, itemDef map[strin
 		}
 		err := d.getRefDoc(pname, itemDef)
 		if err != nil {
-			return fmt.Errorf("failed to get ref doc @[path]=[%s/%s]. Error: %s", d.Path(), pname, err)
+			return fmt.Errorf("failed to get ref doc @processItemDef @[path]=[%s/%s]. Error: %s", d.Path(), pname, err)
 		}
 	}
 	return nil
@@ -262,7 +262,7 @@ func (d *SchemaDoc) processRefs() error {
 			}
 			err := d.getRefDoc(pname, propDef)
 			if err != nil {
-				return fmt.Errorf("failed to get ref doc @[path]=[%s/%s]. Error: %s", d.Path(), pname, err)
+				return fmt.Errorf("failed to get ref doc @processRefs @[path]=[%s/%s]. Error: %s", d.Path(), pname, err)
 			}
 		case JsonKey.String:
 			err := d.getCmtRef(pname, propDef)
