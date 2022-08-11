@@ -300,6 +300,9 @@ func ParseRefName(prop map[string]interface{}) (string, error) {
 	if !ok {
 		return "", nil
 	}
+	if ref == JsonKey.DocRoot {
+		return ref, nil
+	}
 	if !strings.HasPrefix(ref, JsonKey.DefinitionPrefix) {
 		return "", fmt.Errorf("unknown ref value=[%s]", ref)
 	}
@@ -329,6 +332,16 @@ func (d *SchemaDoc) getRefDoc(pname string, prop map[string]interface{}) error {
 }
 
 func (d *SchemaDoc) GetDefinition(dataType string) (*SchemaDoc, error) {
+	if dataType == JsonKey.DocRoot {
+		if d.Parent == nil {
+			return d, nil
+		}
+		doc, err := d.Parent.GetDefinition(dataType)
+		if err != nil {
+			return nil, err
+		}
+		return doc, nil
+	}
 	if d.Definitions != nil {
 		doc, ok := d.Definitions[dataType]
 		if ok {

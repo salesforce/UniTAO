@@ -34,7 +34,7 @@ import (
 	"Data/DbConfig"
 	"Data/DbIface"
 	"InventoryService/InvRecord"
-	"InventoryService/ReferalRecord"
+	"InventoryService/RefRecord"
 
 	"github.com/salesforce/UniTAO/lib/Schema"
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
@@ -45,7 +45,7 @@ import (
 )
 
 const (
-	Referal = "referal"
+	Referral = "referral"
 )
 
 type Handler struct {
@@ -73,7 +73,7 @@ func (h *Handler) init() error {
 	if err != nil {
 		return err
 	}
-	for _, name := range []string{JsonKey.Schema, Schema.Inventory, Referal} {
+	for _, name := range []string{JsonKey.Schema, Schema.Inventory, Referral} {
 		tblExists := false
 		for _, tbl := range tbList {
 			if *tbl == name {
@@ -93,14 +93,14 @@ func (h *Handler) init() error {
 }
 
 func (h *Handler) List(dataType string) ([]string, int, error) {
-	if Util.SearchStrList([]string{JsonKey.Schema, Schema.Inventory, Referal}, dataType) {
+	if Util.SearchStrList([]string{JsonKey.Schema, Schema.Inventory, Referral}, dataType) {
 		result, code, err := h.ListData(dataType)
 		if err != nil {
 			return nil, code, err
 		}
 		dsList := make([]string, 0, len(result))
 		dataKey := Record.DataId
-		if dataType == Referal {
+		if dataType == Referral {
 			dataKey = Record.DataType
 		}
 		for _, data := range result {
@@ -154,33 +154,33 @@ func (h *Handler) Get(dataType string, dataPath string) (interface{}, int, error
 		}
 		return dsInfo, http.StatusOK, nil
 	}
-	if dataType == Referal {
+	if dataType == Referral {
 		if nextPath != "" {
 			return nil, http.StatusBadRequest, fmt.Errorf("path=[%s] not supported on type=[%s]", dataPath, dataType)
 		}
-		referal, code, err := h.GetReferal(dataPath)
+		referral, code, err := h.GetReferral(dataPath)
 		if err != nil {
 			return nil, code, err
 		}
-		dsInfo, code, err := h.GetDsInfo(referal.DsId)
+		dsInfo, code, err := h.GetDsInfo(referral.DsId)
 		if err != nil {
 			return nil, code, err
 		}
-		err = referal.SetDsInfo(dsInfo)
+		err = referral.SetDsInfo(dsInfo)
 		if err != nil {
 			return nil, http.StatusInternalServerError, err
 		}
-		code, err = referal.GetSchema()
+		code, err = referral.GetSchema()
 		if err != nil {
 			return nil, code, err
 		}
-		return referal, http.StatusOK, nil
+		return referral, http.StatusOK, nil
 	}
 	return h.GetDataByPath(fmt.Sprintf("%s/%s", dataType, dataPath))
 }
 
 func (h *Handler) ListData(dataType string) ([]map[string]interface{}, int, error) {
-	if !Util.SearchStrList([]string{JsonKey.Schema, Schema.Inventory, Referal}, dataType) {
+	if !Util.SearchStrList([]string{JsonKey.Schema, Schema.Inventory, Referral}, dataType) {
 		return nil, http.StatusBadRequest, fmt.Errorf("[type]=[%s] is not supported", dataType)
 	}
 	args := make(map[string]interface{})
@@ -285,31 +285,31 @@ func (h *Handler) GetData(dataType string, dataId string) (interface{}, int, err
 }
 
 func (h *Handler) GetDataServiceInfo(dataType string) (*InvRecord.DataServiceInfo, int, error) {
-	referal, code, err := h.GetReferal(dataType)
+	referral, code, err := h.GetReferral(dataType)
 	if err != nil {
 		return nil, code, err
 	}
-	dsInfo, code, err := h.GetDsInfo(referal.DsId)
+	dsInfo, code, err := h.GetDsInfo(referral.DsId)
 	if err != nil {
 		return nil, code, err
 	}
-	err = referal.SetDsInfo(dsInfo)
+	err = referral.SetDsInfo(dsInfo)
 	if err != nil {
 		return nil, http.StatusInternalServerError, err
 	}
-	return referal.DsInfo, http.StatusOK, nil
+	return referral.DsInfo, http.StatusOK, nil
 }
 
-func (h *Handler) GetReferal(dataType string) (*ReferalRecord.ReferalRecord, int, error) {
-	referalData, code, err := h.GetData(Referal, dataType)
+func (h *Handler) GetReferral(dataType string) (*RefRecord.Referral, int, error) {
+	referralData, code, err := h.GetData(Referral, dataType)
 	if err != nil {
-		return nil, code, fmt.Errorf("failed to get referal record for [type]=[%s]", dataType)
+		return nil, code, fmt.Errorf("failed to get referral record for [type]=[%s]", dataType)
 	}
-	referal, err := ReferalRecord.LoadMap(referalData.(map[string]interface{}))
+	referral, err := RefRecord.LoadMap(referralData.(map[string]interface{}))
 	if err != nil {
 		return nil, http.StatusBadRequest, err
 	}
-	return referal, http.StatusOK, nil
+	return referral, http.StatusOK, nil
 }
 
 func (h *Handler) GetDsInfo(dsId string) (*InvRecord.DataServiceInfo, int, error) {

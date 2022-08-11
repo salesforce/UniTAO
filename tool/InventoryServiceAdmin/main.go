@@ -35,7 +35,7 @@ import (
 	"InventoryService/Config"
 	"InventoryService/DataHandler"
 	"InventoryService/InvRecord"
-	"InventoryService/ReferalRecord"
+	"InventoryService/RefRecord"
 
 	"github.com/salesforce/UniTAO/lib/Schema"
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
@@ -196,18 +196,18 @@ func (a *Admin) syncDsSchema() error {
 }
 
 func (a *Admin) getCurrentTypeList(dsId string) ([]string, error) {
-	typeList, _, err := a.handler.List(DataHandler.Referal)
+	typeList, _, err := a.handler.List(DataHandler.Referral)
 	if err != nil {
 		return nil, err
 	}
 	currentTypes := []string{}
 	for _, dataType := range typeList {
-		referal, _, err := a.handler.GetReferal(dataType)
+		referral, _, err := a.handler.GetReferral(dataType)
 		if err != nil {
 			a.removeType(dsId, dataType)
 			continue
 		}
-		if referal.DsId == dsId {
+		if referral.DsId == dsId {
 			currentTypes = append(currentTypes, dataType)
 		}
 	}
@@ -326,22 +326,22 @@ func (a *Admin) addType(dsId string, dataType string) error {
 	}
 	a.removeData(JsonKey.Schema, dataType)
 	a.handler.Db.Create(JsonKey.Schema, schemaRecord)
-	referal := ReferalRecord.ReferalRecord{
+	referral := RefRecord.Referral{
 		Id:        dataType,
 		DataType:  dataType,
 		SchemaVer: schemaRecord.(map[string]interface{})[Record.Version].(string),
 		DsId:      dsId,
 	}
-	referakData, err := referal.ToMap()
+	referakData, err := referral.ToMap()
 	if err != nil {
 		return nil
 	}
-	a.handler.Db.Create(DataHandler.Referal, referakData)
+	a.handler.Db.Create(DataHandler.Referral, referakData)
 	return nil
 }
 
 func (a *Admin) removeType(dsId string, dataType string) error {
-	a.removeData(DataHandler.Referal, dataType)
+	a.removeData(DataHandler.Referral, dataType)
 	a.removeData(JsonKey.Schema, dataType)
 	return nil
 }

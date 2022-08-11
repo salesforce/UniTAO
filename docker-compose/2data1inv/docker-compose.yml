@@ -74,6 +74,9 @@ services:
     image: unitao/inventoryservice:localbuild
     container_name: unitao-inv-service
     restart: always
+    depends_on:
+      - "unitao-data-service01"
+      - "unitao-data-service02"
     volumes:
       -  ./InventoryService/config:/opt/UniTAO/config
       -  ./InventoryService/data:/opt/UniTAO/data
@@ -85,6 +88,8 @@ services:
     image: unitao/inventoryservice:localbuild
     container_name: unitao-inv-service-admin
     restart: "no"
+    depends_on:
+      - "unitao-inv-service"
     volumes:
       -  ./InventoryService/config:/opt/UniTAO/config
       -  ./InventoryService/data:/opt/UniTAO/data

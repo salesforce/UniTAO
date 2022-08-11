@@ -444,10 +444,7 @@ func (p *SchemaPath) WalkCMTIdx(attrName string, attrValue string, nextPath stri
 		return attrValue, nil
 	}
 	// otherwise we see the CMT as direct to the real object
-	cmtPath := fmt.Sprintf("%s/%s", cmtRef.ContentType, attrValue)
-	if nextPath != JsonKey.DocRoot {
-		cmtPath = fmt.Sprintf("%s/%s", cmtPath, nextPath)
-	}
+	cmtPath := fmt.Sprintf("%s/%s/%s", cmtRef.ContentType, attrValue, nextPath)
 	cmt, err := NewFromPath(p.Conn, cmtPath, p)
 	if err != nil {
 		return nil, err

@@ -173,9 +173,6 @@ func (h *Handler) Validate(record *Record.Record) (int, error) {
 	if record.Type == Record.KeyRecord {
 		return http.StatusBadRequest, fmt.Errorf("should not validate schema of %s", Record.KeyRecord)
 	}
-	if record.Type == JsonKey.Schema {
-		return http.StatusAccepted, nil
-	}
 	schema, code, err := h.localSchema(record.Type)
 	if err != nil {
 		return code, err
