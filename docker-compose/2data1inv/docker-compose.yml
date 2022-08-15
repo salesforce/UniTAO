@@ -95,3 +95,13 @@ services:
       -  ./InventoryService/data:/opt/UniTAO/data
     command: "InventoryServiceAdmin sync -config /opt/UniTAO/config/config.json"
 
+  unitao-ui-server:
+    image: unitao/uiserver:localbuild
+    container_name: unitao-uiserver
+    restart: "no"
+    volumes:
+      -  ../../ui/UI:/opt/UniTAO/UI
+      -  ../../ui/WebServer:/opt/UniTAO/WebServer
+    ports:
+      - "8005:3000"
+    command: "node ./WebServer/index.js"
