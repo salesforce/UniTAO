@@ -41,6 +41,8 @@ import (
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
 	"github.com/salesforce/UniTAO/lib/SchemaPath"
+	SchemaPathData "github.com/salesforce/UniTAO/lib/SchemaPath/Data"
+	"github.com/salesforce/UniTAO/lib/SchemaPath/Error"
 	"github.com/salesforce/UniTAO/lib/Util"
 )
 
@@ -136,19 +138,20 @@ func (h *Handler) List(dataType string) ([]string, int, error) {
 }
 
 func (h *Handler) Get(dataType string, dataPath string) (interface{}, int, error) {
-	_, nextPath := Util.ParsePath(dataPath)
+	// if we get to this function, it means dataPath is not empty string already
+	idPath, nextPath := Util.ParsePath(dataPath)
 	if dataType == JsonKey.Schema {
 		if nextPath != "" {
 			return nil, http.StatusBadRequest, fmt.Errorf("path=[%s] not supported on type=[%s]", dataPath, dataType)
 		}
-		return h.GetData(JsonKey.Schema, dataPath)
+		return h.GetData(JsonKey.Schema, idPath)
 	}
 	if dataType == Schema.Inventory {
 		if nextPath != "" {
 			return nil, http.StatusBadRequest, fmt.Errorf("path=[%s] not supported on type=[%s]", dataPath, dataType)
 		}
 		// retrieve data service record from Inventory
-		dsInfo, code, err := h.GetDsInfo(dataPath)
+		dsInfo, code, err := h.GetDsInfo(idPath)
 		if err != nil {
 			return nil, code, err
 		}
@@ -158,7 +161,7 @@ func (h *Handler) Get(dataType string, dataPath string) (interface{}, int, error
 		if nextPath != "" {
 			return nil, http.StatusBadRequest, fmt.Errorf("path=[%s] not supported on type=[%s]", dataPath, dataType)
 		}
-		referral, code, err := h.GetReferral(dataPath)
+		referral, code, err := h.GetReferral(idPath)
 		if err != nil {
 			return nil, code, err
 		}
@@ -176,7 +179,7 @@ func (h *Handler) Get(dataType string, dataPath string) (interface{}, int, error
 		}
 		return referral, http.StatusOK, nil
 	}
-	return h.GetDataByPath(fmt.Sprintf("%s/%s", dataType, dataPath))
+	return h.GetDataByPath(dataType, idPath, nextPath)
 }
 
 func (h *Handler) ListData(dataType string) ([]map[string]interface{}, int, error) {
@@ -192,47 +195,63 @@ func (h *Handler) ListData(dataType string) ([]map[string]interface{}, int, erro
 	return result, http.StatusOK, nil
 }
 
-func (h *Handler) GetSchema(dataType string) (*SchemaDoc.SchemaDoc, error) {
-	data, _, err := h.GetData(JsonKey.Schema, dataType)
+func (h *Handler) GetSchema(dataType string) (*SchemaDoc.SchemaDoc, *Error.SchemaPathErr) {
+	data, code, err := h.GetData(JsonKey.Schema, dataType)
 	if err != nil {
-		return nil, err
+		return nil, &Error.SchemaPathErr{
+			Code:    code,
+			PathErr: fmt.Errorf("failed to get schema=[%s], Error: %s", dataType, err),
+		}
 	}
 	record, err := Record.LoadMap(data.(map[string]interface{}))
 	if err != nil {
-		return nil, fmt.Errorf("failed to load schema record data. [type]=[%s], Error: %s", dataType, err)
+		return nil, &Error.SchemaPathErr{
+			Code:    http.StatusInternalServerError,
+			PathErr: fmt.Errorf("failed to load schema record data. [type]=[%s], Error: %s", dataType, err),
+		}
 	}
-	return SchemaDoc.New(record.Data, dataType, nil)
+	doc, err := SchemaDoc.New(record.Data, dataType, nil)
+	if err != nil {
+		return nil, &Error.SchemaPathErr{
+			Code:    http.StatusInternalServerError,
+			PathErr: fmt.Errorf("failed to schema doc from schema record. [id]=[%s], Error: %s", dataType, err),
+		}
+	}
+	return doc, nil
 }
 
-func (h *Handler) GetDataServiceRecord(dataType string, dataId string) (*Record.Record, error) {
+func (h *Handler) GetDataServiceRecord(dataType string, dataId string) (*Record.Record, *Error.SchemaPathErr) {
 	data, code, err := h.GetDataServiceData(dataType, dataId)
 	if err != nil {
-		return nil, &SchemaPath.SchemaPathErr{
+		return nil, &Error.SchemaPathErr{
 			Code:    code,
 			PathErr: err,
 		}
 	}
 	record, err := Record.LoadMap(data.(map[string]interface{}))
 	if err != nil {
-		return nil, fmt.Errorf("failed to load data as Record. Error:%s", err)
+		return nil, &Error.SchemaPathErr{
+			Code:    http.StatusInternalServerError,
+			PathErr: fmt.Errorf("failed to load data as Record. Error:%s", err),
+		}
 	}
 	return record, nil
 }
 
-func (h *Handler) GetDataByPath(dataPath string) (interface{}, int, error) {
-	conn := SchemaPath.Connection{
+func (h *Handler) GetDataByPath(dataType string, idPath string, nextPath string) (interface{}, int, error) {
+	conn := SchemaPathData.Connection{
 		FuncSchema: h.GetSchema,
 		FuncRecord: h.GetDataServiceRecord,
 	}
-	schemaPath, err := SchemaPath.NewFromPath(&conn, dataPath, nil)
-	if err != nil {
-		pathErr, ok := err.(*SchemaPath.SchemaPathErr)
-		if ok && pathErr.Code == http.StatusNotFound {
-			return nil, http.StatusNotFound, pathErr
-		}
-		return nil, http.StatusBadRequest, fmt.Errorf("failed to generate SchemaPath. from [path]=[%s], Error: %s", dataPath, err)
+	dataPath := idPath
+	if nextPath != "" {
+		dataPath = fmt.Sprintf("%s/%s", idPath, nextPath)
 	}
-	result, err := schemaPath.WalkValue()
+	query, err := SchemaPath.CreateQuery(&conn, dataType, dataPath)
+	if err != nil {
+		return nil, err.Code, err.PathErr
+	}
+	result, err := query.WalkValue()
 	if err != nil {
 		return nil, http.StatusBadRequest, fmt.Errorf("failed to walk SchemaPath. from [path]=[%s], Error: %s", dataPath, err)
 	}

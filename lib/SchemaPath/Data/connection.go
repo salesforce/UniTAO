@@ -23,19 +23,21 @@ This copyright notice and license applies to all files in this directory or sub-
 ************************************************************************************************************
 */
 
-package SchemaPath
+package Data
 
 import (
 	"fmt"
+	"net/http"
 
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
+	"github.com/salesforce/UniTAO/lib/SchemaPath/Error"
 )
 
-type SchemaFunction func(dataType string) (*SchemaDoc.SchemaDoc, error)
+type SchemaFunction func(dataType string) (*SchemaDoc.SchemaDoc, *Error.SchemaPathErr)
 
-type RecordFunction func(dataType string, dataId string) (*Record.Record, error)
+type RecordFunction func(dataType string, dataId string) (*Record.Record, *Error.SchemaPathErr)
 
 type Connection struct {
 	FuncSchema SchemaFunction
@@ -48,7 +50,7 @@ type TypeCache struct {
 	IdCache  map[string]interface{}
 }
 
-func (c *Connection) cacheData(dataType string, id string) (interface{}, error) {
+func (c *Connection) cacheData(dataType string, id string) (interface{}, *Error.SchemaPathErr) {
 	if c.cache == nil {
 		c.cache = map[string]TypeCache{}
 	}
@@ -62,7 +64,7 @@ func (c *Connection) cacheData(dataType string, id string) (interface{}, error) 
 	if ok {
 		return data, nil
 	}
-	var err error
+	var err *Error.SchemaPathErr
 	switch dataType {
 	case JsonKey.Schema:
 		data, err = c.FuncSchema(id)
@@ -76,9 +78,12 @@ func (c *Connection) cacheData(dataType string, id string) (interface{}, error) 
 	return data, err
 }
 
-func (c *Connection) GetSchema(dataType string) (*SchemaDoc.SchemaDoc, error) {
+func (c *Connection) GetSchema(dataType string) (*SchemaDoc.SchemaDoc, *Error.SchemaPathErr) {
 	if c.FuncSchema == nil {
-		return nil, fmt.Errorf("field funcSchema is nil")
+		return nil, &Error.SchemaPathErr{
+			Code:    http.StatusInternalServerError,
+			PathErr: fmt.Errorf("field funcSchema is nil"),
+		}
 	}
 	data, err := c.cacheData(JsonKey.Schema, dataType)
 	if err != nil {
@@ -86,14 +91,20 @@ func (c *Connection) GetSchema(dataType string) (*SchemaDoc.SchemaDoc, error) {
 	}
 	schema, ok := data.(*SchemaDoc.SchemaDoc)
 	if !ok {
-		return nil, fmt.Errorf("function schema return invalid data. failed convert it to SchemaDoc.SchemaDoc. [type]=[%s]", dataType)
+		return nil, &Error.SchemaPathErr{
+			Code:    http.StatusInternalServerError,
+			PathErr: fmt.Errorf("function schema return invalid data. failed convert it to SchemaDoc.SchemaDoc. [type]=[%s]", dataType),
+		}
 	}
 	return schema, nil
 }
 
-func (c *Connection) GetRecord(dataType string, dataId string) (*Record.Record, error) {
+func (c *Connection) GetRecord(dataType string, dataId string) (*Record.Record, *Error.SchemaPathErr) {
 	if c.FuncRecord == nil {
-		return nil, fmt.Errorf("field funcRecord is nil")
+		return nil, &Error.SchemaPathErr{
+			Code:    http.StatusInternalServerError,
+			PathErr: fmt.Errorf("field funcRecord is nil"),
+		}
 	}
 	data, err := c.cacheData(dataType, dataId)
 	if err != nil {
@@ -101,7 +112,10 @@ func (c *Connection) GetRecord(dataType string, dataId string) (*Record.Record, 
 	}
 	record, ok := data.(*Record.Record)
 	if !ok {
-		return nil, fmt.Errorf("function schema return invalid data. failed convert it to Record.Record. [type]=[%s], id=[%s]", dataType, dataId)
+		return nil, &Error.SchemaPathErr{
+			Code:    http.StatusInternalServerError,
+			PathErr: fmt.Errorf("function schema return invalid data. failed convert it to Record.Record. [type]=[%s], id=[%s]", dataType, dataId),
+		}
 	}
 	return record, nil
 }

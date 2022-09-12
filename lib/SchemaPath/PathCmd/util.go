@@ -23,52 +23,40 @@ This copyright notice and license applies to all files in this directory or sub-
 ************************************************************************************************************
 */
 
-package SchemaPath
+package PathCmd
 
 import (
 	"fmt"
-	"net/http"
-
-	"github.com/salesforce/UniTAO/lib/SchemaPath/Data"
-	"github.com/salesforce/UniTAO/lib/SchemaPath/Error"
-	"github.com/salesforce/UniTAO/lib/SchemaPath/Node"
-	"github.com/salesforce/UniTAO/lib/SchemaPath/PathCmd"
-	"github.com/salesforce/UniTAO/lib/Util"
+	"strings"
 )
 
-func CreateQuery(conn *Data.Connection, dataType string, dataPath string) (PathCmd.QueryIface, *Error.SchemaPathErr) {
-	qPath, qCmd, pErr := PathCmd.Parse(dataPath)
-	if pErr != nil {
-		return nil, &Error.SchemaPathErr{
-			Code:    http.StatusBadRequest,
-			PathErr: fmt.Errorf("failed to parse path=[%s], Error:%s", dataPath, pErr),
+func Parse(path string) (string, string, error) {
+	if strings.HasSuffix(path, CmdFlatPath) {
+		qPath := path[:len(path)-len(CmdFlatPath)]
+		return qPath, CmdRef, nil
+	}
+	qIdx := strings.Index(path, CmdPrefix)
+	if qIdx < 0 {
+		return path, CmdValue, nil
+	}
+	qPath := path[:qIdx]
+	qCmd := path[qIdx:]
+	dupIdx := strings.Index(qCmd[1:], CmdPrefix)
+	if dupIdx > -1 {
+		return "", "", fmt.Errorf("invalid format of PathCmd, more than 1 ? in path. path=[%s]", path)
+	}
+	err := Validate(qCmd)
+	if err != nil {
+		return "", "", fmt.Errorf("path command validate failed. Error: %s, @path=[%s]", err, path)
+	}
+	return qPath, qCmd, nil
+}
+
+func Validate(cmd string) error {
+	for _, c := range []string{CmdRef, CmdFlat, CmdSchema, CmdValue, CmdIter} {
+		if c == cmd {
+			return nil
 		}
 	}
-	dataId, nextPath := Util.ParsePath(qPath)
-	queryPath, err := Node.New(conn, dataType, dataId, nextPath, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	switch qCmd {
-	case PathCmd.CmdSchema:
-		return &CmdQuerySchema{
-			p: queryPath,
-		}, nil
-	case PathCmd.CmdFlat:
-		return &CmdQueryFlat{
-			p: queryPath,
-		}, nil
-	case PathCmd.CmdRef:
-		return &CmdQueryRef{
-			p: queryPath,
-		}, nil
-	case PathCmd.CmdIter:
-		return &CmdPathIterator{
-			p: queryPath,
-		}, nil
-	default:
-		return &CmdQueryValue{
-			p: queryPath,
-		}, nil
-	}
+	return fmt.Errorf("unknown path cmd=[%s]", cmd)
 }

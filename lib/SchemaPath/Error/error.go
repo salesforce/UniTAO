@@ -23,52 +23,37 @@ This copyright notice and license applies to all files in this directory or sub-
 ************************************************************************************************************
 */
 
-package SchemaPath
+package Error
 
 import (
 	"fmt"
 	"net/http"
-
-	"github.com/salesforce/UniTAO/lib/SchemaPath/Data"
-	"github.com/salesforce/UniTAO/lib/SchemaPath/Error"
-	"github.com/salesforce/UniTAO/lib/SchemaPath/Node"
-	"github.com/salesforce/UniTAO/lib/SchemaPath/PathCmd"
-	"github.com/salesforce/UniTAO/lib/Util"
 )
 
-func CreateQuery(conn *Data.Connection, dataType string, dataPath string) (PathCmd.QueryIface, *Error.SchemaPathErr) {
-	qPath, qCmd, pErr := PathCmd.Parse(dataPath)
-	if pErr != nil {
-		return nil, &Error.SchemaPathErr{
-			Code:    http.StatusBadRequest,
-			PathErr: fmt.Errorf("failed to parse path=[%s], Error:%s", dataPath, pErr),
+type SchemaPathErr struct {
+	Code    int
+	PathErr error
+}
+
+func IsSchemaPathErr(err error) bool {
+	_, ok := err.(*SchemaPathErr)
+	return ok
+}
+
+func (e *SchemaPathErr) Error() string {
+	return fmt.Sprintf("Code=[%d], Error: %s", e.Code, e.PathErr)
+}
+
+func AppendErr(err error, newMsg string) *SchemaPathErr {
+	newErr := fmt.Errorf("%s Error: %s", newMsg, err)
+	if !IsSchemaPathErr(err) {
+		return &SchemaPathErr{
+			Code:    http.StatusInternalServerError,
+			PathErr: newErr,
 		}
 	}
-	dataId, nextPath := Util.ParsePath(qPath)
-	queryPath, err := Node.New(conn, dataType, dataId, nextPath, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	switch qCmd {
-	case PathCmd.CmdSchema:
-		return &CmdQuerySchema{
-			p: queryPath,
-		}, nil
-	case PathCmd.CmdFlat:
-		return &CmdQueryFlat{
-			p: queryPath,
-		}, nil
-	case PathCmd.CmdRef:
-		return &CmdQueryRef{
-			p: queryPath,
-		}, nil
-	case PathCmd.CmdIter:
-		return &CmdPathIterator{
-			p: queryPath,
-		}, nil
-	default:
-		return &CmdQueryValue{
-			p: queryPath,
-		}, nil
+	return &SchemaPathErr{
+		Code:    err.(*SchemaPathErr).Code,
+		PathErr: newErr,
 	}
 }

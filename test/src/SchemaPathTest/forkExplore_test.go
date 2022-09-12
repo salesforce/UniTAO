@@ -25,11 +25,7 @@ This copyright notice and license applies to all files in this directory or sub-
 
 package SchemaPathTest
 
-import (
-	"reflect"
-	"testing"
-)
-
+/*
 func TestPositiveAllPass(t *testing.T) {
 	schemaStr := `
 	{
@@ -143,7 +139,7 @@ func TestPositiveAllPass(t *testing.T) {
 							"value": "value03",
 							"optValue": "optValue01"
 						}
-	
+
 					]
 				}
 			},
@@ -166,7 +162,7 @@ func TestPositiveAllPass(t *testing.T) {
 							"name": "item03",
 							"value": "value03"
 						}
-	
+
 					]
 				}
 			}
@@ -251,3 +247,4 @@ func TestPositiveAllPass(t *testing.T) {
 		t.Errorf("failed to raise error when path does not exists")
 	}
 }
+*/
