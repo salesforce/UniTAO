@@ -1,0 +1,133 @@
+ "inner": [
+                {   "id": "abc",
+                    "toTWO": "xxx"  // id of an obj2 type: GET inventory/obj2/xxx
+                },
+                {    "id": "aggg",
+                    "toTWO": "xxasdfax"
+            }
+            ]
+
+            
+{
+    "id": "pkas8re7tp",
+    "description": "add node to existing service via nodeGroup",
+    "path": 
+        "display form with service, then node group, then node"
+
+        Select
+        
+        service: \/                  NetSecDS
+        [+] nodeGroup: \/            NSDS_NG2
+        [+] node \/                  CC_SF_N12
+
+        [submit]
+
+        open a new screen for new node 
+
+        id: CC_SF_N12
+        location,
+}
+        [submit]
+
+
+CC_SF_N12
+
+
+Schema addition:
+- need an index for properties
+- need a "+" for extensible lists
+- name (human readable)
+- description
+- readOnly field
+- form header, buttons 
+- logic 
+    (action buttons)
+    when to show an array of enum, a drop down, or search field. 
+
+
+Jagadish Uppala11:09 AM
+https://salesforce.quip.com/tHAGAAx3qgvK#KOJACABVVRb
+Jagadish Uppala12:14 PM
+http://mission-control.netsecui.sam-processing1.netsec.dev1-uswest2.aws.sfdc.cl/#/
+https://mission-control.netsecui.sam-processing1.netsec.dev1-uswest2.aws.sfdc.cl/#/
+
+Option 1: [ "netsec.acl.Provider", "_schema", "_apiReferral"]
+
+Option 2:
+[
+    {
+     type: _schema,
+     id: "netsec.acl.Provider",
+     estate: {
+         contentMediaType: "xxxx",
+     },
+     .....
+    },
+    { type: "_schema",
+      id: "_schema",
+      .....
+
+    },
+
+]
+
+option 1: inventory/schema 
+option 2: inventory/schema?format=full
+
+with query: inventory/schema?hasAttributes="falcon",values=netsec
+
+[netsecFi] [] [netsecF1, netsecF2]
+
+inventory/schema/netsecF2
+
+{type=}
+
+[
+    {type: _apiReferral,
+    id: _schema,
+    ServerType="file"
+    path: "file:xxxxd.json",
+    ....
+    }
+
+    typesRefeapi_referral (file) -> file lambda
+
+]
+
+
+
+switch: {
+    case("ds):
+        data = getObjectFromDS(type,id);
+       break;
+    case("local"):
+        data = localData[type][id];
+       break;   
+}
+
+getObjectFromDS(type,id) {
+    return .....
+};
+
+getLocal(type,id) {
+        return localData[type][id];
+}
+
+getDataF = {
+    "ds"   : getObjectFromDS,
+    "local": getLocal
+}
+
+getDataGeneric (dataPath, type,id) {
+    f = getDataF[dataPath];
+    return f(type, id)
+}
+
+_apiReferral {
+    "_apiReferral": {
+        pathType: "local"
+        pathParameters: {filename, ....}
+        PathInfo {pathType: "ss", fileName}
+    }
+}
+

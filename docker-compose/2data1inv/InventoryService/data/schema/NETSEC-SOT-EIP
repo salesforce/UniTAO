@@ -1,0 +1,100 @@
+{
+ "__id": "NETSEC-SOT-EIP",
+ "__type": "schema",
+ "__ver": "0.0.1",
+ "data": {
+  "additionalProperties": true,
+  "definitions": {
+   "FalconProvider": {
+    "additionalProperties": false,
+    "name": "additionalProperties",
+    "properties": {
+     "region": {
+      "type": "string"
+     },
+     "substrate": {
+      "type": "string"
+     }
+    }
+   },
+   "ServiceEIPList": {
+    "additionalProperties": false,
+    "key": "{service_name}",
+    "name": "ServiceEIPList",
+    "properties": {
+     "cidr": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "resource_type": {
+      "type": "string"
+     },
+     "service_name": {
+      "type": "string"
+     }
+    }
+   },
+   "ServiceList": {
+    "additionalProperties": false,
+    "key": "{functional_domain_name}",
+    "name": "ServiceList",
+    "properties": {
+     "functional_domain_name": {
+      "contentMediaType": "inventory/FalconDomainInstance",
+      "type": "string"
+     },
+     "functional_domain_type": {
+      "type": "string"
+     },
+     "services": {
+      "items": {
+       "$ref": "#/definitions/ServiceEIPList",
+       "type": "object"
+      },
+      "type": "array"
+     }
+    }
+   }
+  },
+  "description": "Elastic IP information for Netsec SOT Service",
+  "key": "{name}",
+  "name": "NETSEC-SOT-EIP",
+  "properties": {
+   "connectivity_type": {
+    "type": "string"
+   },
+   "environment": {
+    "type": "string"
+   },
+   "environment_type": {
+    "type": "string"
+   },
+   "falcon_instance": {
+    "contentMediaType": "inventory/FalconInstance",
+    "type": "string"
+   },
+   "falcon_provider": {
+    "$ref": "#/definitions/FalconProvider",
+    "type": "object"
+   },
+   "grid": {
+    "type": "string"
+   },
+   "name": {
+    "type": "string"
+   },
+   "public_ips": {
+    "items": {
+     "$ref": "#/definitions/ServiceList",
+     "type": "object"
+    },
+    "type": "array"
+   },
+   "schema_version": {
+    "type": "string"
+   }
+  }
+ }
+}

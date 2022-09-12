@@ -1,0 +1,11 @@
+{
+ "AuthType": "",
+ "AuthUrl": "",
+ "DataServcieUrl": "",
+ "DataServiceId": "DataService_01",
+ "DsInfo": null,
+ "Schema": null,
+ "__id": "FalconService",
+ "__type": "FalconService",
+ "__ver": "0.0.1"
+}

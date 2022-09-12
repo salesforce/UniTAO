@@ -1,0 +1,62 @@
+.schemaItem {
+    width: 100;
+    height: 100;
+    fill: rgb(241, 238, 202);
+    stroke: blue;
+    stroke-width: 2;
+}
+
+.itemWrapper {
+    min-width: 100px;
+    border: 2px solid gray;
+    border-radius: 5px;
+    position: absolute;
+    background-color:cornsilk;
+    min-height: 100px;
+    box-shadow: 4px 4px 4px rgba(100,100,100,0.5);
+    cursor:grab;
+    z-index: 0;
+}
+
+.itemWrapper .moving {
+    z-index:900;
+}
+
+.itemHeader {
+    padding: 2px 0px 3px 0px;
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: white;
+    box-shadow: none;
+    text-align: center;
+    pointer-events: none;
+}
+  
+.itemProperty {
+    background-color: rgb(218, 218, 218);
+    border: 1px solid gray;
+    margin: 8px 3px 8px 3px;
+    padding: 1px 0px 1px 0px;
+    border-radius: 10px;
+    box-shadow: 1px 1px 1px rgba(100,100,100,0.5);;
+    pointer-events: none;
+}
+
+a {
+    padding: 15px 5px;
+}
+
+#canvas {
+    position: absolute;
+    pointer-events: none;
+}
+
+#display {
+    position: absolute;
+    background: whitesmoke;
+}
+
+.iconButton img {
+    width: 20px;
+    height: 20px;
+}

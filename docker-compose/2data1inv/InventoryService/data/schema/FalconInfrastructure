@@ -1,0 +1,24 @@
+{
+ "__id": "FalconInfrastructure",
+ "__type": "schema",
+ "__ver": "0.0.1",
+ "data": {
+  "additionalProperties": false,
+  "description": "Falcon Infrastructure",
+  "key": "{name}",
+  "name": "FalconInfrastructure",
+  "properties": {
+   "instances": {
+    "items": {
+     "contentMediaType": "inventory/FalconInstance",
+     "type": "string"
+    },
+    "type": "array"
+   },
+   "name": {
+    "required": true,
+    "type": "string"
+   }
+  }
+ }
+}

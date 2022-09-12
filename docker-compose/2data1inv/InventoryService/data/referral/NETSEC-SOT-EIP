@@ -1,0 +1,11 @@
+{
+ "AuthType": "",
+ "AuthUrl": "",
+ "DataServcieUrl": "",
+ "DataServiceId": "DataService_01",
+ "DsInfo": null,
+ "Schema": null,
+ "__id": "NETSEC-SOT-EIP",
+ "__type": "NETSEC-SOT-EIP",
+ "__ver": "0.0.1"
+}

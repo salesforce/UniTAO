@@ -1,0 +1,28 @@
+{
+ "__id": "FalconDomainInstance",
+ "__type": "schema",
+ "__ver": "0.0.1",
+ "data": {
+  "additionalProperties": false,
+  "description": "Falcon FalconDomainInstance",
+  "key": "{name}",
+  "name": "FalconDomainInstance",
+  "properties": {
+   "instance": {
+    "contentMediaType": "inventory/FalconInstance",
+    "type": "string"
+   },
+   "name": {
+    "required": true,
+    "type": "string"
+   },
+   "services": {
+    "items": {
+     "contentMediaType": "inventory/FalconService",
+     "type": "string"
+    },
+    "type": "array"
+   }
+  }
+ }
+}
