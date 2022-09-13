@@ -240,3 +240,15 @@ func JsonCopy(data interface{}) (interface{}, error) {
 	}
 	return result, nil
 }
+
+func ObjCopy(src interface{}, target interface{}) error {
+	dataBytes, err := json.Marshal(src)
+	if err != nil {
+		return fmt.Errorf("Util.JsonCopy failed to Marshal data, Error: %s", err)
+	}
+	err = json.Unmarshal(dataBytes, target)
+	if err != nil {
+		return fmt.Errorf("Util.JsonCopy failed to UnMarshal data, Error: %s", err)
+	}
+	return nil
+}

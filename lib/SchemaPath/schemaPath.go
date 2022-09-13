@@ -64,7 +64,8 @@ func CreateQuery(conn *Data.Connection, dataType string, dataPath string) (PathC
 		}, nil
 	case PathCmd.CmdIter:
 		return &CmdPathIterator{
-			p: queryPath,
+			path: qPath,
+			p:    queryPath,
 		}, nil
 	default:
 		return &CmdQueryValue{

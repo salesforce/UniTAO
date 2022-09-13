@@ -26,9 +26,20 @@ This copyright notice and license applies to all files in this directory or sub-
 package SchemaPathTest
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/salesforce/UniTAO/lib/SchemaPath"
+	"github.com/salesforce/UniTAO/lib/Util"
 )
+
+func LoadIterResult(data interface{}) (*SchemaPath.IteratorResult, error) {
+	result := SchemaPath.IteratorResult{}
+	err := Util.ObjCopy(data, &result)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
 
 func TestIterOneFork(t *testing.T) {
 	schemaStr := `{
@@ -195,52 +206,79 @@ func TestIterOneFork(t *testing.T) {
 	}`
 	conn := PrepareConn(schemaStr, recordStr)
 	path := "IterEntry/iter01/arrayObj[*]?iterator"
-	iterPathList, err := QueryPath(conn, path)
+	iterResult, err := QueryPath(conn, path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if reflect.TypeOf(iterPathList).Kind() != reflect.Slice {
-		t.Fatalf("expect result of iterator should be array, got %s instead", reflect.TypeOf(iterPathList).Kind())
+	result, cErr := LoadIterResult(iterResult)
+	if cErr != nil {
+		t.Fatal(cErr)
+	}
+	if len(result.QueryResults) != 2 {
+		t.Fatalf("expect result path of [2], got [%d] instead", len(result.QueryResults))
 	}
 	path = "IterEntry/iter01/mapObj[*]?iterator"
-	iterPathList, err = QueryPath(conn, path)
+	iterResult, err = QueryPath(conn, path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if reflect.TypeOf(iterPathList).Kind() != reflect.Slice {
-		t.Fatalf("expect result of iterator should be array, got %s instead", reflect.TypeOf(iterPathList).Kind())
+	result, cErr = LoadIterResult(iterResult)
+	if cErr != nil {
+		t.Fatal(cErr)
+	}
+	if len(result.QueryResults) != 2 {
+		t.Fatalf("expect result path of [2], got [%d] instead", len(result.QueryResults))
 	}
 	path = "IterEntry/iter01/mapObj/*?iterator"
-	iterPathList, err = QueryPath(conn, path)
+	iterResult, err = QueryPath(conn, path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if reflect.TypeOf(iterPathList).Kind() != reflect.Slice {
-		t.Fatalf("expect result of iterator should be array, got %s instead", reflect.TypeOf(iterPathList).Kind())
+	result, cErr = LoadIterResult(iterResult)
+	if cErr != nil {
+		t.Fatal(cErr)
 	}
+	if len(result.QueryResults) != 2 {
+		t.Fatalf("expect result path of [2], got [%d] instead", len(result.QueryResults))
+	}
+
 	path = "IterEntry/iter01/arrayRef[*]?iterator"
-	iterPathList, err = QueryPath(conn, path)
+	iterResult, err = QueryPath(conn, path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if reflect.TypeOf(iterPathList).Kind() != reflect.Slice {
-		t.Fatalf("expect result of iterator should be array, got %s instead", reflect.TypeOf(iterPathList).Kind())
+	result, cErr = LoadIterResult(iterResult)
+	if cErr != nil {
+		t.Fatal(cErr)
 	}
+	if len(result.QueryResults) != 2 {
+		t.Fatalf("expect result path of [2], got [%d] instead", len(result.QueryResults))
+	}
+
 	path = "IterEntry/iter01/mapRef[*]?iterator"
-	iterPathList, err = QueryPath(conn, path)
+	iterResult, err = QueryPath(conn, path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if reflect.TypeOf(iterPathList).Kind() != reflect.Slice {
-		t.Fatalf("expect result of iterator should be array, got %s instead", reflect.TypeOf(iterPathList).Kind())
+	result, cErr = LoadIterResult(iterResult)
+	if cErr != nil {
+		t.Fatal(cErr)
 	}
+	if len(result.QueryResults) != 2 {
+		t.Fatalf("expect result path of [2], got [%d] instead", len(result.QueryResults))
+	}
+
 	path = "IterEntry/iter01/mapRef/*?iterator"
-	iterPathList, err = QueryPath(conn, path)
+	iterResult, err = QueryPath(conn, path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if reflect.TypeOf(iterPathList).Kind() != reflect.Slice {
-		t.Fatalf("expect result of iterator should be array, got %s instead", reflect.TypeOf(iterPathList).Kind())
+	result, cErr = LoadIterResult(iterResult)
+	if cErr != nil {
+		t.Fatal(cErr)
+	}
+	if len(result.QueryResults) != 2 {
+		t.Fatalf("expect result path of [2], got [%d] instead", len(result.QueryResults))
 	}
 }
 
@@ -560,70 +598,81 @@ func TestIterTwoForks(t *testing.T) {
 	}`
 	conn := PrepareConn(schemaStr, recordStr)
 	path := "IterEntry/iter01/arrayObj[*]/recursiveKey/arrayObj[*]?iterator"
-	iterPathList, err := QueryPath(conn, path)
+	iterResult, err := QueryPath(conn, path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if reflect.TypeOf(iterPathList).Kind() != reflect.Slice {
-		t.Fatalf("expect result of iterator should be array, got %s instead", reflect.TypeOf(iterPathList).Kind())
+	result, cErr := LoadIterResult(iterResult)
+	if cErr != nil {
+		t.Fatal(cErr)
 	}
-	if len(iterPathList.([]interface{})) != 4 {
-		t.Fatalf("failed to get all combination. [%d] != expected [4]", len(iterPathList.([]interface{})))
+	if len(result.QueryResults) != 4 {
+		t.Fatalf("expect result path of [4], got [%d] instead", len(result.QueryResults))
 	}
+
 	path = "IterEntry/iter01/mapObj[*]/recursiveKey/mapObj[*]?iterator"
-	iterPathList, err = QueryPath(conn, path)
+	iterResult, err = QueryPath(conn, path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if reflect.TypeOf(iterPathList).Kind() != reflect.Slice {
-		t.Fatalf("expect result of iterator should be array, got %s instead", reflect.TypeOf(iterPathList).Kind())
+	result, cErr = LoadIterResult(iterResult)
+	if cErr != nil {
+		t.Fatal(cErr)
 	}
-	if len(iterPathList.([]interface{})) != 4 {
-		t.Fatalf("failed to get all combination. [%d] != expected [4]", len(iterPathList.([]interface{})))
+	if len(result.QueryResults) != 4 {
+		t.Fatalf("expect result path of [4], got [%d] instead", len(result.QueryResults))
 	}
+
 	path = "IterEntry/iter01/mapObj/*/recursiveKey/mapObj/*?iterator"
-	iterPathList, err = QueryPath(conn, path)
+	iterResult, err = QueryPath(conn, path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if reflect.TypeOf(iterPathList).Kind() != reflect.Slice {
-		t.Fatalf("expect result of iterator should be array, got %s instead", reflect.TypeOf(iterPathList).Kind())
+	result, cErr = LoadIterResult(iterResult)
+	if cErr != nil {
+		t.Fatal(cErr)
 	}
-	if len(iterPathList.([]interface{})) != 4 {
-		t.Fatalf("failed to get all combination. [%d] != expected [4]", len(iterPathList.([]interface{})))
+	if len(result.QueryResults) != 4 {
+		t.Fatalf("expect result path of [4], got [%d] instead", len(result.QueryResults))
 	}
+
 	path = "IterEntry/iter01/arrayRef[*]/recursiveKey/arrayRef[*]?iterator"
-	iterPathList, err = QueryPath(conn, path)
+	iterResult, err = QueryPath(conn, path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if reflect.TypeOf(iterPathList).Kind() != reflect.Slice {
-		t.Fatalf("expect result of iterator should be array, got %s instead", reflect.TypeOf(iterPathList).Kind())
+	result, cErr = LoadIterResult(iterResult)
+	if cErr != nil {
+		t.Fatal(cErr)
 	}
-	if len(iterPathList.([]interface{})) != 4 {
-		t.Fatalf("failed to get all combination. [%d] != expected [4]", len(iterPathList.([]interface{})))
+	if len(result.QueryResults) != 4 {
+		t.Fatalf("expect result path of [4], got [%d] instead", len(result.QueryResults))
 	}
+
 	path = "IterEntry/iter01/mapRef[*]/recursiveKey/mapRef[*]?iterator"
-	iterPathList, err = QueryPath(conn, path)
+	iterResult, err = QueryPath(conn, path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if reflect.TypeOf(iterPathList).Kind() != reflect.Slice {
-		t.Fatalf("expect result of iterator should be array, got %s instead", reflect.TypeOf(iterPathList).Kind())
+	result, cErr = LoadIterResult(iterResult)
+	if cErr != nil {
+		t.Fatal(cErr)
 	}
-	if len(iterPathList.([]interface{})) != 4 {
-		t.Fatalf("failed to get all combination. [%d] != expected [4]", len(iterPathList.([]interface{})))
+	if len(result.QueryResults) != 4 {
+		t.Fatalf("expect result path of [4], got [%d] instead", len(result.QueryResults))
 	}
+
 	path = "IterEntry/iter01/mapRef/*/recursiveKey/mapRef/*?iterator"
-	iterPathList, err = QueryPath(conn, path)
+	iterResult, err = QueryPath(conn, path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if reflect.TypeOf(iterPathList).Kind() != reflect.Slice {
-		t.Fatalf("expect result of iterator should be array, got %s instead", reflect.TypeOf(iterPathList).Kind())
+	result, cErr = LoadIterResult(iterResult)
+	if cErr != nil {
+		t.Fatal(cErr)
 	}
-	if len(iterPathList.([]interface{})) != 4 {
-		t.Fatalf("failed to get all combination. [%d] != expected [4]", len(iterPathList.([]interface{})))
+	if len(result.QueryResults) != 4 {
+		t.Fatalf("expect result path of [4], got [%d] instead", len(result.QueryResults))
 	}
 }
 
@@ -974,58 +1023,68 @@ func TestIterFilter(t *testing.T) {
 	}`
 	conn := PrepareConn(schemaStr, recordStr)
 	path := "IterEntry/iter01/arrayObj[*]/recursiveKey/arrayObj[03_01]/?iterator"
-	iterPathList, err := QueryPath(conn, path)
+	iterResult, err := QueryPath(conn, path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if reflect.TypeOf(iterPathList).Kind() != reflect.Slice {
-		t.Fatalf("expect result of iterator should be array, got %s instead", reflect.TypeOf(iterPathList).Kind())
+	result, cErr := LoadIterResult(iterResult)
+	if cErr != nil {
+		t.Fatal(cErr)
 	}
-	if len(iterPathList.([]interface{})) != 1 {
-		t.Fatalf("failed to get all combination. [%d] != expected [1]", len(iterPathList.([]interface{})))
+	if len(result.QueryResults) != 1 {
+		t.Fatalf("expect result path of [1], got [%d] instead", len(result.QueryResults))
 	}
+
 	path = "IterEntry/iter01/mapObj[*]/recursiveKey/mapObj[03]?iterator"
-	iterPathList, err = QueryPath(conn, path)
+	iterResult, err = QueryPath(conn, path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if reflect.TypeOf(iterPathList).Kind() != reflect.Slice {
-		t.Fatalf("expect result of iterator should be array, got %s instead", reflect.TypeOf(iterPathList).Kind())
+	result, cErr = LoadIterResult(iterResult)
+	if cErr != nil {
+		t.Fatal(cErr)
 	}
-	if len(iterPathList.([]interface{})) != 1 {
-		t.Fatalf("failed to get all combination. [%d] != expected [4]", len(iterPathList.([]interface{})))
+	if len(result.QueryResults) != 1 {
+		t.Fatalf("expect result path of [1], got [%d] instead", len(result.QueryResults))
 	}
+
 	path = "IterEntry/iter01/mapObj/*/recursiveKey/mapObj/03?iterator"
-	iterPathList, err = QueryPath(conn, path)
+	iterResult, err = QueryPath(conn, path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if reflect.TypeOf(iterPathList).Kind() != reflect.Slice {
-		t.Fatalf("expect result of iterator should be array, got %s instead", reflect.TypeOf(iterPathList).Kind())
+
+	result, cErr = LoadIterResult(iterResult)
+	if cErr != nil {
+		t.Fatal(cErr)
 	}
-	if len(iterPathList.([]interface{})) != 1 {
-		t.Fatalf("failed to get all combination. [%d] != expected [4]", len(iterPathList.([]interface{})))
+	if len(result.QueryResults) != 1 {
+		t.Fatalf("expect result path of [1], got [%d] instead", len(result.QueryResults))
 	}
+
 	path = "IterEntry/iter01/arrayRef[*]/recursiveKey/arrayObj[*]/recursiveKey/mapRef[01]?iterator"
-	iterPathList, err = QueryPath(conn, path)
+	iterResult, err = QueryPath(conn, path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if reflect.TypeOf(iterPathList).Kind() != reflect.Slice {
-		t.Fatalf("expect result of iterator should be array, got %s instead", reflect.TypeOf(iterPathList).Kind())
+	result, cErr = LoadIterResult(iterResult)
+	if cErr != nil {
+		t.Fatal(cErr)
 	}
-	if len(iterPathList.([]interface{})) != 4 {
-		t.Fatalf("failed to get all combination. [%d] != expected [4]", len(iterPathList.([]interface{})))
+	if len(result.QueryResults) != 4 {
+		t.Fatalf("expect result path of [4], got [%d] instead", len(result.QueryResults))
 	}
+
 	path = "IterEntry/iter01/arrayRef[*]/recursiveKey/arrayObj[*]/recursiveKey/mapRef/01?iterator"
-	iterPathList, err = QueryPath(conn, path)
+	iterResult, err = QueryPath(conn, path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if reflect.TypeOf(iterPathList).Kind() != reflect.Slice {
-		t.Fatalf("expect result of iterator should be array, got %s instead", reflect.TypeOf(iterPathList).Kind())
+	result, cErr = LoadIterResult(iterResult)
+	if cErr != nil {
+		t.Fatal(cErr)
 	}
-	if len(iterPathList.([]interface{})) != 4 {
-		t.Fatalf("failed to get all combination. [%d] != expected [4]", len(iterPathList.([]interface{})))
+	if len(result.QueryResults) != 4 {
+		t.Fatalf("expect result path of [4], got [%d] instead", len(result.QueryResults))
 	}
 }
