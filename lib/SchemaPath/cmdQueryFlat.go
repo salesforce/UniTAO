@@ -105,6 +105,16 @@ func FlatNodeArray(node *Node.PathNode, nodeValue []interface{}) (interface{}, *
 	for node.Next != nil {
 		node = node.Next
 	}
+	if node.AttrName == "" {
+		resultAry, err := FlatSchemaArray(node.Schema, valueAry)
+		if err != nil {
+			return nil, &Error.SchemaPathErr{
+				Code:    http.StatusInternalServerError,
+				PathErr: err,
+			}
+		}
+		return resultAry, nil
+	}
 	itemSchema, ok := node.Schema.SubDocs[node.AttrName]
 	if !ok {
 		return nil, &Error.SchemaPathErr{

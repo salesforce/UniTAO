@@ -941,3 +941,194 @@ func TestFlatRef(t *testing.T) {
 		t.Fatalf("invalid flat value from ArrayRef flat")
 	}
 }
+
+func TestFlat2LayerArrayAll(t *testing.T) {
+	schemaStr := `{
+		"entry": {
+			"name": "entry",
+			"properties": {
+				"arrayObj": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"$ref": "#/definitions/firstLayer"
+					}
+				}
+			},
+			"definitions": {
+				"firstLayer": {
+					"name": "firstLayer",
+					"key": "layer1-{key}",
+					"properties": {
+						"key": {
+							"type": "string"
+						},
+						"arrayObj": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"$ref": "#/definitions/secondLayer"
+							}							
+						}
+					}
+				},
+				"secondLayer": {
+					"name": "secondLayer",
+					"key": "layer2-{key}",
+					"properties": {
+						"key": {
+							"type": "string"
+						},
+						"arrayObj": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"$ref": "#/definitions/itemObj"
+							}
+						}
+					}
+				},
+				"itemObj": {
+					"name": "itemObj",
+					"key": "item-{key}",
+					"properties": {
+						"key": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		}
+	}`
+	recordStr := `{
+		"entry": {
+			"01": {
+				"__id": "01",
+				"__type": "entry",
+				"__ver": "0.0.1",
+				"data": {
+					"arrayObj": [
+						{
+							"key": "01",
+							"arrayObj": [
+								{
+									"key": "01",
+									"arrayObj": [
+										{
+											"key": "01"
+										},
+										{
+											"key": "02"
+										},
+										{
+											"key": "03"
+										}
+									]
+								},
+								{
+									"key": "02",
+									"arrayObj": [
+										{
+											"key": "03"
+										},
+										{
+											"key": "04"
+										},
+										{
+											"key": "05"
+										}
+									]
+								}
+							]
+						},
+						{
+							"key": "02",
+							"arrayObj": [
+								{
+									"key": "03",
+									"arrayObj": [
+										{
+											"key": "06"
+										},
+										{
+											"key": "07"
+										},
+										{
+											"key": "08"
+										}
+									]
+								},
+								{
+									"key": "04",
+									"arrayObj": [
+										{
+											"key": "09"
+										},
+										{
+											"key": "10"
+										},
+										{
+											"key": "11"
+										}
+									]
+								}
+							]
+						},
+						{
+							"key": "03",
+							"arrayObj": [
+								{
+									"key": "05",
+									"arrayObj": [
+										{
+											"key": "12"
+										},
+										{
+											"key": "13"
+										},
+										{
+											"key": "14"
+										}
+									]
+								},
+								{
+									"key": "06",
+									"arrayObj": [
+										{
+											"key": "15"
+										},
+										{
+											"key": "16"
+										},
+										{
+											"key": "17"
+										}
+									]
+								}
+							]
+						}
+					]
+				}
+			}			
+		}
+	}`
+	conn := PrepareConn(schemaStr, recordStr)
+	queryPath := "entry/01/arrayObj[*]?flat"
+	value, err := QueryPath(conn, queryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pathErr := SchemaPath.ValidateFlatValue(value)
+	if pathErr != nil {
+		t.Fatalf(pathErr.Error())
+	}
+	queryPath = "entry/01/arrayObj[*]/arrayObj[*]?flat"
+	value, err = QueryPath(conn, queryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pathErr = SchemaPath.ValidateFlatValue(value)
+	if pathErr != nil {
+		t.Fatalf(pathErr.Error())
+	}
+}
