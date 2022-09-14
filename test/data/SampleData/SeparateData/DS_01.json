@@ -1,152 +1,114 @@
-[
-    {
-        "__id": "schema",
-        "__type": "schema",
-        "__ver": "1_01_01",
-        "data": {
-            "name": "schema",
-            "description": "schema of schema",
-            "properties": {
-                "__id": {
-                    "type": "string",
-                    "template": "{data.name}"
-                },
-                "__type": {
-                    "type": "string"
-                },
-                "__ver": {
-                    "type": "string"
-                },
-                "data": {
-                    "type": "object",
-                    "$ref": "#/definitions/schema"
-                }
-            },
-            "additionalProperties": false,
-            "definitions": {
-                "schema": {
-                    "properties": {
-                        "name": {
-                            "type": "string"
-                        },
-                        "description": {
-                            "type": "string"
-                        },
-                        "properties": {
-                            "type": "object",
-                            "$ref": "#/definitions/prop"
-                        },
-                        "definitions": {
-                            "type": "object",
-                            "$ref": "#/definitions/schema"
-                        }
+{
+    "data": [
+        {
+            "__id": "infrastructure",
+            "__type": "schema",
+            "__ver": "0.0.1",
+            "data": {
+                "name": "infrastructure",
+                "description": "Infrastructure (root or all data)",
+                "properties": {
+                    "id": {
+                        "type": "string"
                     },
-                    "additionalProperties": false
-                },
-                "prop": {
-                    "properties": {}
-                }
-            }
-        }
-    },
-    {
-        "__id": "infrastructure",
-        "__type": "schema",
-        "__ver": "1_01_01",
-        "data": {
-            "name": "infrastructure",
-            "description": "Infrastructure (root or all data)",
-            "properties": {
-                "id": {
-                    "type": "string"
-                },
-                "regions": {
-                    "type": "array",
-                    "items": {
-                        "type": "string",
-                        "contentMediaType": "inventory/region"
+                    "regions": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "contentMediaType": "inventory/region"
+                        }
                     }
                 }
             }
-        }
-    },
-    {
-        "__id": "region",
-        "__type": "schema",
-        "__ver": "1_01_01",
-        "data": {
-            "name": "region",
-            "description": "geographical regions Schema",
-            "properties": {
-                "id": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "data_centers": {
-                    "type": "array",
-                    "items": {
-                        "type": "string",
-                        "contentMediaType": "inventory/data_center"
+        },
+        {
+            "__id": "region",
+            "__type": "schema",
+            "__ver": "0.0.1",
+            "data": {
+                "name": "region",
+                "description": "geographical regions Schema",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "data_centers": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "contentMediaType": "inventory/data_center"
+                        }
                     }
                 }
             }
-        }
-    },
-    {
-        "__id": "DC_type",
-        "__type": "schema",
-        "__ver": "1_01_01",
-        "data": {
-            "name": "DC_type",
-            "description": "Data Center Type Schema",
-            "properties": {
-                "id": {
-                    "type": "string",
-                    "enum": ["AWSv2", "GCPv1", "SFv7"]
-                },
-                "specURL": {
-                    "type": "string"
+        },
+        {
+            "__id": "DC_type",
+            "__type": "schema",
+            "__ver": "0.0.1",
+            "data": {
+                "name": "DC_type",
+                "description": "Data Center Type Schema",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "enum": ["AWSv2", "GCPv1", "SFv7"]
+                    },
+                    "specURL": {
+                        "type": "string"
+                    }
                 }
             }
+        },
+        {
+            "__id": "global",
+            "__type": "infrastructure",
+            "__ver": "0.0.1",
+            "data": {
+                "name": "global",
+                "description": "Global Root of all infrastructure",
+                "regions": [
+                    "North_America",
+                    "South_America",
+                    "Europe",
+                    "Asia",
+                    "Middle_East",
+                    "Africa"
+                ]
+            }
+        },
+        {
+            "__id": "North_America",
+            "__type": "region",
+            "__ver": "0.0.1",
+            "data": {
+                "id": "North_America",
+                "description": "North America Infrastructure",
+                "data_centers": ["SEA1"]
+            }
+        },
+        {
+            "__id": "South_America",
+            "__type": "region",
+            "__ver": "0.0.1",
+            "data": {
+                "id": "South_America",
+                "description": "North America Infrastructure",
+                "data_centers": ["SEA1"]
+            }
+        },
+        {
+            "__id": "SFv7",
+            "__type": "DC_type",
+            "__ver": "0.0.1",
+            "data": {
+                "id": "SFv7",
+                "description": "SF Data Centers v7",
+                "specURL": "specs.internal.salesforce.com/dataCenter/SFv7.pdf"
+            }
         }
-    },
-    {
-        "__id": "global",
-        "__type": "infrastructure",
-        "__ver": "1_01_01",
-        "data": {
-            "name": "global",
-            "description": "Global Root of all infrastructure",
-            "regions": [
-                "North_America",
-                "South_America",
-                "Europe",
-                "Asia",
-                "Middle_East",
-                "Africa"
-            ]
-        }
-    },
-    {
-        "__id": "North_America",
-        "__type": "region",
-        "__ver": "1_01_01",
-        "data": {
-            "id": "North_America",
-            "description": "North America Infrastructure",
-            "data_centers": ["SEA1"]
-        }
-    },
-    {
-        "__id": "SFv7",
-        "__type": "DC_type",
-        "__ver": "1_01_01",
-        "data": {
-            "id": "SFv7",
-            "description": "SF Data Centers v7",
-            "specURL": "specs.internal.salesforce.com/dataCenter/SFv7.pdf"
-        }
-    }
-]
+    ]
+}

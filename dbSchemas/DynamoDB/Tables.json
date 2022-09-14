@@ -1,6 +1,10 @@
 {
-  "Data": {
-    "TableName": "Data",
+  "data": {
+    "TableName": "data",
+    "ProvisionedThroughput": {
+      "ReadCapacityUnits": 3,
+      "WriteCapacityUnits": 3
+    },
     "AttributeDefinitions": [
       {
         "AttributeName": "__type",
@@ -9,7 +13,7 @@
       {
         "AttributeName": "__id",
         "AttributeType": "S"
-      }
+      }      
     ],
     "KeySchema": [
       {
@@ -19,12 +23,7 @@
       {
         "AttributeName": "__id",
         "KeyType": "RANGE"
-      }
-    ],
-    "ProvisionedThroughput": {
-      "ReadCapacityUnits": 3,
-      "WriteCapacityUnits": 3
-    }
+      }      
+    ]
   }
 }
-  

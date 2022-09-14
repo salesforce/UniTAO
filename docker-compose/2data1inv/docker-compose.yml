@@ -1,0 +1,107 @@
+version: '3.8'
+services:
+  dynamodb:
+    image:  amazon/dynamodb-local:latest
+    container_name: dynamodb-local
+    restart: always
+    volumes:
+      -  ./DynamoDB:/home/dynamodblocal/data
+    ports:
+      - "8000:8000"
+    command: "-jar DynamoDBLocal.jar -sharedDb -dbPath /home/dynamodblocal/data/"
+
+  dynamodb-admin:
+    image: aaronshaf/dynamodb-admin
+    ports:
+      - "8001:8001"
+    environment:
+      DYNAMO_ENDPOINT: "http://dynamodb-local:8000"
+      AWS_REGION: "us-west-2"
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+    depends_on:
+      - dynamodb
+
+  unitao-data-service01:
+    image: unitao/dataservice:localbuild
+    container_name: unitao-data-service01
+    restart: always
+    stdin_open: true
+    tty: true
+    volumes:
+      -  ./DataService01:/opt/UniTAO/config
+    ports:
+      - "8002:80"
+    depends_on:
+      - dynamodb
+    command: "DataService -config /opt/UniTAO/config/config.json"
+
+  unitao-data-service01-admin:
+    image: unitao/dataservice:localbuild
+    container_name: unitao-data-service01-admin
+    restart: "no"
+    volumes:
+      -  ./DataService01:/opt/UniTAO/config
+    depends_on:
+      - dynamodb
+    command: "initTable.sh"
+
+  unitao-data-service02:
+    image: unitao/dataservice:localbuild
+    container_name: unitao-data-service02
+    restart: always
+    stdin_open: true
+    tty: true
+    volumes:
+      -  ./DataService02:/opt/UniTAO/config
+    ports:
+      - "8003:80"
+    depends_on:
+      - dynamodb
+    command: "DataService -config /opt/UniTAO/config/config.json"
+
+  unitao-data-service02-admin:
+    image: unitao/dataservice:localbuild
+    container_name: unitao-data-service02-admin
+    restart: "no"
+    volumes:
+      -  ./DataService02:/opt/UniTAO/config
+    depends_on:
+      - dynamodb
+    command: "initTable.sh"
+
+  unitao-inv-service:
+    image: unitao/inventoryservice:localbuild
+    container_name: unitao-inv-service
+    restart: always
+    depends_on:
+      - "unitao-data-service01"
+      - "unitao-data-service02"
+    volumes:
+      -  ./InventoryService/config:/opt/UniTAO/config
+      -  ./InventoryService/data:/opt/UniTAO/data
+    ports:
+      - "8004:80"
+    command: "InventoryService -config /opt/UniTAO/config/config.json"
+
+  unitao-inv-service-admin:
+    image: unitao/inventoryservice:localbuild
+    container_name: unitao-inv-service-admin
+    restart: "no"
+    depends_on:
+      - "unitao-inv-service"
+    volumes:
+      -  ./InventoryService/config:/opt/UniTAO/config
+      -  ./InventoryService/data:/opt/UniTAO/data
+    command: "InventoryServiceAdmin sync -config /opt/UniTAO/config/config.json"
+
+  unitao-ui-server:
+    image: unitao/uiserver:localbuild
+    container_name: unitao-uiserver
+    restart: "no"
+    volumes:
+      -  ../../ui/UI:/opt/UniTAO/UI
+      -  ../../ui/WebServer:/opt/UniTAO/WebServer
+    ports:
+      - "8005:3000"
+    command: "node ./WebServer/index.js"

@@ -26,65 +26,207 @@ This copyright notice and license applies to all files in this directory or sub-
 package DataServiceTest
 
 import (
-	"UniTao/DataService/lib/Config"
-	"UniTao/DataService/lib/DataHandler"
-	"UniTao/Schema"
-	"UniTao/Util"
+	"Data/DbConfig"
+	"Data/DbIface"
+	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"path/filepath"
 	"testing"
+
+	"DataService/Config"
+	"DataService/DataHandler"
+	"DataService/DataServer"
+
+	"github.com/salesforce/UniTAO/lib/Schema/Record"
 )
 
+// Make sure both data service and inventory Service are running before running the test
 func TestDataHander(t *testing.T) {
-	log.Print("test start")
-	config, err := loadConfig()
+	configStr := `
+	{
+		"database": {
+			"type": "dynamodb",
+			"dynamodb": {
+				"region": "us-west-2",
+				"endpoint": "http://localhost:8000"
+			}
+		},
+		"table": {
+			"data": "DataService01"
+		},
+		"http": {
+			"type": "http",
+			"dns": "localhost",
+			"port": "8002",
+			"id": "DataService_01"
+		},
+		"inventory": {
+			"url": "http://localhost:8004"
+		}
+	}
+	`
+	config := Config.Confuguration{}
+	err := json.Unmarshal([]byte(configStr), &config)
 	if err != nil {
-		t.Fatalf("failed to read config file. Error:%s", err)
+		t.Fatalf("faild to load config str. invalid format. Error:%s", err)
 	}
 	log.Print("config loaded")
-	handler, err := DataHandler.New(*config)
-	if err != nil {
-		t.Fatalf("failed to create DataHandler from config, Error:%s", err)
+	schemaStr := `
+	{
+		"region": {
+			"__id": "region",
+			"__type": "schema",
+			"__ver": "0.0.1",
+			"data": {
+				"name": "region",
+				"description": "geographical regions Schema",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"description": {
+						"type": "string"
+					},
+					"data_centers": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"contentMediaType": "inventory/data_center"
+						}
+					}
+				}
+			}
+		},
+		"data_center": {
+			"__id": "data_center",
+			"__type": "schema",
+			"__ver": "0.0.1",
+			"data": {
+				"name": "data_center",
+				"description": "geographical regions Schema",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"description": {
+						"type": "string"
+					}
+				}
+			}
+		},
+		"SEA1": {
+			"__id": "SEA1",
+			"__type": "data_center",
+			"__ver": "0.0.1",
+			"data": {
+				"name": "Seattle",
+				"description": "Data Center in Seattle"
+			}
+		}
 	}
-	filePath := "data/region.json"
-	testData, err := Util.LoadJSONMap(filePath)
+	`
+	schemaData := map[string]interface{}{}
+	err = json.Unmarshal([]byte(schemaStr), &schemaData)
 	if err != nil {
-		t.Fatalf("failed loading data from [path]=[%s], Err:%s", filePath, err)
+		t.Fatalf("Failed to load schema data for region. Error:%s", err)
 	}
-	log.Print("data loaded")
-	data, ok := testData[Schema.RecordData].(map[string]interface{})
-	if !ok {
-		t.Fatalf("missing field [%s] from test data", Schema.RecordData)
+	connectDb := func(config DbConfig.DatabaseConfig) (DbIface.Database, error) {
+		mockDb := MockDatabase{
+			config: config,
+		}
+		mockDb.get = func(queryArgs map[string]interface{}) ([]map[string]interface{}, error) {
+			result := []map[string]interface{}{}
+			data, ok := schemaData[queryArgs[Record.DataId].(string)]
+			if ok {
+				result = append(result, data.(map[string]interface{}))
+			}
+			return result, nil
+		}
+		return mockDb, nil
 	}
-	log.Print("get data for test")
-	dataType := data[Schema.DataType].(string)
-	dataId := data[Schema.DataId].(string)
-	log.Printf("[type]=[%s],[id]=[%s]", dataType, dataId)
-	_, err = handler.Validate(dataType, dataId, data)
+	handler, err := DataHandler.New(config, connectDb)
 	if err != nil {
-		t.Fatalf("failed to validate positive data.")
+		t.Fatalf("failed to create handler")
+	}
+
+	regionStr := `
+	{
+		"data": {
+			"__id": "North_America",
+			"__type": "region",
+			"__ver": "1_01_01",
+			"data": {
+				"id": "North_America",
+				"description": "North America Infrastructure",
+				"data_centers": ["SEA1"]
+			}
+		},
+		"negativeData": {
+			"__id": "North_America",
+			"__type": "region",
+			"__ver": "1_01_01",
+			"data": {
+				"id": "North_America",
+				"description": "North America Infrastructure",
+				"data_centers": ["SEA1", "DFW4", "LAX2"]
+			}
+		}
+	}
+	`
+	testData := map[string]interface{}{}
+	err = json.Unmarshal([]byte(regionStr), &testData)
+	if err != nil {
+		t.Fatalf("failed loading test data Err:%s", err)
+	}
+	log.Print("get positive data for test")
+	record, err := Record.LoadMap(testData["data"].(map[string]interface{}))
+	if err != nil {
+		t.Fatalf("failed to load data as record. Error:%s", err)
+	}
+	log.Printf("[type]=[%s],[id]=[%s]", record.Type, record.Id)
+	_, err = handler.Validate(record)
+	if err != nil {
+		t.Fatalf("failed to validate positive data. Error:%s", err)
 	}
 	log.Printf("positive data validate passed")
-	negativeData, ok := testData["negativeData"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("missing field [%s] from test data", Schema.RecordData)
+	log.Print("get negative Data for test")
+	record, err = Record.LoadMap(testData["negativeData"].(map[string]interface{}))
+	if err != nil {
+		t.Fatalf("failed to load negativeData as record. Error:%s", err)
 	}
-	log.Print("get data for test")
-	dataType = negativeData[Schema.DataType].(string)
-	dataId = negativeData[Schema.DataId].(string)
-	log.Printf("[type]=[%s],[id]=[%s]", dataType, dataId)
-	_, err = handler.Validate(dataType, dataId, negativeData)
+	log.Printf("[type]=[%s],[id]=[%s]", record.Type, record.Id)
+	_, err = handler.Validate(record)
 	if err == nil {
 		t.Fatalf("failed to validate negative data.")
 	}
 	log.Printf("negative data validate passed")
+}
 
+func TestParseRecord(t *testing.T) {
+	server := DataServer.Server{}
+	payload := make(map[string]interface{})
+	dataType := "test"
+	typeVer := "00_00_00"
+	dataId := "test_01"
+	record := Record.NewRecord(dataType, typeVer, dataId, payload)
+	_, code, _ := server.ParseRecord([]string{}, record.Map(), dataType, dataId)
+	if code != http.StatusAccepted {
+		t.Fatalf("failed to parse record. type=[%s], id=[%s]", dataType, dataId)
+	}
+	pRecord, _, err := server.ParseRecord([]string{"true"}, record.Data, dataType, dataId)
+	if err != nil {
+		t.Fatalf("failed to parse record with no Reacod header. Error:%s", err)
+	}
+	if pRecord.Version != "0_00_00" {
+		t.Fatalf("failed to create record with correct version")
+	}
 }
 
 func loadConfig() (*Config.Confuguration, error) {
 	config := Config.Confuguration{}
-	configPathStr := "../../data/dynamoDbLocal/db-ds-01/config.json"
+	configPathStr := "../../data/DataService01/config.json"
 	configPath, err := filepath.Abs(configPathStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ABS Path [%s], Error:%s", configPathStr, err)

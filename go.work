@@ -24,11 +24,15 @@
 go 1.18
 
 use (
+    ./app/DataService
+    ./app/InventoryService
+    ./lib/Schema
+    ./lib/SchemaPath
+    ./lib/Util
     ./src/Data
     ./src/DataService
-    ./src/DataServiceAdmin
     ./src/InventoryService
-    ./src/Schema
-    ./src/Util
-    ./test/src/
+    ./tool/DataServiceAdmin
+    ./tool/InventoryServiceAdmin
+    ./test/src
 )

@@ -1,0 +1,7 @@
+FROM node:alpine AS build
+WORKDIR /opt/UniTAO/
+
+RUN apk update && apk add bash
+
+RUN mkdir ./WebServer
+RUN mkdir ./UI

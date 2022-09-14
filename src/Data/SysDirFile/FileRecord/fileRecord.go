@@ -26,7 +26,6 @@ This copyright notice and license applies to all files in this directory or sub-
 package FileRecord
 
 import (
-	"UniTao/Util"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -34,6 +33,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/salesforce/UniTAO/lib/Util"
 )
 
 type Record struct {

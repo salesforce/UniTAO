@@ -1,0 +1,5 @@
+__inventory
+.idea/*
+*.db
+__debug_bin
+node_modules/
