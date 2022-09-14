@@ -68,7 +68,7 @@ func create(data map[string]interface{}, id string, parent *SchemaDoc) (*SchemaD
 		keyTemplate = ""
 	}
 
-	doc := SchemaDoc{
+  doc := SchemaDoc{
 		Id:          id,
 		Parent:      parent,
 		Data:        data,

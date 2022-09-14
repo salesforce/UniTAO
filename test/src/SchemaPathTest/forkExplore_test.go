@@ -139,7 +139,6 @@ func TestPositiveAllPass(t *testing.T) {
 							"value": "value03",
 							"optValue": "optValue01"
 						}
-
 					]
 				}
 			},
@@ -162,7 +161,6 @@ func TestPositiveAllPass(t *testing.T) {
 							"name": "item03",
 							"value": "value03"
 						}
-
 					]
 				}
 			}
