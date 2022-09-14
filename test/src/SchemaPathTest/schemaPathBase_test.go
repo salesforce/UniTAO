@@ -28,18 +28,21 @@ package SchemaPathTest
 import (
 	"encoding/json"
 	"fmt"
-	"reflect"
+	"net/http"
 	"testing"
 
-	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
 	"github.com/salesforce/UniTAO/lib/SchemaPath"
+	SchemaPathData "github.com/salesforce/UniTAO/lib/SchemaPath/Data"
+	"github.com/salesforce/UniTAO/lib/SchemaPath/Error"
+	"github.com/salesforce/UniTAO/lib/SchemaPath/Node"
+	"github.com/salesforce/UniTAO/lib/Util"
 )
 
 func TestParseArrayPath(t *testing.T) {
 	arrayPath := "abc[1]"
-	attrName, attrIdx, err := SchemaPath.ParseArrayPath(arrayPath)
+	attrName, attrIdx, err := Util.ParseArrayPath(arrayPath)
 	if err != nil {
 		t.Errorf("failed to parse array attr: %s, Error:%s", arrayPath, err)
 	}
@@ -50,47 +53,68 @@ func TestParseArrayPath(t *testing.T) {
 		t.Errorf("parse path failed, expect [1]!=[%s]", attrIdx)
 	}
 	arrayPath = "abc[]"
-	_, _, err = SchemaPath.ParseArrayPath(arrayPath)
+	_, _, err = Util.ParseArrayPath(arrayPath)
 	if err == nil {
 		t.Errorf("failed to caught array path error=[empty idx]. %s", arrayPath)
 	}
 }
 
-func PrepareConn(schemaStr string, recordStr string) *SchemaPath.Connection {
-	getSchema := func(dataType string) (*SchemaDoc.SchemaDoc, error) {
+func PrepareConn(schemaStr string, recordStr string) *SchemaPathData.Connection {
+	getSchema := func(dataType string) (*SchemaDoc.SchemaDoc, *Error.SchemaPathErr) {
 		schemaMap := map[string]interface{}{}
 		err := json.Unmarshal([]byte(schemaStr), &schemaMap)
 		if err != nil {
-			return nil, fmt.Errorf("failed to ummarshal schema map str, Error:%s", err)
+			return nil, &Error.SchemaPathErr{
+				Code:    http.StatusInternalServerError,
+				PathErr: fmt.Errorf("failed to ummarshal schema map str, Error:%s", err),
+			}
 		}
 		schemaData, ok := schemaMap[dataType].(map[string]interface{})
 		if !ok {
-			return nil, fmt.Errorf("schema [type]=[%s] does not exists", dataType)
+			return nil, &Error.SchemaPathErr{
+				Code:    http.StatusNotFound,
+				PathErr: fmt.Errorf("schema [type]=[%s] does not exists", dataType),
+			}
 		}
-		return SchemaDoc.New(schemaData, dataType, nil)
+		doc, err := SchemaDoc.New(schemaData, dataType, nil)
+		if err != nil {
+			return nil, &Error.SchemaPathErr{
+				Code:    http.StatusInternalServerError,
+				PathErr: fmt.Errorf("failed to schema data type=[%s], Error:%s", dataType, err),
+			}
+		}
+		return doc, nil
 	}
-	getRecord := func(dataType string, dataId string) (*Record.Record, error) {
+	getRecord := func(dataType string, dataId string) (*Record.Record, *Error.SchemaPathErr) {
 		recordMap := map[string]interface{}{}
 		err := json.Unmarshal([]byte(recordStr), &recordMap)
 		if err != nil {
-			return nil, fmt.Errorf("failed to ummarshal schema map str, Error:%s", err)
+			return nil, &Error.SchemaPathErr{
+				Code:    http.StatusInternalServerError,
+				PathErr: fmt.Errorf("failed to ummarshal schema map str, Error:%s", err),
+			}
 		}
 		data, ok := recordMap[dataType].(map[string]interface{})[dataId].(map[string]interface{})
 		if !ok {
-			return nil, fmt.Errorf("record [%s/%s] does not exists", dataType, dataId)
+			return nil, &Error.SchemaPathErr{
+				Code:    http.StatusNotFound,
+				PathErr: fmt.Errorf("record [%s/%s] does not exists", dataType, dataId),
+			}
 		}
 		record, err := Record.LoadMap(data)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load data as Record. Error:%s", err)
+			return nil, &Error.SchemaPathErr{
+				Code:    http.StatusInternalServerError,
+				PathErr: fmt.Errorf("failed to load data as Record. Error:%s", err),
+			}
 		}
 		return record, nil
 	}
-	conn := SchemaPath.Connection{
+	conn := SchemaPathData.Connection{
 		FuncSchema: getSchema,
 		FuncRecord: getRecord,
 	}
 	return &conn
-
 }
 
 func TestConn(t *testing.T) {
@@ -138,21 +162,8 @@ func TestConn(t *testing.T) {
 	}
 }
 
-func QueryPath(conn *SchemaPath.Connection, path string) (interface{}, error) {
-	schemaPath, err := SchemaPath.NewFromPath(conn, path, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate SchemaPath. from [path]=[%s], Error: %s", path, err)
-	}
-	value, err := schemaPath.WalkValue()
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse value from [path]=[%s], Error: %s", path, err)
-	}
-	return value, nil
-}
-
-func TestWalkInObjectAndMap(t *testing.T) {
-	schemaStr := `
-	{
+func TestPathNode(t *testing.T) {
+	schemaStr := `{
 		"schema1": {
 			"name": "schema1",
 			"description": "test schema 01",
@@ -173,17 +184,27 @@ func TestWalkInObjectAndMap(t *testing.T) {
 			},
 			"definitions": {
 				"testValue": {
+					"name": "testValue",
 					"properties": {
 						"value1": {
 							"type": "string"
 						},
 						"value2": {
-							"type": "string"
+							"type": "string",
+							"contentMediaType": "inventory/schema2"
 						}
 					}
 				}
 			}
-
+		},
+		"schema2": {
+			"name": "schema2",
+			"description": "cross recod type schema 02",
+			"properties": {
+				"test": {
+					"type": "string"
+				}
+			}
 		}
 	}`
 	recordStr := `{
@@ -196,128 +217,53 @@ func TestWalkInObjectAndMap(t *testing.T) {
 					"name": "data1",
 					"value": {
 						"value1": "01",
-						"value2": "02"
+						"value2": "data02"
 					},
 					"mapStr": {
 						"keyExists": "exists"
 					}
 				}
 			}
+		},
+		"schema2": {
+			"data02": {
+				"__id": "data02",
+				"__type": "schema2",
+				"__ver": "0.0.1",
+				"data": {
+					"test": "testStr"
+				}
+			}
 		}
 	}`
 	conn := PrepareConn(schemaStr, recordStr)
-	queryPath := "schema1/data1/value/value1"
-	value, err := QueryPath(conn, queryPath)
+	queryPath := "/value/value2"
+	_, err := Node.New(conn, "schema1", "data1", queryPath, nil, nil)
 	if err != nil {
-		t.Fatal(err)
-	}
-	if value.(string) != "01" {
-		t.Fatalf("invalid value from [path]=[%s], [%s]!=[01]", queryPath, value.(string))
-	}
-	queryPath = "schema1/data1/mapStr/keyExists"
-	value, err = QueryPath(conn, queryPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if value.(string) != "exists" {
-		t.Errorf("invalid value from [path]=[%s], [%s]!=[exists]", queryPath, value.(string))
-	}
-	queryPath = "schema1/data1/mapStr/keyNotExists"
-	value, err = QueryPath(conn, queryPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if value != nil {
-		t.Errorf("invalid value from [path]=[%s], [%s]!=[nil]", queryPath, value.(string))
+		t.Fatalf("PathNode-positive: failed to build node path chain. Error: %s", err)
 	}
 }
 
-func TestWalkInArray(t *testing.T) {
-	schemaStr := `
-		{
-			"schemaWitArray": {
-				"name": "schemaWitArray",
-				"description": "schema of object with array of object in attribute",
-				"properties": {
-					"attrArray": {
-						"type": "array",
-						"items": {
-							"type": "object",
-							"$ref": "#/definitions/itemObj"
-						}
-					}
-				},
-				"definitions": {
-					"itemObj": {
-						"description": "item object of an array",
-						"key": "{key1}_{key2}",
-						"properties": {
-							"key1": {
-								"type": "string"
-							},
-							"key2": {
-								"type": "string"
-							}
-						}
-					}
-				}
-			}
-		}
-	`
-	recordStr := `
-	{
-		"schemaWitArray": {
-			"testArray01": {
-				"__id": "testArray01",
-				"__type": "schemaWitArray",
-				"__ver": "0.0.1",
-				"data": {
-					"attrArray": [
-						{
-							"key1": "01",
-							"key2": "01"
-						},
-						{
-							"key1": "01",
-							"key2": "02"
-						}
-					]
-				}
-			}
-		}
-	}`
-	conn := PrepareConn(schemaStr, recordStr)
-	queryPath := "schemaWitArray/testArray01/attrArray"
-	value, err := QueryPath(conn, queryPath)
+func QueryPath(conn *SchemaPathData.Connection, path string) (interface{}, *Error.SchemaPathErr) {
+	dataType, nextPath := Util.ParsePath(path)
+	query, err := SchemaPath.CreateQuery(conn, dataType, nextPath)
 	if err != nil {
-		t.Fatal(err)
+		return nil, Error.AppendErr(err, fmt.Sprintf("failed to generate SchemaPath. from [path]=[%s]", path))
 	}
-	if reflect.TypeOf(value).Kind() != reflect.Slice {
-		t.Errorf("failed to get array from path=[%s]", queryPath)
-	}
-	queryPath = "schemaWitArray/testArray01/attrArray[01_01]"
-	value, err = QueryPath(conn, queryPath)
+	value, err := query.WalkValue()
 	if err != nil {
-		t.Fatal(err)
+		return nil, Error.AppendErr(err, fmt.Sprintf("failed to parse value from [path]=[%s]", path))
 	}
-	if value == nil {
-		t.Errorf("failed to get the value of idx=[01_01], @[path]=[%s]", queryPath)
-	}
-	if value.(map[string]interface{})["key2"] != "01" {
-		t.Errorf("failed to get the correct value from [path]=[%s]", queryPath)
-	}
-	queryPath = "schemaWitArray/testArray01/attrArray[01_02]/key2"
-	value, err = QueryPath(conn, queryPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if value == nil {
-		t.Errorf("failed to get the value of idx=[01_01], @[path]=[%s]", queryPath)
-	}
-	if value.(string) != "02" {
-		t.Errorf("failed to get the correct value=[%s] from [path]=[%s]", value.(string), queryPath)
-	}
+	return value, nil
 }
+
+/*
+
+
+
+
+
+
 
 func TestWalkInRef(t *testing.T) {
 	schemaStr := `
@@ -487,103 +433,7 @@ func TestWalkInRef(t *testing.T) {
 	}
 }
 
-func TestWalkSchema(t *testing.T) {
-	schemaStr := `
-	{
-		"schemaWitArray": {
-			"name": "schemaWitArray",
-			"description": "schema of object with array of object in attribute",
-			"properties": {
-				"attrArray": {
-					"type": "array",
-					"items": {
-						"type": "object",
-						"$ref": "#/definitions/itemObj"
-					}
-				}
-			},
-			"definitions": {
-				"itemObj": {
-					"name": "itemObj",
-					"description": "item object of an array",
-					"key": "{key1}_{key2}",
-					"properties": {
-						"key1": {
-							"type": "string"
-						},
-						"key2": {
-							"type": "string"
-						}
-					}
-				}
-			}
-		}
-	}
-`
-	recordStr := `
-	{
-		"schemaWitArray": {
-			"testArray01": {
-				"__id": "testArray01",
-				"__type": "schemaWitArray",
-				"__ver": "0.0.1",
-				"data": {
-					"attrArray": [
-						{
-							"key1": "01",
-							"key2": "01"
-						},
-						{
-							"key1": "01",
-							"key2": "02"
-						}
-					]
-				}
-			},
-			"testArray02": {
-				"__id": "testArray01",
-				"__type": "schemaWitArray",
-				"__ver": "0.0.1",
-				"data": {
-					"attrArray": null
-				}
-			}
-		}
-	}`
-	conn := PrepareConn(schemaStr, recordStr)
-	queryPath := "schemaWitArray/testArray01?schema"
-	value, err := QueryPath(conn, queryPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if value.(map[string]interface{})[JsonKey.Name].(string) != "schemaWitArray" {
-		t.Errorf("got invalid shema data")
-	}
-	queryPath = "schemaWitArray/testArray01/attrArray?schema"
-	value, err = QueryPath(conn, queryPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if value.(map[string]interface{})[JsonKey.Type].(string) != JsonKey.Array {
-		t.Errorf("got invalid shema data")
-	}
-	queryPath = "schemaWitArray/testArray01/attrArray[01_02]?schema"
-	value, err = QueryPath(conn, queryPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if value.(map[string]interface{})[JsonKey.Type].(string) != JsonKey.Object {
-		t.Errorf("got invalid shema data")
-	}
-	queryPath = "schemaWitArray/testArray02/attrArray?schema"
-	value, err = QueryPath(conn, queryPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if value.(map[string]interface{})[JsonKey.Type].(string) != JsonKey.Array {
-		t.Errorf("got invalid shema data")
-	}
-}
+
 
 func TestWalkFlat(t *testing.T) {
 	schemaStr := `
@@ -738,3 +588,4 @@ func TestWalkFlat(t *testing.T) {
 		t.Errorf("failed to extract key of item 0 of itemArray, expect [01_01] != [%s], @[path]=[%s]", flatAry[0], queryPath)
 	}
 }
+*/

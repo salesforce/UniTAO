@@ -23,53 +23,11 @@ This copyright notice and license applies to all files in this directory or sub-
 ************************************************************************************************************
 */
 
-package SchemaPath
+package PathCmd
 
-import (
-	"fmt"
-	"net/http"
+import "github.com/salesforce/UniTAO/lib/SchemaPath/Error"
 
-	"github.com/salesforce/UniTAO/lib/SchemaPath/Data"
-	"github.com/salesforce/UniTAO/lib/SchemaPath/Error"
-	"github.com/salesforce/UniTAO/lib/SchemaPath/Node"
-	"github.com/salesforce/UniTAO/lib/SchemaPath/PathCmd"
-	"github.com/salesforce/UniTAO/lib/Util"
-)
-
-func CreateQuery(conn *Data.Connection, dataType string, dataPath string) (PathCmd.QueryIface, *Error.SchemaPathErr) {
-	qPath, qCmd, pErr := PathCmd.Parse(dataPath)
-	if pErr != nil {
-		return nil, &Error.SchemaPathErr{
-			Code:    http.StatusBadRequest,
-			PathErr: fmt.Errorf("failed to parse path=[%s], Error:%s", dataPath, pErr),
-		}
-	}
-	dataId, nextPath := Util.ParsePath(qPath)
-	queryPath, err := Node.New(conn, dataType, dataId, nextPath, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	switch qCmd {
-	case PathCmd.CmdSchema:
-		return &CmdQuerySchema{
-			p: queryPath,
-		}, nil
-	case PathCmd.CmdFlat:
-		return &CmdQueryFlat{
-			p: queryPath,
-		}, nil
-	case PathCmd.CmdRef:
-		return &CmdQueryRef{
-			p: queryPath,
-		}, nil
-	case PathCmd.CmdIter:
-		return &CmdPathIterator{
-			path: qPath,
-			p:    queryPath,
-		}, nil
-	default:
-		return &CmdQueryValue{
-			p: queryPath,
-		}, nil
-	}
+type QueryIface interface {
+	Name() string
+	WalkValue() (interface{}, *Error.SchemaPathErr)
 }

@@ -23,53 +23,56 @@ This copyright notice and license applies to all files in this directory or sub-
 ************************************************************************************************************
 */
 
-package SchemaPath
+package SchemaPathTest
 
 import (
 	"fmt"
-	"net/http"
+	"testing"
 
-	"github.com/salesforce/UniTAO/lib/SchemaPath/Data"
-	"github.com/salesforce/UniTAO/lib/SchemaPath/Error"
-	"github.com/salesforce/UniTAO/lib/SchemaPath/Node"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/PathCmd"
-	"github.com/salesforce/UniTAO/lib/Util"
 )
 
-func CreateQuery(conn *Data.Connection, dataType string, dataPath string) (PathCmd.QueryIface, *Error.SchemaPathErr) {
-	qPath, qCmd, pErr := PathCmd.Parse(dataPath)
-	if pErr != nil {
-		return nil, &Error.SchemaPathErr{
-			Code:    http.StatusBadRequest,
-			PathErr: fmt.Errorf("failed to parse path=[%s], Error:%s", dataPath, pErr),
+func TestPathParseCmdAll(t *testing.T) {
+	for _, cmd := range []string{PathCmd.CmdFlat, PathCmd.CmdIter, PathCmd.CmdRef, PathCmd.CmdSchema, PathCmd.CmdValue} {
+		path := fmt.Sprintf("/test/123%s", cmd)
+		qPath, qCmd, err := PathCmd.Parse(path)
+		if err != nil {
+			t.Errorf("failed to parse path=[%s], Error:%s", path, err)
+		}
+		if qCmd != cmd {
+			t.Errorf("invalid cmd parsed [%s], expect [%s]", qCmd, cmd)
+		}
+		if qPath != "/test/123" {
+			t.Errorf("invalid path parsed [%s], expect [/test/123]", qPath)
 		}
 	}
-	dataId, nextPath := Util.ParsePath(qPath)
-	queryPath, err := Node.New(conn, dataType, dataId, nextPath, nil, nil)
+
+}
+
+func TestPathParseRefPath(t *testing.T) {
+	path := "/test/123/$"
+	qPath, qCmd, err := PathCmd.Parse(path)
 	if err != nil {
-		return nil, err
+		t.Errorf("failed to parse path=[%s], Error:%s", path, err)
 	}
-	switch qCmd {
-	case PathCmd.CmdSchema:
-		return &CmdQuerySchema{
-			p: queryPath,
-		}, nil
-	case PathCmd.CmdFlat:
-		return &CmdQueryFlat{
-			p: queryPath,
-		}, nil
-	case PathCmd.CmdRef:
-		return &CmdQueryRef{
-			p: queryPath,
-		}, nil
-	case PathCmd.CmdIter:
-		return &CmdPathIterator{
-			path: qPath,
-			p:    queryPath,
-		}, nil
-	default:
-		return &CmdQueryValue{
-			p: queryPath,
-		}, nil
+	if qCmd != PathCmd.CmdRef {
+		t.Errorf("invalid cmd parsed [%s], expect [%s]", qCmd, PathCmd.CmdRef)
+	}
+	if qPath != "/test/123" {
+		t.Errorf("invalid path parsed [%s], expect [/test/123]", qPath)
+	}
+}
+
+func TestPathParseValueDefault(t *testing.T) {
+	path := "/test/123"
+	qPath, qCmd, err := PathCmd.Parse(path)
+	if err != nil {
+		t.Errorf("failed to parse path=[%s], Error:%s", path, err)
+	}
+	if qCmd != PathCmd.CmdValue {
+		t.Errorf("invalid cmd parsed [%s], expect [%s]", qCmd, PathCmd.CmdValue)
+	}
+	if qPath != "/test/123" {
+		t.Errorf("invalid path parsed [%s], expect [/test/123]", qPath)
 	}
 }
