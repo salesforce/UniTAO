@@ -23,7 +23,7 @@ This copyright notice and license applies to all files in this directory or sub-
 ************************************************************************************************************
 */
 
-package ReferalRecord
+package RefRecord
 
 import (
 	"encoding/json"
@@ -36,7 +36,7 @@ import (
 	"github.com/salesforce/UniTAO/lib/Util"
 )
 
-type ReferalRecord struct {
+type Referral struct {
 	Id        string                 `json:"__id"`
 	DataType  string                 `json:"__type"`
 	SchemaVer string                 `json:"__ver"`
@@ -48,20 +48,20 @@ type ReferalRecord struct {
 	DsInfo    *InvRecord.DataServiceInfo
 }
 
-func LoadMap(data map[string]interface{}) (*ReferalRecord, error) {
+func LoadMap(data map[string]interface{}) (*Referral, error) {
 	raw, err := json.Marshal(data)
 	if err != nil {
-		return nil, fmt.Errorf("failed to Marshal data for ReferalRecord. Error:%s", err)
+		return nil, fmt.Errorf("failed to Marshal data for ReferralRecord. Error:%s", err)
 	}
-	record := ReferalRecord{}
+	record := Referral{}
 	err = json.Unmarshal(raw, &record)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse map data for ReferalRecord. Error:%s", err)
+		return nil, fmt.Errorf("failed to parse map data for ReferralRecord. Error:%s", err)
 	}
 	return &record, nil
 }
 
-func (r *ReferalRecord) GetSchema() (int, error) {
+func (r *Referral) GetSchema() (int, error) {
 	schemaUrl := fmt.Sprintf("%s/%s/%s", r.DsUrl, JsonKey.Schema, r.DataType)
 	schemaData, code, err := Util.GetRestData(schemaUrl)
 	if err != nil {
@@ -75,7 +75,7 @@ func (r *ReferalRecord) GetSchema() (int, error) {
 	return http.StatusOK, nil
 }
 
-func (r *ReferalRecord) SetDsInfo(ds *InvRecord.DataServiceInfo) error {
+func (r *Referral) SetDsInfo(ds *InvRecord.DataServiceInfo) error {
 	r.DsInfo = ds
 	dsUrl, err := ds.GetUrl()
 	if err != nil {
@@ -85,7 +85,7 @@ func (r *ReferalRecord) SetDsInfo(ds *InvRecord.DataServiceInfo) error {
 	return nil
 }
 
-func (r *ReferalRecord) ToMap() (map[string]interface{}, error) {
+func (r *Referral) ToMap() (map[string]interface{}, error) {
 	raw, err := json.Marshal(r)
 	if err != nil {
 		return nil, err

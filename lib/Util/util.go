@@ -62,6 +62,22 @@ func ParsePath(path string) (string, string) {
 	return currentPath, nextPath
 }
 
+func ParseArrayPath(path string) (string, string, error) {
+	if path[len(path)-1:] != "]" {
+		return path, "", nil
+	}
+	keyIdx := strings.Index(path, "[")
+	if keyIdx < 1 {
+		return path, "", nil
+	}
+	attrName := path[:keyIdx]
+	key := path[keyIdx+1 : len(path)-1]
+	if key == "" {
+		return "", "", fmt.Errorf("invalid array path=[%s], key empty", path)
+	}
+	return attrName, key, nil
+}
+
 func ResponseJson(w http.ResponseWriter, data interface{}, status int) {
 	jsonData, err := json.MarshalIndent(data, "", "    ")
 	if err != nil {
@@ -223,4 +239,16 @@ func JsonCopy(data interface{}) (interface{}, error) {
 		return nil, fmt.Errorf("Util.JsonCopy failed to UnMarshal data, Error: %s", err)
 	}
 	return result, nil
+}
+
+func ObjCopy(src interface{}, target interface{}) error {
+	dataBytes, err := json.Marshal(src)
+	if err != nil {
+		return fmt.Errorf("Util.JsonCopy failed to Marshal data, Error: %s", err)
+	}
+	err = json.Unmarshal(dataBytes, target)
+	if err != nil {
+		return fmt.Errorf("Util.JsonCopy failed to UnMarshal data, Error: %s", err)
+	}
+	return nil
 }

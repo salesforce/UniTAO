@@ -67,11 +67,8 @@ func create(data map[string]interface{}, id string, parent *SchemaDoc) (*SchemaD
 	if !ok {
 		keyTemplate = ""
 	}
-	rawData, err := Util.JsonCopy(data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to copy SchemaDoc Data. @path=[%s], Error:%s", parentPath, err)
-	}
-	doc := SchemaDoc{
+
+  doc := SchemaDoc{
 		Id:          id,
 		Parent:      parent,
 		Data:        data,
@@ -79,8 +76,21 @@ func create(data map[string]interface{}, id string, parent *SchemaDoc) (*SchemaD
 		KeyAttrs:    ParseTemplateVars(keyTemplate),
 		CmtRefs:     map[string]*CMTDocRef{},
 		SubDocs:     map[string]*SchemaDoc{},
-		RAW:         rawData.(map[string]interface{}),
 	}
+	if parent == nil {
+		rawDataIface, err := Util.JsonCopy(data)
+		if err != nil {
+			return nil, fmt.Errorf("failed to copy SchemaDoc Data. @path=[%s], Error:%s", parentPath, err)
+		}
+		doc.RAW = rawDataIface.(map[string]interface{})
+	} else {
+		rawData, err := parent.GetDefinitionRaw(id)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get Raw Schema for definition dataType=[%s]", id)
+		}
+		doc.RAW = rawData
+	}
+
 	docDefs, ok := data[JsonKey.Definitions]
 	if ok {
 		defMap, ok := docDefs.(map[string]interface{})
@@ -134,12 +144,10 @@ func (d *SchemaDoc) preprocess() error {
 	err = d.processRefs()
 	if err != nil {
 		return fmt.Errorf("preprocess failed @processInvRefs, [path]=[%s], Error:%s", d.Path(), err)
-
 	}
 	err = d.validateKeyAttrs()
 	if err != nil {
 		return fmt.Errorf("validate Key Attributes failed. [path]=[%s] Error: %s", d.Path(), err)
-
 	}
 	if d.Definitions != nil {
 		for _, defDoc := range d.Definitions {
@@ -232,7 +240,7 @@ func (d *SchemaDoc) processItemDef(pType string, pname string, itemDef map[strin
 		}
 		err := d.getRefDoc(pname, itemDef)
 		if err != nil {
-			return fmt.Errorf("failed to get ref doc @[path]=[%s/%s]. Error: %s", d.Path(), pname, err)
+			return fmt.Errorf("failed to get ref doc @processItemDef @[path]=[%s/%s]. Error: %s", d.Path(), pname, err)
 		}
 	}
 	return nil
@@ -258,11 +266,11 @@ func (d *SchemaDoc) processRefs() error {
 				if err != nil {
 					return err
 				}
-				return nil
+				continue
 			}
 			err := d.getRefDoc(pname, propDef)
 			if err != nil {
-				return fmt.Errorf("failed to get ref doc @[path]=[%s/%s]. Error: %s", d.Path(), pname, err)
+				return fmt.Errorf("failed to get ref doc @processRefs @[path]=[%s/%s]. Error: %s", d.Path(), pname, err)
 			}
 		case JsonKey.String:
 			err := d.getCmtRef(pname, propDef)
@@ -279,14 +287,14 @@ func (d *SchemaDoc) getCmtRef(pname string, prop map[string]interface{}) error {
 	if !ok || cmt == "" {
 		return nil
 	}
-	cmtType, nextPath := Util.ParsePath(cmt)
+	cmtType, dataType := Util.ParsePath(cmt)
 	switch cmtType {
 	case JsonKey.Inventory:
 		ref := CMTDocRef{
 			Doc:         d,
 			Name:        pname,
 			CmtType:     cmtType,
-			ContentType: nextPath,
+			ContentType: dataType,
 		}
 		d.CmtRefs[ref.Name] = &ref
 		return nil
@@ -299,6 +307,9 @@ func ParseRefName(prop map[string]interface{}) (string, error) {
 	ref, ok := prop[JsonKey.Ref].(string)
 	if !ok {
 		return "", nil
+	}
+	if ref == JsonKey.DocRoot {
+		return ref, nil
 	}
 	if !strings.HasPrefix(ref, JsonKey.DefinitionPrefix) {
 		return "", fmt.Errorf("unknown ref value=[%s]", ref)
@@ -329,6 +340,16 @@ func (d *SchemaDoc) getRefDoc(pname string, prop map[string]interface{}) error {
 }
 
 func (d *SchemaDoc) GetDefinition(dataType string) (*SchemaDoc, error) {
+	if dataType == JsonKey.DocRoot {
+		if d.Parent == nil {
+			return d, nil
+		}
+		doc, err := d.Parent.GetDefinition(dataType)
+		if err != nil {
+			return nil, err
+		}
+		return doc, nil
+	}
 	if d.Definitions != nil {
 		doc, ok := d.Definitions[dataType]
 		if ok {
@@ -337,6 +358,33 @@ func (d *SchemaDoc) GetDefinition(dataType string) (*SchemaDoc, error) {
 	}
 	if d.Parent != nil {
 		doc, err := d.Parent.GetDefinition(dataType)
+		if err != nil {
+			return nil, err
+		}
+		return doc, nil
+	}
+	return nil, nil
+}
+
+func (d *SchemaDoc) GetDefinitionRaw(dataType string) (map[string]interface{}, error) {
+	if dataType == JsonKey.DocRoot {
+		if d.Parent == nil {
+			return d.RAW, nil
+		}
+		doc, err := d.Parent.GetDefinitionRaw(dataType)
+		if err != nil {
+			return nil, err
+		}
+		return doc, nil
+	}
+	if d.Definitions != nil {
+		doc, ok := d.RAW[JsonKey.Definitions].(map[string]interface{})[dataType].(map[string]interface{})
+		if ok {
+			return doc, nil
+		}
+	}
+	if d.Parent != nil {
+		doc, err := d.Parent.GetDefinitionRaw(dataType)
 		if err != nil {
 			return nil, err
 		}
