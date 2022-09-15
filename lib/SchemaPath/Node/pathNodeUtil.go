@@ -117,6 +117,7 @@ func GetNodeListIdx(node *PathNode, value []interface{}, key string) (interface{
 			if item == key {
 				return item, nil
 			}
+			continue
 		}
 		itemKey, err := node.Next.Schema.BuildKey(item.(map[string]interface{}))
 		if err != nil {
