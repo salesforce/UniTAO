@@ -397,3 +397,81 @@ func TestWalkInAll(t *testing.T) {
 
 	}
 }
+
+func TestWalkRecordCmtRecordDirect(t *testing.T) {
+	schemaStr := `{
+		"entry": {
+			"name": "entry",
+			"properties": {
+				"nextList": {
+					"type": "array",
+					"items": {
+						"type": "string",
+						"contentMediaType": "inventory/next"
+					}
+				}
+			}
+		},
+		"next": {
+			"name": "next",
+			"key": "{itemKey}",
+			"properties": {
+				"itemKey": {
+					"type": "string"
+				},
+				"value":{
+					"type": "string"
+				}
+			}
+		}
+	}`
+	recordStr := `{
+		"entry": {
+			"01": {
+				"__id": "01",
+				"__type": "entry",
+				"data": {
+					"nextList": [
+						"next-02",
+						"aws-dev2-uswest2"
+					]
+				}
+			}
+		},
+		"next": {
+			"aws-dev2-uswest2": {
+				"__id": "aws-dev2-uswest2",
+				"__type": "next",
+				"data": {
+					"itemKey": "aws-dev2-uswest2",
+					"value": "this is next 01"
+				}
+			},
+			"next-02": {
+				"__id": "next-02",
+				"__type": "next",
+				"data": {
+					"itemKey": "next-02",
+					"value": "this is next 02"
+				}
+			}
+		}
+	}`
+	conn := PrepareConn(schemaStr, recordStr)
+	path := "entry/01/nextList"
+	value, err := QueryPath(conn, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reflect.TypeOf(value).Kind() != reflect.Slice {
+		t.Fatalf("invalid return value type=[%s], expected=[%s], path=[%s]", reflect.TypeOf(value).Kind(), reflect.Slice, path)
+	}
+	path = "entry/01/nextList[aws-dev2-uswest2]"
+	value, err = QueryPath(conn, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reflect.TypeOf(value).Kind() != reflect.Map {
+		t.Fatalf("invalid return value type=[%s], expected=[%s], path=[%s]", reflect.TypeOf(value).Kind(), reflect.Map, path)
+	}
+}
