@@ -35,6 +35,7 @@ import (
 	"github.com/salesforce/UniTAO/lib/SchemaPath/Error"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/Node"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/PathCmd"
+	"github.com/salesforce/UniTAO/lib/Util"
 )
 
 type CmdQueryFlat struct {
@@ -62,10 +63,31 @@ func (c *CmdQueryFlat) WalkValue() (interface{}, *Error.SchemaPathErr) {
 	validateErr := ValidateFlatValue(nodeValue)
 	if validateErr == nil {
 		// the return value is already a flat value
+		if reflect.TypeOf(nodeValue).Kind() == reflect.Slice {
+			dedupeList, nErr := Util.DeDupeList(nodeValue.([]interface{}))
+			if nErr != nil {
+				return nil, &Error.SchemaPathErr{
+					Code:    http.StatusInternalServerError,
+					PathErr: fmt.Errorf("failed to dedupe result. Error:%s", nErr),
+				}
+			}
+			return dedupeList, nil
+		}
 		return nodeValue, nil
 	}
 	if reflect.TypeOf(nodeValue).Kind() == reflect.Slice {
-		return FlatNodeArray(c.p, nodeValue.([]interface{}))
+		valueList, err := FlatNodeArray(c.p, nodeValue.([]interface{}))
+		if err != nil {
+			return nil, err
+		}
+		dedupeList, nErr := Util.DeDupeList(valueList.([]interface{}))
+		if nErr != nil {
+			return nil, &Error.SchemaPathErr{
+				Code:    http.StatusInternalServerError,
+				PathErr: fmt.Errorf("failed to dedupe result. Error:%s", nErr),
+			}
+		}
+		return dedupeList, nil
 	}
 	return FlatNodeMap(c.p, nodeValue.(map[string]interface{}))
 }

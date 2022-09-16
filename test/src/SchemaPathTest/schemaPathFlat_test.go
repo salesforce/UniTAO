@@ -1132,3 +1132,214 @@ func TestFlat2LayerArrayAll(t *testing.T) {
 		t.Fatalf(pathErr.Error())
 	}
 }
+
+func TestFlatDeDupe(t *testing.T) {
+	schemaStr := `{
+		"entry": {
+			"name": "entry",
+			"properties": {
+				"simpleAry": {
+					"type": "array",
+					"items": {
+						"type": "string"						
+					}
+				},
+				"refAry": {
+					"type": "array",
+					"items": {
+						"type": "string",
+						"contentMediaType": "inventory/refObj"
+					}
+				},
+				"objMap": {
+					"type": "map",
+					"items": {
+						"type": "object",
+						"$ref": "#/definitions/itemObj"
+					}
+				}
+			},
+			"definitions": {
+				"itemObj": {
+					"name": "itemObj",
+					"key": "obj-{key}",
+					"properties": {
+						"key": {
+							"type": "string"
+						},
+						"refVal": {
+							"type": "string",
+							"contentMediaType": "inventory/refObj"
+						},
+						"simpleAry": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						}
+					}
+				}
+			}
+		},
+		"refObj": {
+			"name": "refObj",
+			"key": "ref-{key}",
+			"properties": {
+				"key": {
+					"type": "string"
+				},
+				"value": {
+					"type": "string"
+				},
+				"simpleAry": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	}`
+	recordStr := `{
+		"entry": {
+			"01": {
+				"__id": "01",
+				"__type": "entry",
+				"__ver": "0.0.1",
+				"data": {
+					"simpleAry": [
+						"01",
+						"02",
+						"01",
+						"04",
+						"03",
+						"02"
+					],
+					"refAry": [
+						"ref-01",
+						"ref-02",
+						"ref-03"
+					],
+					"objMap": {
+						"01": {
+							"key": "01",
+							"refVal": "ref-01",
+							"simpleAry": [
+								"01",
+								"02"
+							]
+						},
+						"02": {
+							"key": "02",
+							"refVal": "ref-02",
+							"simpleAry": [
+								"01",
+								"02",
+								"03"
+							]
+						},
+						"03": {
+							"key": "03",
+							"refVal": "ref-02",
+							"simpleAry": [
+								"01",
+								"02",
+								"03",
+								"04"
+							]
+						}
+					}
+				}
+			}
+		},
+		"refObj": {
+			"ref-01": {
+				"__id": "ref-01",
+				"__type": "refObj",
+				"__ver": "0.0.1",
+				"data": {
+					"key": "01",
+					"value": "01",
+					"simpleAry": [
+						"01",
+						"02"
+					]
+				}
+			},
+			"ref-02": {
+				"__id": "ref-02",
+				"__type": "refObj",
+				"__ver": "0.0.1",
+				"data": {
+					"key": "02",
+					"value": "02",
+					"simpleAry": [
+						"01",
+						"02",
+						"03"
+					]
+				}
+			},
+			"ref-03": {
+				"__id": "ref-03",
+				"__type": "refObj",
+				"__ver": "0.0.1",
+				"data": {
+					"key": "03",
+					"value": "03",
+					"simpleAry": [
+						"01",
+						"02",
+						"03",
+						"04"
+					]
+				}
+			}
+		}
+	}`
+	conn := PrepareConn(schemaStr, recordStr)
+	queryPath := "entry/01/simpleAry?flat"
+	value, err := QueryPath(conn, queryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reflect.TypeOf(value).Kind() != reflect.Slice {
+		t.Fatalf("invalid return type on simpleAry. suppose to be [%s]", reflect.Slice)
+	}
+	if len(value.([]interface{})) != 4 {
+		t.Fatalf("failed to dedupe. return item num [%d]!=[4]", len(value.([]interface{})))
+	}
+	queryPath = "entry/01/refAry[*]/simpleAry?flat"
+	value, err = QueryPath(conn, queryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reflect.TypeOf(value).Kind() != reflect.Slice {
+		t.Fatalf("invalid return type on simpleAry. suppose to be [%s]", reflect.Slice)
+	}
+	if len(value.([]interface{})) != 4 {
+		t.Fatalf("failed to dedupe. return item num [%d]!=[4]", len(value.([]interface{})))
+	}
+	queryPath = "entry/01/objMap[*]/simpleAry?flat"
+	value, err = QueryPath(conn, queryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reflect.TypeOf(value).Kind() != reflect.Slice {
+		t.Fatalf("invalid return type on simpleAry. suppose to be [%s]", reflect.Slice)
+	}
+	if len(value.([]interface{})) != 4 {
+		t.Fatalf("failed to dedupe. return item num [%d]!=[4]", len(value.([]interface{})))
+	}
+	queryPath = "entry/01/objMap[*]/refVal?flat"
+	value, err = QueryPath(conn, queryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reflect.TypeOf(value).Kind() != reflect.Slice {
+		t.Fatalf("invalid return type on simpleAry. suppose to be [%s]", reflect.Slice)
+	}
+	if len(value.([]interface{})) != 2 {
+		t.Fatalf("failed to dedupe. return item num [%d]!=[2]", len(value.([]interface{})))
+	}
+}
