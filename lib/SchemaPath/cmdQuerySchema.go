@@ -26,50 +26,49 @@ This copyright notice and license applies to all files in this directory or sub-
 package SchemaPath
 
 import (
-	"fmt"
-	"net/http"
-
+	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/Data"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/Error"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/Node"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/PathCmd"
-	"github.com/salesforce/UniTAO/lib/Util"
 )
 
-func CreateQuery(conn *Data.Connection, dataType string, dataPath string) (PathCmd.QueryIface, *Error.SchemaPathErr) {
-	qPath, qCmd, pErr := PathCmd.Parse(dataPath)
-	if pErr != nil {
-		return nil, &Error.SchemaPathErr{
-			Code:    http.StatusBadRequest,
-			PathErr: fmt.Errorf("failed to parse path=[%s], Error:%s", dataPath, pErr),
-		}
-	}
-	dataId, nextPath := Util.ParsePath(qPath)
-	queryPath, err := Node.New(conn, dataType, dataId, nextPath, nil, nil)
+type CmdQuerySchema struct {
+	p *Node.PathNode
+}
+
+func NewSchemaQuery(conn *Data.Connection, dataType string, dataId string, path string) (*CmdQuerySchema, error) {
+	node, err := Node.New(conn, dataType, dataId, path, nil, nil)
 	if err != nil {
 		return nil, err
 	}
-	switch qCmd {
-	case PathCmd.CmdSchema:
-		return &CmdQuerySchema{
-			p: queryPath,
-		}, nil
-	case PathCmd.CmdFlat:
-		return &CmdQueryFlat{
-			p: queryPath,
-		}, nil
-	case PathCmd.CmdRef:
-		return &CmdQueryRef{
-			p: queryPath,
-		}, nil
-	case PathCmd.CmdIter:
-		return &CmdPathIterator{
-			path: qPath,
-			p:    queryPath,
-		}, nil
-	default:
-		return &CmdQueryValue{
-			p: queryPath,
-		}, nil
+	return &CmdQuerySchema{
+		p: node,
+	}, nil
+}
+
+func (c *CmdQuerySchema) Name() string {
+	return PathCmd.CmdSchema
+}
+
+func (c *CmdQuerySchema) WalkValue() (interface{}, *Error.SchemaPathErr) {
+	node := c.p
+	for node.Next != nil {
+		node = node.Next
 	}
+	if node.AttrName == "" {
+		return node.Schema.RAW, nil
+	}
+	rawAttrDef := node.Schema.RAW[JsonKey.Properties].(map[string]interface{})[node.AttrName].(map[string]interface{})
+	// when Idx is not empty, it's either array or a map hash object
+	rawType := rawAttrDef[JsonKey.Type].(string)
+	if node.Idx != "" {
+		if rawType == JsonKey.Array || rawType == JsonKey.Map {
+			return rawAttrDef[JsonKey.Items], nil
+		}
+		if rawType == JsonKey.Object && node.Idx != "" {
+			return rawAttrDef[JsonKey.AdditionalProperties], nil
+		}
+	}
+	return rawAttrDef, nil
 }
