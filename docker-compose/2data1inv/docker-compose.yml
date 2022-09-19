@@ -103,13 +103,13 @@ services:
 
   unitao-ui-server:
     image: unitao/uiserver:localbuild
-    container_name: unitao-uiserver
+    container_name: unitao-ui-schema-visualizer
     restart: "no"
     stdin_open: true
     tty: true
     volumes:
       -  ../../ui/UI:/opt/UniTAO/UI
-      -  ../../ui/WebServer:/opt/UniTAO/WebServer
+      -  ../../schemaVisualizer:/opt/UniTAO/SchemaVisualizer
     ports:
       - "8005:3000"
-    command: "node ./WebServer/index.js"
+    command: "node ./SchemaVisualizer/index.js"
