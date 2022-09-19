@@ -109,7 +109,7 @@ services:
     tty: true
     volumes:
       -  ../../ui/UI:/opt/UniTAO/UI
-      -  ../../schemaVisualizer:/opt/UniTAO/SchemaVisualizer
+      -  ../../schemaVisualizer:/opt/UniTAO/WebServer
     ports:
       - "8005:3000"
-    command: "node ./SchemaVisualizer/index.js"
+    command: "node ./WebServer/index.js"
