@@ -121,6 +121,10 @@ func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (srv *Server) ResponseJson(w http.ResponseWriter, data interface{}, status int) {
+	Util.ResponseJson(w, data, status, srv.config.Http)
+}
+
 func (srv *Server) handleGet(w http.ResponseWriter, dataType string, dataId string) {
 	if dataId == "" {
 		log.Printf("list datatype=[%s]", dataType)
@@ -129,7 +133,7 @@ func (srv *Server) handleGet(w http.ResponseWriter, dataType string, dataId stri
 			http.Error(w, err.Error(), code)
 			return
 		}
-		Util.ResponseJson(w, idList, code)
+		srv.ResponseJson(w, idList, code)
 		return
 	}
 	log.Printf("get data type=[%s], id=[%s]", dataType, dataId)
@@ -138,7 +142,7 @@ func (srv *Server) handleGet(w http.ResponseWriter, dataType string, dataId stri
 		http.Error(w, err.Error(), code)
 		return
 	}
-	Util.ResponseJson(w, result, code)
+	srv.ResponseJson(w, result, code)
 }
 
 func (srv *Server) ParseRecord(noRecordList []string, payload map[string]interface{}, dataType string, dataId string) (*Record.Record, int, error) {
@@ -177,7 +181,7 @@ func (srv *Server) handlePost(w http.ResponseWriter, r *http.Request, dataType s
 		http.Error(w, err.Error(), code)
 		return
 	}
-	Util.ResponseJson(w, record, http.StatusCreated)
+	srv.ResponseJson(w, record, http.StatusCreated)
 }
 
 func (srv *Server) handlerPut(w http.ResponseWriter, r *http.Request, dataType string, dataId string) {
@@ -197,7 +201,7 @@ func (srv *Server) handlerPut(w http.ResponseWriter, r *http.Request, dataType s
 		http.Error(w, err.Error(), code)
 		return
 	}
-	Util.ResponseJson(w, record, http.StatusCreated)
+	srv.ResponseJson(w, record, http.StatusCreated)
 }
 
 func (srv *Server) handleDelete(w http.ResponseWriter, dataType string, dataId string) {
@@ -208,5 +212,5 @@ func (srv *Server) handleDelete(w http.ResponseWriter, dataType string, dataId s
 	result := map[string]string{
 		"result": fmt.Sprintf("item [type/id]=[%s/%s] deleted", dataType, dataId),
 	}
-	Util.ResponseJson(w, result, code)
+	srv.ResponseJson(w, result, code)
 }

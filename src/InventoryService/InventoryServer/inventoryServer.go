@@ -103,6 +103,9 @@ func (srv *Server) Run() {
 	log.Printf("Data Server Listen @%s://%s:%s", srv.config.Http.HttpType, srv.config.Http.DnsName, srv.Port)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", srv.Port), nil))
 }
+func (srv *Server) ResponseJson(w http.ResponseWriter, data interface{}, status int) {
+	Util.ResponseJson(w, data, status, srv.config.Http)
+}
 
 func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
@@ -113,7 +116,7 @@ func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 	if dataType == "" {
 		respObj := make(map[string]string)
 		respObj["error message"] = "please use inventory{type}[/{id}]"
-		Util.ResponseJson(w, respObj, http.StatusOK)
+		srv.ResponseJson(w, respObj, http.StatusOK)
 		return
 	}
 	if dataPath == "" {
@@ -122,7 +125,7 @@ func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), code)
 			return
 		}
-		Util.ResponseJson(w, idList, code)
+		srv.ResponseJson(w, idList, code)
 		return
 	}
 	data, code, err := srv.data.Get(dataType, dataPath)
@@ -130,5 +133,5 @@ func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), code)
 		return
 	}
-	Util.ResponseJson(w, data, http.StatusOK)
+	srv.ResponseJson(w, data, http.StatusOK)
 }

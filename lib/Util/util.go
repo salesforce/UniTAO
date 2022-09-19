@@ -41,10 +41,11 @@ import (
 )
 
 type HttpConfig struct {
-	HttpType string `json:"type"`
-	DnsName  string `json:"dns"`
-	Port     string `json:"port"`
-	Id       string `json:"id"`
+	HttpType  string                 `json:"type"`
+	DnsName   string                 `json:"dns"`
+	Port      string                 `json:"port"`
+	Id        string                 `json:"id"`
+	HeaderCfg map[string]interface{} `json:"headers"`
 }
 
 func ParsePath(path string) (string, string) {
@@ -78,7 +79,7 @@ func ParseArrayPath(path string) (string, string, error) {
 	return attrName, key, nil
 }
 
-func ResponseJson(w http.ResponseWriter, data interface{}, status int) {
+func ResponseJson(w http.ResponseWriter, data interface{}, status int, httpCfg HttpConfig) {
 	jsonData, err := json.MarshalIndent(data, "", "    ")
 	if err != nil {
 		log.Fatal(err)
@@ -86,7 +87,17 @@ func ResponseJson(w http.ResponseWriter, data interface{}, status int) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	for key, value := range httpCfg.HeaderCfg {
+		switch reflect.TypeOf(value).Kind() {
+		case reflect.Slice:
+			for _, item := range value.([]interface{}) {
+				w.Header().Set(key, item.(string))
+			}
+		default:
+			w.Header().Set(key, value.(string))
+		}
+
+	}
 	w.WriteHeader(status)
 	w.Write(jsonData)
 }
