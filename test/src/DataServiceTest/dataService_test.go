@@ -29,10 +29,8 @@ import (
 	"Data/DbConfig"
 	"Data/DbIface"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
-	"path/filepath"
 	"testing"
 
 	"DataService/Config"
@@ -205,35 +203,39 @@ func TestDataHander(t *testing.T) {
 }
 
 func TestParseRecord(t *testing.T) {
-	server := DataServer.Server{}
 	payload := make(map[string]interface{})
 	dataType := "test"
 	typeVer := "00_00_00"
 	dataId := "test_01"
 	record := Record.NewRecord(dataType, typeVer, dataId, payload)
-	_, code, _ := server.ParseRecord([]string{}, record.Map(), dataType, dataId)
+	_, code, _ := DataServer.ParseRecord([]string{}, record.Map(), dataType, dataId)
 	if code != http.StatusAccepted {
 		t.Fatalf("failed to parse record. type=[%s], id=[%s]", dataType, dataId)
 	}
-	pRecord, _, err := server.ParseRecord([]string{"true"}, record.Data, dataType, dataId)
+	_, code, _ = DataServer.ParseRecord([]string{}, record.Map(), "", "")
+	if code != http.StatusAccepted {
+		t.Fatalf("failed to parse record. type='', id=''")
+	}
+	_, code, _ = DataServer.ParseRecord([]string{}, record.Map(), dataType, "")
+	if code != http.StatusAccepted {
+		t.Fatalf("failed to parse record. type='%s', id=''", dataType)
+	}
+	_, code, _ = DataServer.ParseRecord([]string{}, record.Map(), "", dataId)
+	if code != http.StatusAccepted {
+		t.Fatalf("failed to parse record. type='', id='%s'", dataId)
+	}
+	pRecord, _, err := DataServer.ParseRecord([]string{"true"}, record.Data, dataType, dataId)
 	if err != nil {
 		t.Fatalf("failed to parse record with no Reacod header. Error:%s", err)
 	}
 	if pRecord.Version != "0_00_00" {
 		t.Fatalf("failed to create record with correct version")
 	}
-}
-
-func loadConfig() (*Config.Confuguration, error) {
-	config := Config.Confuguration{}
-	configPathStr := "../../data/DataService01/config.json"
-	configPath, err := filepath.Abs(configPathStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get ABS Path [%s], Error:%s", configPathStr, err)
+	_, code, err = DataServer.ParseRecord([]string{"true"}, record.Data, "", "")
+	if err == nil {
+		t.Fatalf("failed to catch missing type and id error. Error:%s", err)
 	}
-	err = Config.Read(configPath, &config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read Data Service config file, [%s], Error:%s", configPath, err)
+	if code != http.StatusBadRequest {
+		t.Fatalf("invalid status code for missing type and id error. expecte [%d]!=[%d]", http.StatusBadRequest, code)
 	}
-	return &config, nil
 }
