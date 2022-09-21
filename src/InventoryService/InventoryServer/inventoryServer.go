@@ -104,26 +104,28 @@ func (srv *Server) Run() {
 	log.Printf("Data Server Listen @%s://%s:%s", srv.config.Http.HttpType, srv.config.Http.DnsName, srv.Port)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", srv.Port), nil))
 }
-func (srv *Server) ResponseJson(w http.ResponseWriter, data interface{}, status int) {
-	Http.ResponseJson(w, data, status, srv.config.Http)
-}
 
 func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
-		http.Error(w, "Inventory Server only support GET method", http.StatusMethodNotAllowed)
+		err := Http.NewHttpError("Inventory Server only support GET method", http.StatusMethodNotAllowed)
+		Http.ResponseJson(w, err, err.Status, srv.config.Http)
 		return
 	}
 	dataType, dataPath := Util.ParsePath(r.RequestURI)
 	if dataType == "" {
-		respObj := make(map[string]string)
-		respObj["error message"] = "please use inventory{type}[/{id}]"
-		Http.ResponseJson(w, respObj, http.StatusOK, srv.config.Http)
+		err := Http.NewHttpError("please use inventory{type}[/{id}], dataType is empty", http.StatusBadRequest)
+		Http.ResponseJson(w, err, err.Status, srv.config.Http)
 		return
 	}
 	if dataPath == "" {
 		idList, code, err := srv.data.List(dataType)
 		if err != nil {
-			http.Error(w, err.Error(), code)
+			if Http.IsHttpError(err) {
+				Http.ResponseJson(w, err, err.(Http.HttpError).Status, srv.config.Http)
+			} else {
+				httpErr := Http.WrapError(err, fmt.Sprintf("failed to list type=[%s]", dataType), code)
+				Http.ResponseJson(w, httpErr, httpErr.Status, srv.config.Http)
+			}
 			return
 		}
 		Http.ResponseJson(w, idList, code, srv.config.Http)
@@ -131,7 +133,12 @@ func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 	}
 	data, code, err := srv.data.Get(dataType, dataPath)
 	if err != nil {
-		http.Error(w, err.Error(), code)
+		if Http.IsHttpError(err) {
+			Http.ResponseJson(w, err, err.(Http.HttpError).Status, srv.config.Http)
+		} else {
+			httpErr := Http.WrapError(err, fmt.Sprintf("failed to get data @path=[%s/%s]", dataType, dataPath), code)
+			Http.ResponseJson(w, httpErr, httpErr.Status, srv.config.Http)
+		}
 		return
 	}
 	Http.ResponseJson(w, data, http.StatusOK, srv.config.Http)
