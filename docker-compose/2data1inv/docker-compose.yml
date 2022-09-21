@@ -13,7 +13,7 @@ services:
   dynamodb-admin:
     image: aaronshaf/dynamodb-admin
     ports:
-      - "8001:8001"
+      - "7999:8001"
     environment:
       DYNAMO_ENDPOINT: "http://dynamodb-local:8000"
       AWS_REGION: "us-west-2"
@@ -31,7 +31,7 @@ services:
     volumes:
       -  ./DataService01:/opt/UniTAO/config
     ports:
-      - "8002:80"
+      - "8001:80"
     depends_on:
       - dynamodb
     command: "DataService -config /opt/UniTAO/config/config.json"
@@ -55,7 +55,7 @@ services:
     volumes:
       -  ./DataService02:/opt/UniTAO/config
     ports:
-      - "8003:80"
+      - "8002:80"
     depends_on:
       - dynamodb
     command: "DataService -config /opt/UniTAO/config/config.json"

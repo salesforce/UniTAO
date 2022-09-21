@@ -23,64 +23,68 @@ This copyright notice and license applies to all files in this directory or sub-
 ************************************************************************************************************
 */
 
-package InvRecord
+package Http
 
 import (
 	"encoding/json"
-	"fmt"
+	"net/http"
+	"strings"
 
-	"github.com/salesforce/UniTAO/lib/Schema"
-	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Util"
-	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
 
-const (
-	LatestVer = "0.0.1"
-)
+const TAB = "    "
 
-type DataServiceInfo struct {
-	Id           string   `json:"dsId"`
-	URL          []string `json:"url"`
-	LastSyncTime string   `json:"lastSynctime"`
-	goodUrl      string
+type HttpError struct {
+	Status  int           `json:"httpStatus"`
+	Message []string      `json:"message"`
+	Code    int           `json:"code"`
+	Context []interface{} `json:"context"`
+	Payload interface{}   `json:"payload"`
 }
 
-func NewDsInfo(id string, url string) *Record.Record {
-	dsInfo := DataServiceInfo{
-		Id:  id,
-		URL: []string{url},
-	}
-	dsMap, _ := Util.StructToMap(dsInfo)
-	record := Record.NewRecord(Schema.Inventory, LatestVer, id, dsMap)
-	return record
-}
-
-func CreateDsInfo(payload interface{}) (*DataServiceInfo, error) {
-	ds_marshalled, err := json.Marshal(payload)
+func (e HttpError) Error() string {
+	errTxtBytes, err := json.MarshalIndent(e, "", "    ")
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal payload to bytes as json, Err:%s", err)
+		newErr := HttpError{
+			Status: http.StatusInternalServerError,
+			Message: []string{
+				"failed to parse HttpError to string",
+				"Error:",
+			},
+			Code: e.Status,
+		}
+
+		return newErr.Error()
 	}
-	dsInfo := DataServiceInfo{}
-	err = json.Unmarshal(ds_marshalled, &dsInfo)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load json payload as DataServiceInfo, Err:%s", err)
-	}
-	return &dsInfo, nil
+	return string(errTxtBytes)
 }
 
-func (ds *DataServiceInfo) GetUrl() (string, error) {
-	if ds.goodUrl == "" || !Http.SiteReachable(ds.goodUrl) {
-		ds.goodUrl = ""
-		for _, url := range ds.URL {
-			if Http.SiteReachable(url) {
-				ds.goodUrl = url
-			}
-		}
-		if ds.goodUrl == "" {
-			return "", fmt.Errorf("no good url is reachable for DS=[%s]", ds.Id)
-		}
-	}
+func AppendError(srcErr *HttpError, err *HttpError) {
+	tabErrMessage := Util.PrefixStrLst(err.Message, TAB)
+	srcErr.Message = append(srcErr.Message, tabErrMessage...)
+	srcErr.Context = append(srcErr.Context, err)
+}
 
-	return ds.goodUrl, nil
+func IsHttpError(err error) bool {
+	_, ok := err.(*HttpError)
+	return ok
+}
+
+func NewHttpError(msg string, status int) *HttpError {
+	return &HttpError{
+		Status:  status,
+		Message: strings.Split(msg, "\n"),
+		Context: []interface{}{},
+	}
+}
+
+func WrapError(err error, newMsg string, newStatus int) *HttpError {
+	newErr := NewHttpError(newMsg, newStatus)
+	if !IsHttpError(err) {
+		AppendError(newErr, NewHttpError(err.Error(), http.StatusInternalServerError))
+	} else {
+		AppendError(newErr, err.(*HttpError))
+	}
+	return newErr
 }

@@ -208,20 +208,20 @@ func TestParseRecord(t *testing.T) {
 	typeVer := "00_00_00"
 	dataId := "test_01"
 	record := Record.NewRecord(dataType, typeVer, dataId, payload)
-	_, code, _ := DataServer.ParseRecord([]string{}, record.Map(), dataType, dataId)
+	_, code, _ := DataServer.ParseRecord([]string{}, record.Map(), "", "")
 	if code != http.StatusAccepted {
 		t.Fatalf("failed to parse record. type=[%s], id=[%s]", dataType, dataId)
 	}
-	_, code, _ = DataServer.ParseRecord([]string{}, record.Map(), "", "")
-	if code != http.StatusAccepted {
-		t.Fatalf("failed to parse record. type='', id=''")
+	_, code, _ = DataServer.ParseRecord([]string{}, record.Map(), dataType, dataId)
+	if code != http.StatusBadRequest {
+		t.Fatalf("failed to validate post/put url path. type and id should be empty")
 	}
 	_, code, _ = DataServer.ParseRecord([]string{}, record.Map(), dataType, "")
-	if code != http.StatusAccepted {
+	if code != http.StatusBadRequest {
 		t.Fatalf("failed to parse record. type='%s', id=''", dataType)
 	}
 	_, code, _ = DataServer.ParseRecord([]string{}, record.Map(), "", dataId)
-	if code != http.StatusAccepted {
+	if code != http.StatusBadRequest {
 		t.Fatalf("failed to parse record. type='', id='%s'", dataId)
 	}
 	pRecord, _, err := DataServer.ParseRecord([]string{"true"}, record.Data, dataType, dataId)

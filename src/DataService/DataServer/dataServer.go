@@ -37,6 +37,7 @@ import (
 
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Util"
+	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
 
 const (
@@ -104,7 +105,12 @@ func (srv *Server) init() error {
 func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 	dataType, dataId := Util.ParsePath(r.URL.Path)
 	if dataType == Record.KeyRecord {
-		http.Error(w, fmt.Sprintf("data type=[%s] is not supported", dataType), http.StatusBadRequest)
+		Http.ResponseJson(w, Http.HttpError{
+			Status: http.StatusBadRequest,
+			Message: []string{
+				fmt.Sprintf("data type=[%s] is not supported", dataType),
+			},
+		}, http.StatusBadRequest, srv.config.Http)
 		return
 	}
 	switch r.Method {
@@ -117,32 +123,33 @@ func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 	case "PUT":
 		srv.handlerPut(w, r, dataType, dataId)
 	default:
-		http.Error(w, fmt.Sprintf("method [%s] not supported", r.Method), http.StatusMethodNotAllowed)
+		Http.ResponseJson(w, Http.HttpError{
+			Status: http.StatusMethodNotAllowed,
+			Message: []string{
+				fmt.Sprintf("method [%s] not supported", r.Method),
+			},
+		}, http.StatusMethodNotAllowed, srv.config.Http)
 	}
-}
-
-func (srv *Server) ResponseJson(w http.ResponseWriter, data interface{}, status int) {
-	Util.ResponseJson(w, data, status, srv.config.Http)
 }
 
 func (srv *Server) handleGet(w http.ResponseWriter, dataType string, dataId string) {
 	if dataId == "" {
-		log.Printf("list datatype=[%s]", dataType)
 		idList, code, err := srv.data.List(dataType)
 		if err != nil {
-			http.Error(w, err.Error(), code)
+			Http.ResponseJson(w, Http.WrapError(err, fmt.Sprintf("list datatype=[%s] failed", dataType), code),
+				code, srv.config.Http)
 			return
 		}
-		srv.ResponseJson(w, idList, code)
+		Http.ResponseJson(w, idList, code, srv.config.Http)
 		return
 	}
-	log.Printf("get data type=[%s], id=[%s]", dataType, dataId)
 	result, code, err := srv.data.Get(dataType, dataId)
 	if err != nil {
-		http.Error(w, err.Error(), code)
+		Http.ResponseJson(w, Http.WrapError(err, fmt.Sprintf("get data type=[%s], id=[%s] failed", dataType, dataId), code),
+			code, srv.config.Http)
 		return
 	}
-	srv.ResponseJson(w, result, code)
+	Http.ResponseJson(w, result, code, srv.config.Http)
 }
 
 func ParseRecord(noRecordList []string, payload map[string]interface{}, dataType string, dataId string) (*Record.Record, int, error) {
@@ -151,23 +158,11 @@ func ParseRecord(noRecordList []string, payload map[string]interface{}, dataType
 		if err != nil {
 			return nil, http.StatusBadRequest, fmt.Errorf("failed to load JSON payload from request. Error:%s", err)
 		}
-		if record.Type == "" {
-			if dataType == "" {
-				return nil, http.StatusBadRequest, fmt.Errorf("empty data type in record. [%s]=''", Record.DataType)
-			}
-			record.Type = dataType
+		if dataType != "" {
+			return nil, http.StatusBadRequest, fmt.Errorf("data type expect to be empty for action=[POST, PUT]")
 		}
-		if record.Type != dataType && dataType != "" {
-			return nil, http.StatusBadRequest, fmt.Errorf("invalid type. [%s]!=[%s]", dataType, record.Type)
-		}
-		if record.Id == "" {
-			if dataId == "" {
-				return nil, http.StatusBadRequest, fmt.Errorf("empty data id in record. [%s]=''", Record.DataId)
-			}
-			record.Id = dataId
-		}
-		if record.Id != dataId && dataId != "" {
-			return nil, http.StatusBadRequest, fmt.Errorf("data id does not match. [%s]!=[%s]", dataId, record.Id)
+		if dataId != "" {
+			return nil, http.StatusBadRequest, fmt.Errorf("data expect to be empty for action=[POST, PUT]")
 		}
 		return record, http.StatusAccepted, nil
 	}
@@ -182,53 +177,59 @@ func ParseRecord(noRecordList []string, payload map[string]interface{}, dataType
 }
 
 func (srv *Server) handlePost(w http.ResponseWriter, r *http.Request, dataType string, dataId string) {
-	log.Printf("post data type=[%s] id=[%s]", dataType, dataId)
 	payload := make(map[string]interface{})
 	code, err := Util.LoadJSONPayload(r, payload)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("failed to load JSON payload from request. Error:%s", err), code)
+		Http.ResponseJson(w, Http.WrapError(err, "failed to load JSON payload from request", code),
+			code, srv.config.Http)
 		return
 	}
 	record, code, err := ParseRecord(r.Header.Values(Record.NotRecord), payload, dataType, dataId)
 	if err != nil {
-		http.Error(w, err.Error(), code)
+		Http.ResponseJson(w, Http.WrapError(err, "failed to load payload as Record", code),
+			code, srv.config.Http)
 		return
 	}
 	code, err = srv.data.Add(record)
 	if err != nil {
-		http.Error(w, err.Error(), code)
+		Http.ResponseJson(w, Http.WrapError(err, "failed to add Record", code),
+			code, srv.config.Http)
 		return
 	}
-	srv.ResponseJson(w, record, http.StatusCreated)
+	Http.ResponseText(w, []byte(record.Id), http.StatusCreated, srv.config.Http)
 }
 
 func (srv *Server) handlerPut(w http.ResponseWriter, r *http.Request, dataType string, dataId string) {
 	payload := make(map[string]interface{})
 	code, err := Util.LoadJSONPayload(r, payload)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("failed to load JSON payload from request. Error:%s", err), code)
+		Http.ResponseJson(w, Http.WrapError(err, "failed to load JSON payload from request", code),
+			code, srv.config.Http)
 		return
 	}
 	record, code, err := ParseRecord(r.Header.Values(Record.NotRecord), payload, dataType, dataId)
 	if err != nil {
-		http.Error(w, err.Error(), code)
+		Http.ResponseJson(w, Http.WrapError(err, "failed to load payload as Record", code),
+			code, srv.config.Http)
 		return
 	}
 	code, err = srv.data.Set(record)
 	if err != nil {
-		http.Error(w, err.Error(), code)
+		Http.ResponseJson(w, Http.WrapError(err, "failed to set Record", code),
+			code, srv.config.Http)
 		return
 	}
-	srv.ResponseJson(w, record, http.StatusCreated)
+	Http.ResponseText(w, []byte(record.Id), http.StatusCreated, srv.config.Http)
 }
 
 func (srv *Server) handleDelete(w http.ResponseWriter, dataType string, dataId string) {
 	code, err := srv.data.Delete(dataType, dataId)
 	if err != nil {
-		http.Error(w, err.Error(), code)
+		Http.ResponseJson(w, Http.WrapError(err, fmt.Sprintf("failed to delete Record type=[%s],id=[%s]", dataType, dataId), code),
+			code, srv.config.Http)
 	}
 	result := map[string]string{
 		"result": fmt.Sprintf("item [type/id]=[%s/%s] deleted", dataType, dataId),
 	}
-	srv.ResponseJson(w, result, code)
+	Http.ResponseJson(w, result, code, srv.config.Http)
 }

@@ -258,6 +258,9 @@ func ValidateFlatValue(value interface{}) error {
 
 func ValidateFlatArray(value []interface{}) error {
 	for idx, item := range value {
+		if item == nil {
+			continue
+		}
 		valueType := reflect.TypeOf(item).Kind()
 		if valueType == reflect.Slice || valueType == reflect.Map {
 			return fmt.Errorf("invalid flat array item @idx=[%d]. item type=[%s] should only ne simple type", idx, valueType)
@@ -268,6 +271,9 @@ func ValidateFlatArray(value []interface{}) error {
 
 func ValidateFlatMap(value map[string]interface{}) error {
 	for key, item := range value {
+		if item == nil {
+			continue
+		}
 		switch reflect.TypeOf(item).Kind() {
 		case reflect.Map:
 			return fmt.Errorf("invalid get flat value on attr=[%s], type=[%s], expected=[%s]", key, reflect.Map, reflect.Slice)

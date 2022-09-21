@@ -23,32 +23,58 @@ This copyright notice and license applies to all files in this directory or sub-
 ************************************************************************************************************
 */
 
-package Config
+package HttpErrorTest
 
 import (
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"os"
-
-	"Data/DbConfig"
+	"net/http"
+	"testing"
 
 	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
 
-type ServerConfig struct {
-	Database DbConfig.DatabaseConfig `json:"database"`
-	Http     Http.Config             `json:"http"`
+func TestIsHttpError(t *testing.T) {
+	err := fmt.Errorf("test")
+	if Http.IsHttpError(err) {
+		t.Fatalf("should not be a HttpError")
+	}
+	httpErr := Http.NewHttpError("test", http.StatusBadRequest)
+	if !Http.IsHttpError(httpErr) {
+		t.Fatalf("fail to detect HttpError")
+	}
 }
 
-func Read(configPath string, config *ServerConfig) error {
-	jsonFile, err := os.Open(configPath)
-	if err != nil {
-		return fmt.Errorf("failed to open Config JSON file: [%s], err:%s", configPath, err)
-
+func TestNewHttpErr(t *testing.T) {
+	msg := `123
+	234`
+	err := Http.NewHttpError(msg, http.StatusOK)
+	if err.Status != http.StatusOK {
+		t.Fatalf("created the wrong err. status=[%d], expect [%d]", err.Status, http.StatusOK)
 	}
-	defer jsonFile.Close()
-	byteValue, _ := ioutil.ReadAll(jsonFile)
-	json.Unmarshal([]byte(byteValue), config)
-	return nil
+	if len(err.Message) != 2 {
+		t.Fatalf("invalid split err msg. line number [%d] expect [2]", len(err.Message))
+	}
+}
+
+func TestAppendErr(t *testing.T) {
+	err01 := Http.NewHttpError("test", http.StatusOK)
+	err02 := Http.NewHttpError("testTab", http.StatusOK)
+	Http.AppendError(err01, err02)
+	if len(err01.Message) != 2 {
+		t.Fatalf("failed to append message to 2")
+	}
+	if len(err01.Context) != 1 {
+		t.Fatalf("failed to append err02 into Context")
+	}
+}
+
+func TestWrapErr(t *testing.T) {
+	err01 := fmt.Errorf("test01")
+	err := Http.WrapError(err01, "wrapTest", http.StatusBadRequest)
+	if len(err.Message) != 2 {
+		t.Fatalf("failed to wrap message as 2 line")
+	}
+	if err.Message[0] != "wrapTest" {
+		t.Fatalf("failed to add new title message")
+	}
 }

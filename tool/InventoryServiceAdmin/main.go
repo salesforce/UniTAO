@@ -41,6 +41,7 @@ import (
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Util"
+	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
 
 type AdminArgs struct {
@@ -60,6 +61,7 @@ const (
 	CMD_DS    = "ds"
 	CMD_DS_ID = "id"
 	CMD_SYNC  = "sync"
+	LatestVer = "0.0.1"
 )
 
 type Admin struct {
@@ -162,15 +164,15 @@ func (a *Admin) Run() error {
 func (a *Admin) addDsRecord() error {
 	_, code, err := a.handler.GetData(Schema.Inventory, a.args.ops.id)
 	if err == nil {
-		err = fmt.Errorf("Data Server Record already exists, [%s]=[%s]", Record.DataId, a.args.ops.id)
+		err = fmt.Errorf("data server record already exists, [%s]=[%s]", Record.DataId, a.args.ops.id)
 		return err
 	}
 	if code != http.StatusNotFound {
 		err = fmt.Errorf("failed to query Data Service record, [%s]=[%s], CODE:%d, Error:%s", Record.DataId, a.args.ops.id, code, err)
 		return err
 	}
-	dsInfo := InvRecord.NewDsInfo(a.args.ops.id, a.args.ops.url)
-	payload, err := dsInfo.ToIface()
+	dsRecord := InvRecord.NewDsInfo(a.args.ops.id, a.args.ops.url)
+	payload, err := Util.StructToMap(dsRecord)
 	if err != nil {
 		return err
 	}
@@ -196,7 +198,7 @@ func (a *Admin) syncDsSchema() error {
 }
 
 func (a *Admin) getCurrentTypeList(dsId string) ([]string, error) {
-	typeList, _, err := a.handler.List(DataHandler.Referral)
+	typeList, _, err := a.handler.List(RefRecord.Referral)
 	if err != nil {
 		return nil, err
 	}
@@ -223,11 +225,11 @@ func (a *Admin) getDsTypeList(dsId string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	schemaUrl, err := Util.URLPathJoin(dsUrl, JsonKey.Schema)
+	schemaUrl, err := Http.URLPathJoin(dsUrl, JsonKey.Schema)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse url from DS record [%s]=[%s], Err:%s", Record.DataId, a.args.ops.id, err)
 	}
-	result, code, err := Util.GetRestData(*schemaUrl)
+	result, code, err := Http.GetRestData(*schemaUrl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to Rest Data from [path]=[%s], Code:%d", *schemaUrl, code)
 	}
@@ -259,54 +261,6 @@ func (a *Admin) syncSchemaWithId(dsId string) error {
 			a.addType(dsId, dataType)
 		}
 	}
-
-	// for _, dataType := range ds.TypeList {
-	// 	if Util.SearchStrList(newTypeList, dataType) {
-	// 		continue
-	// 	}
-	// 	log.Printf("data type [%s] removed from ds [%s], remove schema", dataType, ds.Id)
-	// 	err = a.removeData(JsonKey.Schema, dataType)
-	// 	if err != nil {
-	// 		return fmt.Errorf("failed to remove schema [%s], Err:%s", dataType, err)
-	// 	}
-	// }
-	// ds.TypeList = newTypeList
-	// payload, err := ds.ToIface()
-	// if err != nil {
-	// 	return fmt.Errorf("failed to convert Data Service info to record, Err:%s", err)
-	// }
-	// keys := make(map[string]interface{})
-	// ds.LastSyncTime = time.Now().Format(time.RFC850)
-	// keys[Record.DataId] = ds.Id
-	// log.Printf("refresh DataService record for data type mapping")
-	// err = a.handler.Db.Replace(Schema.Inventory, keys, payload)
-	// if err != nil {
-	// 	return fmt.Errorf("failed to replace [%s]=[%s], Err:%s", Record.DataId, ds.Id, err)
-	// }
-	// for _, dataType := range ds.TypeList {
-	// 	_, code, err := a.handler.Get(JsonKey.Schema, dataType)
-	// 	if err == nil {
-	// 		log.Printf("data type [%s] schema exists, next", dataType)
-	// 		continue
-	// 	}
-	// 	if code != http.StatusNotFound {
-	// 		return fmt.Errorf("failed to get schema for [type]=[%s], Err:%s", dataType, err)
-	// 	}
-	// 	typeSchemaUrl, err := Util.URLPathJoin(*schemaUrl, dataType)
-	// 	if err != nil {
-	// 		return fmt.Errorf("failed to build schema url. for type=[%s], Error:%s", dataType, err)
-	// 	}
-	// 	log.Printf("download schema for type=[%s], from url=[%s]", dataType, *typeSchemaUrl)
-	// 	typeSchema, code, err := Util.GetRestData(*typeSchemaUrl)
-	// 	if err != nil {
-	// 		return fmt.Errorf("failed to retrieve data from [url]=[%s], Error:%s", *typeSchemaUrl, err)
-	// 	}
-	// 	log.Printf("save schema for type=[%s], code=[%d]", dataType, code)
-	// 	err = a.handler.Db.Create(JsonKey.Schema, typeSchema)
-	// 	if err != nil {
-	// 		return fmt.Errorf("failed to create schema [type]=[%s], Err:%s", dataType, err)
-	// 	}
-	// }
 	return nil
 }
 
@@ -320,28 +274,24 @@ func (a *Admin) addType(dsId string, dataType string) error {
 		return err
 	}
 	schemaUrl := fmt.Sprintf("%s/%s/%s", dsUrl, JsonKey.Schema, dataType)
-	schemaRecord, _, err := Util.GetRestData(schemaUrl)
+	schemaRecord, _, err := Http.GetRestData(schemaUrl)
 	if err != nil {
 		return err
 	}
 	a.removeData(JsonKey.Schema, dataType)
 	a.handler.Db.Create(JsonKey.Schema, schemaRecord)
-	referral := RefRecord.Referral{
-		Id:        dataType,
+	referral := RefRecord.ReferralData{
 		DataType:  dataType,
 		SchemaVer: schemaRecord.(map[string]interface{})[Record.Version].(string),
 		DsId:      dsId,
 	}
-	referakData, err := referral.ToMap()
-	if err != nil {
-		return nil
-	}
-	a.handler.Db.Create(DataHandler.Referral, referakData)
+	referralData, _ := Util.StructToMap(referral.GetRecord())
+	a.handler.Db.Create(RefRecord.Referral, referralData)
 	return nil
 }
 
 func (a *Admin) removeType(dsId string, dataType string) error {
-	a.removeData(DataHandler.Referral, dataType)
+	a.removeData(RefRecord.Referral, dataType)
 	a.removeData(JsonKey.Schema, dataType)
 	return nil
 }

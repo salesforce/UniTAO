@@ -33,27 +33,32 @@ import (
 	"InventoryService/InvRecord"
 
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
+	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Util"
+	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
 
-type Referral struct {
-	Id        string                 `json:"__id"`
-	DataType  string                 `json:"__type"`
-	SchemaVer string                 `json:"__ver"`
+const (
+	Referral  = "referral"
+	LatestVer = "0.0.1"
+)
+
+type ReferralData struct {
+	DataType  string                 `json:"DataType"`
+	SchemaVer string                 `json:"SchemaVersion"`
 	DsId      string                 `json:"DataServiceId"`
-	DsUrl     string                 `json:"DataServcieUrl"`
 	AuthUrl   string                 `json:"AuthUrl"`
 	AuthType  string                 `json:"AuthType"`
 	Schema    map[string]interface{} `json:"Schema"`
 	DsInfo    *InvRecord.DataServiceInfo
 }
 
-func LoadMap(data map[string]interface{}) (*Referral, error) {
+func LoadMap(data map[string]interface{}) (*ReferralData, error) {
 	raw, err := json.Marshal(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to Marshal data for ReferralRecord. Error:%s", err)
 	}
-	record := Referral{}
+	record := ReferralData{}
 	err = json.Unmarshal(raw, &record)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse map data for ReferralRecord. Error:%s", err)
@@ -61,9 +66,16 @@ func LoadMap(data map[string]interface{}) (*Referral, error) {
 	return &record, nil
 }
 
-func (r *Referral) GetSchema() (int, error) {
-	schemaUrl := fmt.Sprintf("%s/%s/%s", r.DsUrl, JsonKey.Schema, r.DataType)
-	schemaData, code, err := Util.GetRestData(schemaUrl)
+func (r *ReferralData) GetSchema() (int, error) {
+	if r.DsInfo == nil {
+		return http.StatusInternalServerError, fmt.Errorf("failed to load DsInfo for type=[%s]", r.DataType)
+	}
+	dsUrl, err := r.DsInfo.GetUrl()
+	if err != nil {
+		return http.StatusInternalServerError, fmt.Errorf("no good url to DS=[%s], error:%s", r.DsInfo.Id, err)
+	}
+	schemaUrl := fmt.Sprintf("%s/%s/%s", dsUrl, JsonKey.Schema, r.DataType)
+	schemaData, code, err := Http.GetRestData(schemaUrl)
 	if err != nil {
 		return code, err
 	}
@@ -75,25 +87,7 @@ func (r *Referral) GetSchema() (int, error) {
 	return http.StatusOK, nil
 }
 
-func (r *Referral) SetDsInfo(ds *InvRecord.DataServiceInfo) error {
-	r.DsInfo = ds
-	dsUrl, err := ds.GetUrl()
-	if err != nil {
-		return err
-	}
-	r.DsUrl = dsUrl
-	return nil
-}
-
-func (r *Referral) ToMap() (map[string]interface{}, error) {
-	raw, err := json.Marshal(r)
-	if err != nil {
-		return nil, err
-	}
-	data := make(map[string]interface{})
-	err = json.Unmarshal(raw, &data)
-	if err != nil {
-		return nil, err
-	}
-	return data, nil
+func (r *ReferralData) GetRecord() *Record.Record {
+	rMap, _ := Util.StructToMap(r)
+	return Record.NewRecord(Referral, LatestVer, r.DataType, rMap)
 }

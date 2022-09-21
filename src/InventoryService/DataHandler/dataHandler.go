@@ -44,10 +44,7 @@ import (
 	SchemaPathData "github.com/salesforce/UniTAO/lib/SchemaPath/Data"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/Error"
 	"github.com/salesforce/UniTAO/lib/Util"
-)
-
-const (
-	Referral = "referral"
+	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
 
 type Handler struct {
@@ -75,7 +72,7 @@ func (h *Handler) init() error {
 	if err != nil {
 		return err
 	}
-	for _, name := range []string{JsonKey.Schema, Schema.Inventory, Referral} {
+	for _, name := range []string{JsonKey.Schema, Schema.Inventory, RefRecord.Referral} {
 		tblExists := false
 		for _, tbl := range tbList {
 			if *tbl == name {
@@ -95,16 +92,13 @@ func (h *Handler) init() error {
 }
 
 func (h *Handler) List(dataType string) ([]string, int, error) {
-	if Util.SearchStrList([]string{JsonKey.Schema, Schema.Inventory, Referral}, dataType) {
+	if Util.SearchStrList([]string{JsonKey.Schema, Schema.Inventory, RefRecord.Referral}, dataType) {
 		result, code, err := h.ListData(dataType)
 		if err != nil {
 			return nil, code, err
 		}
 		dsList := make([]string, 0, len(result))
 		dataKey := Record.DataId
-		if dataType == Referral {
-			dataKey = Record.DataType
-		}
 		for _, data := range result {
 			dsList = append(dsList, data[dataKey].(string))
 		}
@@ -114,19 +108,19 @@ func (h *Handler) List(dataType string) ([]string, int, error) {
 	if err != nil {
 		return nil, code, err
 	}
-	dsInfo, code, err := h.GetDataServiceInfo(dataType)
+	referral, code, err := h.GetReferral(dataType)
 	if err != nil {
 		return nil, code, err
 	}
-	dsUrl, err := dsInfo.GetUrl()
+	dsUrl, err := referral.DsInfo.GetUrl()
 	if err != nil {
 		return nil, http.StatusInternalServerError, err
 	}
-	urlPath, err := Util.URLPathJoin(dsUrl, dataType)
+	urlPath, err := Http.URLPathJoin(dsUrl, dataType)
 	if err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("failed to parse url from data service [%s]=[%s], url=[%s], Error:%s", Record.DataId, dsInfo.Id, dsInfo.URL, err)
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to parse url from data service [%s]=[%s], url=[%s], Error:%s", Record.DataId, referral.DsInfo.Id, dsUrl, err)
 	}
-	dataList, code, err := Util.GetRestData(*urlPath)
+	dataList, code, err := Http.GetRestData(*urlPath)
 	if err != nil {
 		return nil, code, fmt.Errorf("failed to get data from REST URL=[%s], Code=[%d], Err:%s", *urlPath, code, err)
 	}
@@ -151,13 +145,13 @@ func (h *Handler) Get(dataType string, dataPath string) (interface{}, int, error
 			return nil, http.StatusBadRequest, fmt.Errorf("path=[%s] not supported on type=[%s]", dataPath, dataType)
 		}
 		// retrieve data service record from Inventory
-		dsInfo, code, err := h.GetDsInfo(idPath)
+		dsRecord, code, err := h.GetDsRecord(idPath)
 		if err != nil {
 			return nil, code, err
 		}
-		return dsInfo, http.StatusOK, nil
+		return dsRecord, http.StatusOK, nil
 	}
-	if dataType == Referral {
+	if dataType == RefRecord.Referral {
 		if nextPath != "" {
 			return nil, http.StatusBadRequest, fmt.Errorf("path=[%s] not supported on type=[%s]", dataPath, dataType)
 		}
@@ -165,25 +159,13 @@ func (h *Handler) Get(dataType string, dataPath string) (interface{}, int, error
 		if err != nil {
 			return nil, code, err
 		}
-		dsInfo, code, err := h.GetDsInfo(referral.DsId)
-		if err != nil {
-			return nil, code, err
-		}
-		err = referral.SetDsInfo(dsInfo)
-		if err != nil {
-			return nil, http.StatusInternalServerError, err
-		}
-		code, err = referral.GetSchema()
-		if err != nil {
-			return nil, code, err
-		}
-		return referral, http.StatusOK, nil
+		return referral.GetRecord(), http.StatusOK, nil
 	}
 	return h.GetDataByPath(dataType, idPath, nextPath)
 }
 
 func (h *Handler) ListData(dataType string) ([]map[string]interface{}, int, error) {
-	if !Util.SearchStrList([]string{JsonKey.Schema, Schema.Inventory, Referral}, dataType) {
+	if !Util.SearchStrList([]string{JsonKey.Schema, Schema.Inventory, RefRecord.Referral}, dataType) {
 		return nil, http.StatusBadRequest, fmt.Errorf("[type]=[%s] is not supported", dataType)
 	}
 	args := make(map[string]interface{})
@@ -200,7 +182,7 @@ func (h *Handler) GetSchema(dataType string) (*SchemaDoc.SchemaDoc, *Error.Schem
 	if err != nil {
 		return nil, &Error.SchemaPathErr{
 			Code:    code,
-			PathErr: fmt.Errorf("failed to get schema=[%s], Error: %s", dataType, err),
+			PathErr: fmt.Errorf("object of type “%s” does not exist, Error: %s", dataType, err),
 		}
 	}
 	record, err := Record.LoadMap(data.(map[string]interface{}))
@@ -262,19 +244,19 @@ func (h *Handler) GetDataByPath(dataType string, idPath string, nextPath string)
 }
 
 func (h *Handler) GetDataServiceData(dataType string, dataId string) (interface{}, int, error) {
-	dsInfo, code, err := h.GetDataServiceInfo(dataType)
+	referral, code, err := h.GetReferral(dataType)
 	if err != nil {
 		return nil, code, err
 	}
-	dsUrl, err := dsInfo.GetUrl()
+	dsUrl, err := referral.DsInfo.GetUrl()
 	if err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("no good url for DataService=[%s], Error: %s", dsInfo.Id, err)
+		return nil, http.StatusInternalServerError, fmt.Errorf("no good url for DataService=[%s], Error: %s", referral.DsId, err)
 	}
-	idPath, err := Util.URLPathJoin(dsUrl, dataType, dataId)
+	idPath, err := Http.URLPathJoin(dsUrl, dataType, dataId)
 	if err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("failed to parse url from data service [%s]=[%s], url=[%s], Error:%s", Record.DataId, dsInfo.Id, dsInfo.URL, err)
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to parse url from data service [%s]=[%s], url=[%s], Error:%s", Record.DataId, referral.DsId, dsUrl, err)
 	}
-	data, code, err := Util.GetRestData(*idPath)
+	data, code, err := Http.GetRestData(*idPath)
 	if err != nil {
 		if code == http.StatusNotFound {
 			return data, code, err
@@ -298,45 +280,74 @@ func (h *Handler) GetData(dataType string, dataId string) (interface{}, int, err
 		return nil, http.StatusInternalServerError, err
 	}
 	if len(recordList) == 0 {
-		return nil, http.StatusNotFound, fmt.Errorf("failed to find [{type}/{id}]=[%s/%s]", dataType, dataId)
+		return nil, http.StatusNotFound, fmt.Errorf("object of type “%s” with id <%s> not found", dataType, dataId)
 	}
 	return recordList[0], http.StatusOK, nil
 }
 
-func (h *Handler) GetDataServiceInfo(dataType string) (*InvRecord.DataServiceInfo, int, error) {
-	referral, code, err := h.GetReferral(dataType)
-	if err != nil {
-		return nil, code, err
-	}
-	dsInfo, code, err := h.GetDsInfo(referral.DsId)
-	if err != nil {
-		return nil, code, err
-	}
-	err = referral.SetDsInfo(dsInfo)
-	if err != nil {
-		return nil, http.StatusInternalServerError, err
-	}
-	return referral.DsInfo, http.StatusOK, nil
-}
-
-func (h *Handler) GetReferral(dataType string) (*RefRecord.Referral, int, error) {
-	referralData, code, err := h.GetData(Referral, dataType)
+func (h *Handler) GetReferralRecord(dataType string) (*Record.Record, int, error) {
+	referralData, code, err := h.GetData(RefRecord.Referral, dataType)
 	if err != nil {
 		return nil, code, fmt.Errorf("failed to get referral record for [type]=[%s]", dataType)
 	}
-	referral, err := RefRecord.LoadMap(referralData.(map[string]interface{}))
+	referralMap, ok := referralData.(map[string]interface{})
+	if !ok {
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to convert data of [%s] to map[string]interface{}", dataType)
+	}
+	record, err := Record.LoadMap(referralMap)
+	if err != nil {
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to load referral data of [%s] as Record. Error:%s", dataType, err)
+	}
+	return record, http.StatusOK, nil
+}
+
+func (h *Handler) GetReferral(dataType string) (*RefRecord.ReferralData, int, error) {
+	record, code, err := h.GetReferralRecord(dataType)
+	if err != nil {
+		return nil, code, err
+	}
+	referral, err := RefRecord.LoadMap(record.Data)
 	if err != nil {
 		return nil, http.StatusBadRequest, err
+	}
+	dsRecord, code, err := h.GetDsRecord(referral.DsId)
+	if err != nil {
+		return nil, code, err
+	}
+	dsInfo, err := InvRecord.CreateDsInfo(dsRecord.Data)
+	if err != nil {
+		return nil, code, err
+	}
+	referral.DsInfo = dsInfo
+	code, err = referral.GetSchema()
+	if err != nil {
+		return nil, code, err
 	}
 	return referral, http.StatusOK, nil
 }
 
-func (h *Handler) GetDsInfo(dsId string) (*InvRecord.DataServiceInfo, int, error) {
+func (h *Handler) GetDsRecord(dsId string) (*Record.Record, int, error) {
 	dsInfoData, code, err := h.GetData(Schema.Inventory, dsId)
 	if err != nil {
 		return nil, code, err
 	}
-	dsInfo, err := InvRecord.CreateDsInfo(dsInfoData)
+	recordMap, ok := dsInfoData.(map[string]interface{})
+	if !ok {
+		return nil, http.StatusInternalServerError, fmt.Errorf("%s:%s invalid data. convert to map[string]interface{} failed", Schema.Inventory, dsId)
+	}
+	record, err := Record.LoadMap(recordMap)
+	if err != nil {
+		return nil, http.StatusInternalServerError, fmt.Errorf("%s:%s invalid data. failed to load as Record", Schema.Inventory, dsId)
+	}
+	return record, http.StatusOK, nil
+}
+
+func (h *Handler) GetDsInfo(dsId string) (*InvRecord.DataServiceInfo, int, error) {
+	record, code, err := h.GetDsRecord(dsId)
+	if err != nil {
+		return nil, code, err
+	}
+	dsInfo, err := InvRecord.CreateDsInfo(record.Data)
 	if err != nil {
 		return nil, http.StatusInternalServerError, err
 	}

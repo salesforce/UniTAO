@@ -35,6 +35,7 @@ import (
 	"InventoryService/DataHandler"
 
 	"github.com/salesforce/UniTAO/lib/Util"
+	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
 
 type Server struct {
@@ -104,7 +105,7 @@ func (srv *Server) Run() {
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", srv.Port), nil))
 }
 func (srv *Server) ResponseJson(w http.ResponseWriter, data interface{}, status int) {
-	Util.ResponseJson(w, data, status, srv.config.Http)
+	Http.ResponseJson(w, data, status, srv.config.Http)
 }
 
 func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
@@ -116,7 +117,7 @@ func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 	if dataType == "" {
 		respObj := make(map[string]string)
 		respObj["error message"] = "please use inventory{type}[/{id}]"
-		srv.ResponseJson(w, respObj, http.StatusOK)
+		Http.ResponseJson(w, respObj, http.StatusOK, srv.config.Http)
 		return
 	}
 	if dataPath == "" {
@@ -125,7 +126,7 @@ func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), code)
 			return
 		}
-		srv.ResponseJson(w, idList, code)
+		Http.ResponseJson(w, idList, code, srv.config.Http)
 		return
 	}
 	data, code, err := srv.data.Get(dataType, dataPath)
@@ -133,5 +134,5 @@ func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), code)
 		return
 	}
-	srv.ResponseJson(w, data, http.StatusOK)
+	Http.ResponseJson(w, data, http.StatusOK, srv.config.Http)
 }

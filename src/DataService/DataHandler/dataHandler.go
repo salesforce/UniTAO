@@ -39,7 +39,7 @@ import (
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
-	"github.com/salesforce/UniTAO/lib/Util"
+	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
 
 type Handler struct {
@@ -65,7 +65,7 @@ func (h *Handler) List(dataType string) ([]string, int, error) {
 	if dataType != JsonKey.Schema && dataType != "" {
 		_, code, err := h.GetData(JsonKey.Schema, dataType)
 		if err != nil {
-			err = fmt.Errorf("failed to get schema for type=[%s], Err:%s", dataType, err)
+			err = fmt.Errorf("object of type “%s” does not exist, Err:%s", dataType, err)
 			return nil, code, err
 		}
 	}
@@ -95,7 +95,7 @@ func (h *Handler) Get(dataType string, dataId string) (map[string]interface{}, i
 	}
 	_, code, err := h.GetData(JsonKey.Schema, dataType)
 	if err != nil {
-		err = fmt.Errorf("failed to get schema for type=[%s], Err:%s", dataType, err)
+		err = fmt.Errorf("object of type “%s” does not exist, Err:%s", dataType, err)
 		return nil, code, err
 	}
 	return h.GetData(dataType, dataId)
@@ -111,7 +111,7 @@ func (h *Handler) GetData(dataType string, dataId string) (map[string]interface{
 		return nil, http.StatusInternalServerError, err
 	}
 	if len(recordList) == 0 {
-		return nil, http.StatusNotFound, fmt.Errorf("failed to find [{type}/{id}]=[%s/%s]", dataType, dataId)
+		return nil, http.StatusNotFound, fmt.Errorf("object of type '%s' with id '%s' not found", dataType, dataId)
 	}
 	return recordList[0], http.StatusOK, nil
 }
@@ -122,7 +122,7 @@ func (h *Handler) Lock(dataType string, dataId string) (int, error) {
 	}
 	_, code, err := h.GetData(JsonKey.Schema, dataType)
 	if err != nil {
-		err = fmt.Errorf("failed to get schema for data type=[%s], Err:%s", dataType, err)
+		err = fmt.Errorf("object of type “%s” does not exist, Err:%s", dataType, err)
 		return code, err
 	}
 	return http.StatusAccepted, err
@@ -135,7 +135,7 @@ func (h *Handler) localSchema(dataType string) (*Schema.SchemaOps, int, error) {
 	}
 	data, code, err := h.GetData(JsonKey.Schema, dataType)
 	if err != nil {
-		err = fmt.Errorf("failed to get schema for type=[%s], Err:%s", dataType, err)
+		err = fmt.Errorf("object of type “%s” does not exist, Err:%s", dataType, err)
 		return nil, code, err
 	}
 	record, err := Record.LoadMap(data)
@@ -154,11 +154,11 @@ func (h *Handler) inventoryData(dataType string, value string) (map[string]inter
 	if h.config.Inv.Url == "" {
 		return nil, http.StatusInternalServerError, fmt.Errorf("missing inventory URL in configuration [inventory/url]. at Data Service=[%s]", h.config.Http.Id)
 	}
-	dataUrl, err := Util.URLPathJoin(h.config.Inv.Url, dataType, value)
+	dataUrl, err := Http.URLPathJoin(h.config.Inv.Url, dataType, value)
 	if err != nil {
 		return nil, http.StatusBadRequest, fmt.Errorf("failed to build ref data url. [url/type/id]=[%s/%s/%s]", h.config.Inv.Url, dataType, value)
 	}
-	data, code, err := Util.GetRestData(*dataUrl)
+	data, code, err := Http.GetRestData(*dataUrl)
 	if err == nil {
 		mapData, ok := data.(map[string]interface{})
 		if !ok {
@@ -204,6 +204,7 @@ func (h *Handler) ValidateDataRefs(doc *SchemaDoc.SchemaDoc, data interface{}, d
 
 // Validate Content Media Type Reference Values
 func (h *Handler) validateCmtRefs(doc *SchemaDoc.SchemaDoc, data map[string]interface{}, dataPath string) (int, error) {
+	errList := []*Http.HttpError{}
 	for _, ref := range doc.CmtRefs {
 		value, ok := data[ref.Name]
 		if !ok {
@@ -214,25 +215,47 @@ func (h *Handler) validateCmtRefs(doc *SchemaDoc.SchemaDoc, data map[string]inte
 		case reflect.String:
 			hasRef, err := h.validateCmtRefValue(ref, value.(string))
 			if err != nil {
-				return http.StatusBadRequest, fmt.Errorf("failed to validate value with [type]=[%s], [path]=[%s], Err:%s", ref.ContentType, refPath, err)
+				errList = append(errList,
+					Http.WrapError(err, fmt.Sprintf("broken reference @[%s], '%s:%s' value validate failed.", refPath, ref.ContentType, value),
+						http.StatusBadRequest))
+				continue
 			}
 			if !hasRef {
-				return http.StatusBadRequest, fmt.Errorf("ref does not exists,[type]=[%s], [path]=[%s], [ref]=[%s]", ref.ContentType, refPath, value)
+				errList = append(errList, Http.NewHttpError(
+					fmt.Sprintf("broken reference @[%s], '%s:%s' does not exists", refPath, ref.ContentType, value),
+					http.StatusBadRequest))
 			}
 		case reflect.Slice:
 			for idx, item := range value.([]interface{}) {
 				idxPath := fmt.Sprintf("%s[%d]", refPath, idx)
 				hasRef, err := h.validateCmtRefValue(ref, item.(string))
 				if err != nil {
-					return http.StatusBadRequest, fmt.Errorf("failed to validate value with [type]=[%s], [path]=[%s], Err:%s", ref.ContentType, idxPath, err)
+					errList = append(errList,
+						Http.WrapError(err, fmt.Sprintf("broken reference @[%s], '%s:%s' value validate failed.", idxPath, ref.ContentType, item),
+							http.StatusBadRequest))
+					continue
 				}
 				if !hasRef {
-					return http.StatusBadRequest, fmt.Errorf("ref does not exists,[type]=[%s], [path]=[%s], [ref]=[%s]", ref.ContentType, idxPath, item.(string))
+					errList = append(errList, Http.NewHttpError(
+						fmt.Sprintf("broken reference @[%s], '%s:%s' does not exist.", idxPath, ref.ContentType, item),
+						http.StatusBadRequest))
 				}
 			}
 		default:
-			return http.StatusBadRequest, fmt.Errorf("failed to validate, ref only support on string or array, [path]=[%s]", refPath)
+			errList = append(errList, Http.NewHttpError(
+				fmt.Sprintf("broken reference @[%s], 'dataType=[%s]' are not supported. only support string or array", refPath, reflect.TypeOf(value).Kind()),
+				http.StatusBadRequest))
 		}
+	}
+	if len(errList) > 0 {
+		if len(errList) > 1 {
+			err := Http.NewHttpError("broken references:", http.StatusBadRequest)
+			for _, itemErr := range errList {
+				Http.AppendError(err, itemErr)
+			}
+			return err.Status, err
+		}
+		return errList[0].Status, errList[0]
 	}
 	return http.StatusAccepted, nil
 }
