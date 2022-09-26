@@ -21,7 +21,9 @@ class schemaVisualizer {
         }    
         else if (localStorage.schemaVisualizer) {
             this.visual = JSON.parse(localStorage.schemaVisualizer)
-        }      
+        } else {
+            this.visual = {}
+        }
         this.items = {};
         this.state = {};
         await this.scmStore.init(schemaForest, this.schemaFetched.bind(this));
