@@ -134,46 +134,44 @@ func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 
 func (srv *Server) handleGet(w http.ResponseWriter, dataType string, dataId string) {
 	if dataId == "" {
-		idList, code, err := srv.data.List(dataType)
+		idList, err := srv.data.List(dataType)
 		if err != nil {
-			Http.ResponseJson(w, Http.WrapError(err, fmt.Sprintf("list datatype=[%s] failed", dataType), code),
-				code, srv.config.Http)
+			Http.ResponseJson(w, err, err.Status, srv.config.Http)
 			return
 		}
-		Http.ResponseJson(w, idList, code, srv.config.Http)
+		Http.ResponseJson(w, idList, http.StatusOK, srv.config.Http)
 		return
 	}
-	result, code, err := srv.data.Get(dataType, dataId)
+	result, err := srv.data.Get(dataType, dataId)
 	if err != nil {
-		Http.ResponseJson(w, Http.WrapError(err, fmt.Sprintf("get data type=[%s], id=[%s] failed", dataType, dataId), code),
-			code, srv.config.Http)
+		Http.ResponseJson(w, err, err.Status, srv.config.Http)
 		return
 	}
-	Http.ResponseJson(w, result, code, srv.config.Http)
+	Http.ResponseJson(w, result, http.StatusOK, srv.config.Http)
 }
 
-func ParseRecord(noRecordList []string, payload map[string]interface{}, dataType string, dataId string) (*Record.Record, int, error) {
+func ParseRecord(noRecordList []string, payload map[string]interface{}, dataType string, dataId string) (*Record.Record, *Http.HttpError) {
 	if len(noRecordList) == 0 {
 		record, err := Record.LoadMap(payload)
 		if err != nil {
-			return nil, http.StatusBadRequest, fmt.Errorf("failed to load JSON payload from request. Error:%s", err)
+			return nil, Http.WrapError(err, "failed to load JSON payload from request", http.StatusBadRequest)
 		}
 		if dataType != "" {
-			return nil, http.StatusBadRequest, fmt.Errorf("data type expect to be empty for action=[POST, PUT]")
+			return nil, Http.NewHttpError("data type expect to be empty for action=[POST, PUT]", http.StatusBadRequest)
 		}
 		if dataId != "" {
-			return nil, http.StatusBadRequest, fmt.Errorf("data expect to be empty for action=[POST, PUT]")
+			return nil, Http.NewHttpError("data expect to be empty for action=[POST, PUT]", http.StatusBadRequest)
 		}
-		return record, http.StatusAccepted, nil
+		return record, nil
 	}
 	if dataType == "" {
-		return nil, http.StatusBadRequest, fmt.Errorf("empty data type in path. [%s/%s]=''", Record.DataType, Record.DataId)
+		return nil, Http.NewHttpError(fmt.Sprintf("empty data type in path. [%s/%s]=''", Record.DataType, Record.DataId), http.StatusBadRequest)
 	}
 	if dataId == "" {
-		return nil, http.StatusBadRequest, fmt.Errorf("empty data id in path. [%s/%s]=''", Record.DataType, Record.DataId)
+		return nil, Http.NewHttpError(fmt.Sprintf("empty data id in path. [%s/%s]=''", Record.DataType, Record.DataId), http.StatusBadRequest)
 	}
 	record := Record.NewRecord(dataType, "0_00_00", dataId, payload)
-	return record, http.StatusAccepted, nil
+	return record, nil
 }
 
 func (srv *Server) handlePost(w http.ResponseWriter, r *http.Request, dataType string, dataId string) {
@@ -184,16 +182,14 @@ func (srv *Server) handlePost(w http.ResponseWriter, r *http.Request, dataType s
 			code, srv.config.Http)
 		return
 	}
-	record, code, err := ParseRecord(r.Header.Values(Record.NotRecord), payload, dataType, dataId)
-	if err != nil {
-		Http.ResponseJson(w, Http.WrapError(err, "failed to load payload as Record", code),
-			code, srv.config.Http)
+	record, e := ParseRecord(r.Header.Values(Record.NotRecord), payload, dataType, dataId)
+	if e != nil {
+		Http.ResponseJson(w, err, e.Status, srv.config.Http)
 		return
 	}
-	code, err = srv.data.Add(record)
-	if err != nil {
-		Http.ResponseJson(w, Http.WrapError(err, "failed to add Record", code),
-			code, srv.config.Http)
+	e = srv.data.Add(record)
+	if e != nil {
+		Http.ResponseJson(w, e, e.Status, srv.config.Http)
 		return
 	}
 	Http.ResponseText(w, []byte(record.Id), http.StatusCreated, srv.config.Http)
@@ -207,29 +203,26 @@ func (srv *Server) handlerPut(w http.ResponseWriter, r *http.Request, dataType s
 			code, srv.config.Http)
 		return
 	}
-	record, code, err := ParseRecord(r.Header.Values(Record.NotRecord), payload, dataType, dataId)
-	if err != nil {
-		Http.ResponseJson(w, Http.WrapError(err, "failed to load payload as Record", code),
-			code, srv.config.Http)
+	record, e := ParseRecord(r.Header.Values(Record.NotRecord), payload, dataType, dataId)
+	if e != nil {
+		Http.ResponseJson(w, e, e.Status, srv.config.Http)
 		return
 	}
-	code, err = srv.data.Set(record)
-	if err != nil {
-		Http.ResponseJson(w, Http.WrapError(err, "failed to set Record", code),
-			code, srv.config.Http)
+	e = srv.data.Set(record)
+	if e != nil {
+		Http.ResponseJson(w, e, e.Status, srv.config.Http)
 		return
 	}
 	Http.ResponseText(w, []byte(record.Id), http.StatusCreated, srv.config.Http)
 }
 
 func (srv *Server) handleDelete(w http.ResponseWriter, dataType string, dataId string) {
-	code, err := srv.data.Delete(dataType, dataId)
+	err := srv.data.Delete(dataType, dataId)
 	if err != nil {
-		Http.ResponseJson(w, Http.WrapError(err, fmt.Sprintf("failed to delete Record type=[%s],id=[%s]", dataType, dataId), code),
-			code, srv.config.Http)
+		Http.ResponseJson(w, err, err.Status, srv.config.Http)
 	}
 	result := map[string]string{
 		"result": fmt.Sprintf("item [type/id]=[%s/%s] deleted", dataType, dataId),
 	}
-	Http.ResponseJson(w, result, code, srv.config.Http)
+	Http.ResponseJson(w, result, http.StatusAccepted, srv.config.Http)
 }

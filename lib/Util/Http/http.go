@@ -79,6 +79,15 @@ func Response(w http.ResponseWriter, txt []byte, status int, httpCfg Config) {
 	w.Write(txt)
 }
 
+func ResponseErr(w http.ResponseWriter, err error, code int, httpCfg Config) {
+	if !IsHttpError(err) {
+		err = NewHttpError(err.Error(), code)
+	} else {
+		code = err.(*HttpError).Status
+	}
+	ResponseJson(w, err, code, httpCfg)
+}
+
 func GetRestData(url string) (interface{}, int, error) {
 	response, err := http.Get(url)
 	if err != nil {

@@ -28,9 +28,9 @@ package SchemaPath
 import (
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/Data"
-	"github.com/salesforce/UniTAO/lib/SchemaPath/Error"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/Node"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/PathCmd"
+	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
 
 type CmdQuerySchema struct {
@@ -51,7 +51,7 @@ func (c *CmdQuerySchema) Name() string {
 	return PathCmd.CmdSchema
 }
 
-func (c *CmdQuerySchema) WalkValue() (interface{}, *Error.SchemaPathErr) {
+func (c *CmdQuerySchema) WalkValue() (interface{}, *Http.HttpError) {
 	node := c.p
 	for node.Next != nil {
 		node = node.Next

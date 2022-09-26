@@ -118,27 +118,17 @@ func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if dataPath == "" {
-		idList, code, err := srv.data.List(dataType)
+		idList, err := srv.data.List(dataType)
 		if err != nil {
-			if Http.IsHttpError(err) {
-				Http.ResponseJson(w, err, err.(Http.HttpError).Status, srv.config.Http)
-			} else {
-				httpErr := Http.WrapError(err, fmt.Sprintf("failed to list type=[%s]", dataType), code)
-				Http.ResponseJson(w, httpErr, httpErr.Status, srv.config.Http)
-			}
+			Http.ResponseJson(w, err, err.Status, srv.config.Http)
 			return
 		}
-		Http.ResponseJson(w, idList, code, srv.config.Http)
+		Http.ResponseJson(w, idList, http.StatusOK, srv.config.Http)
 		return
 	}
-	data, code, err := srv.data.Get(dataType, dataPath)
+	data, err := srv.data.Get(dataType, dataPath)
 	if err != nil {
-		if Http.IsHttpError(err) {
-			Http.ResponseJson(w, err, err.(Http.HttpError).Status, srv.config.Http)
-		} else {
-			httpErr := Http.WrapError(err, fmt.Sprintf("failed to get data @path=[%s/%s]", dataType, dataPath), code)
-			Http.ResponseJson(w, httpErr, httpErr.Status, srv.config.Http)
-		}
+		Http.ResponseJson(w, err, err.Status, srv.config.Http)
 		return
 	}
 	Http.ResponseJson(w, data, http.StatusOK, srv.config.Http)

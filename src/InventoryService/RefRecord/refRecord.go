@@ -66,25 +66,26 @@ func LoadMap(data map[string]interface{}) (*ReferralData, error) {
 	return &record, nil
 }
 
-func (r *ReferralData) GetSchema() (int, error) {
+func (r *ReferralData) GetSchema() *Http.HttpError {
 	if r.DsInfo == nil {
-		return http.StatusInternalServerError, fmt.Errorf("failed to load DsInfo for type=[%s]", r.DataType)
+		return Http.NewHttpError(fmt.Sprintf("failed to load DsInfo for type=[%s]", r.DataType), http.StatusInternalServerError)
+
 	}
 	dsUrl, err := r.DsInfo.GetUrl()
 	if err != nil {
-		return http.StatusInternalServerError, fmt.Errorf("no good url to DS=[%s], error:%s", r.DsInfo.Id, err)
+		return Http.NewHttpError(fmt.Sprintf("no good url to DS=[%s], error:%s", r.DsInfo.Id, err), http.StatusInternalServerError)
 	}
 	schemaUrl := fmt.Sprintf("%s/%s/%s", dsUrl, JsonKey.Schema, r.DataType)
 	schemaData, code, err := Http.GetRestData(schemaUrl)
 	if err != nil {
-		return code, err
+		return Http.NewHttpError(err.Error(), code)
 	}
 	schema, ok := schemaData.(map[string]interface{})
 	if !ok {
-		return http.StatusInternalServerError, fmt.Errorf("failed to parse schema record. from path=[%s]", schemaUrl)
+		return Http.NewHttpError(fmt.Sprintf("failed to parse schema record. from path=[%s]", schemaUrl), http.StatusInternalServerError)
 	}
 	r.Schema = schema
-	return http.StatusOK, nil
+	return nil
 }
 
 func (r *ReferralData) GetRecord() *Record.Record {

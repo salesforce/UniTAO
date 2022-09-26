@@ -27,10 +27,13 @@ package PathCmd
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
+
+	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
 
-func Parse(path string) (string, string, error) {
+func Parse(path string) (string, string, *Http.HttpError) {
 	if strings.HasSuffix(path, CmdFlatPath) {
 		qPath := path[:len(path)-len(CmdFlatPath)]
 		return qPath, CmdRef, nil
@@ -43,20 +46,22 @@ func Parse(path string) (string, string, error) {
 	qCmd := path[qIdx:]
 	dupIdx := strings.Index(qCmd[1:], CmdPrefix)
 	if dupIdx > -1 {
-		return "", "", fmt.Errorf("invalid format of PathCmd, more than 1 ? in path. path=[%s]", path)
+		return "", "", Http.NewHttpError(fmt.Sprintf("invalid format of PathCmd, more than 1 ? in path. path=[%s]", path), http.StatusBadRequest)
+
 	}
 	err := Validate(qCmd)
 	if err != nil {
-		return "", "", fmt.Errorf("path command validate failed. Error: %s, @path=[%s]", err, path)
+		return "", "", Http.NewHttpError(fmt.Sprintf("path command validate failed. Error: %s, @path=[%s]", err, path), http.StatusBadRequest)
+
 	}
 	return qPath, qCmd, nil
 }
 
-func Validate(cmd string) error {
+func Validate(cmd string) *Http.HttpError {
 	for _, c := range []string{CmdRef, CmdFlat, CmdSchema, CmdValue, CmdIter} {
 		if c == cmd {
 			return nil
 		}
 	}
-	return fmt.Errorf("unknown path cmd=[%s]", cmd)
+	return Http.NewHttpError(fmt.Sprintf("unknown path cmd=[%s]", cmd), http.StatusBadRequest)
 }

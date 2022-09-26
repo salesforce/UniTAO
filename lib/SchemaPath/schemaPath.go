@@ -26,23 +26,17 @@ This copyright notice and license applies to all files in this directory or sub-
 package SchemaPath
 
 import (
-	"fmt"
-	"net/http"
-
 	"github.com/salesforce/UniTAO/lib/SchemaPath/Data"
-	"github.com/salesforce/UniTAO/lib/SchemaPath/Error"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/Node"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/PathCmd"
 	"github.com/salesforce/UniTAO/lib/Util"
+	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
 
-func CreateQuery(conn *Data.Connection, dataType string, dataPath string) (PathCmd.QueryIface, *Error.SchemaPathErr) {
+func CreateQuery(conn *Data.Connection, dataType string, dataPath string) (PathCmd.QueryIface, *Http.HttpError) {
 	qPath, qCmd, pErr := PathCmd.Parse(dataPath)
 	if pErr != nil {
-		return nil, &Error.SchemaPathErr{
-			Code:    http.StatusBadRequest,
-			PathErr: fmt.Errorf("failed to parse path=[%s], Error:%s", dataPath, pErr),
-		}
+		return nil, pErr
 	}
 	dataId, nextPath := Util.ParsePath(qPath)
 	queryPath, err := Node.New(conn, dataType, dataId, nextPath, nil, nil)
