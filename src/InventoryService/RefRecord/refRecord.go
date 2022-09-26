@@ -84,7 +84,11 @@ func (r *ReferralData) GetSchema() *Http.HttpError {
 	if !ok {
 		return Http.NewHttpError(fmt.Sprintf("failed to parse schema record. from path=[%s]", schemaUrl), http.StatusInternalServerError)
 	}
-	r.Schema = schema
+	schemaRecord, err := Record.LoadMap(schema)
+	if err != nil {
+		return Http.WrapError(err, "schema from dataservice is not in Record format.", http.StatusInternalServerError)
+	}
+	r.Schema = schemaRecord.Data
 	return nil
 }
 
