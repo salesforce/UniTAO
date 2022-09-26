@@ -32,12 +32,12 @@ import (
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
-	"github.com/salesforce/UniTAO/lib/SchemaPath/Error"
+	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
 
-type SchemaFunction func(dataType string) (*SchemaDoc.SchemaDoc, *Error.SchemaPathErr)
+type SchemaFunction func(dataType string) (*SchemaDoc.SchemaDoc, *Http.HttpError)
 
-type RecordFunction func(dataType string, dataId string) (*Record.Record, *Error.SchemaPathErr)
+type RecordFunction func(dataType string, dataId string) (*Record.Record, *Http.HttpError)
 
 type Connection struct {
 	FuncSchema SchemaFunction
@@ -50,7 +50,7 @@ type TypeCache struct {
 	IdCache  map[string]interface{}
 }
 
-func (c *Connection) cacheData(dataType string, id string) (interface{}, *Error.SchemaPathErr) {
+func (c *Connection) cacheData(dataType string, id string) (interface{}, *Http.HttpError) {
 	if c.cache == nil {
 		c.cache = map[string]TypeCache{}
 	}
@@ -64,7 +64,7 @@ func (c *Connection) cacheData(dataType string, id string) (interface{}, *Error.
 	if ok {
 		return data, nil
 	}
-	var err *Error.SchemaPathErr
+	var err *Http.HttpError
 	switch dataType {
 	case JsonKey.Schema:
 		data, err = c.FuncSchema(id)
@@ -78,12 +78,9 @@ func (c *Connection) cacheData(dataType string, id string) (interface{}, *Error.
 	return data, err
 }
 
-func (c *Connection) GetSchema(dataType string) (*SchemaDoc.SchemaDoc, *Error.SchemaPathErr) {
+func (c *Connection) GetSchema(dataType string) (*SchemaDoc.SchemaDoc, *Http.HttpError) {
 	if c.FuncSchema == nil {
-		return nil, &Error.SchemaPathErr{
-			Code:    http.StatusInternalServerError,
-			PathErr: fmt.Errorf("field funcSchema is nil"),
-		}
+		return nil, Http.NewHttpError("field funcSchema is nil", http.StatusInternalServerError)
 	}
 	data, err := c.cacheData(JsonKey.Schema, dataType)
 	if err != nil {
@@ -91,20 +88,14 @@ func (c *Connection) GetSchema(dataType string) (*SchemaDoc.SchemaDoc, *Error.Sc
 	}
 	schema, ok := data.(*SchemaDoc.SchemaDoc)
 	if !ok {
-		return nil, &Error.SchemaPathErr{
-			Code:    http.StatusInternalServerError,
-			PathErr: fmt.Errorf("function schema return invalid data. failed convert it to SchemaDoc.SchemaDoc. [type]=[%s]", dataType),
-		}
+		return nil, Http.NewHttpError(fmt.Sprintf("function schema return invalid data. failed convert it to SchemaDoc.SchemaDoc. [type]=[%s]", dataType), http.StatusInternalServerError)
 	}
 	return schema, nil
 }
 
-func (c *Connection) GetRecord(dataType string, dataId string) (*Record.Record, *Error.SchemaPathErr) {
+func (c *Connection) GetRecord(dataType string, dataId string) (*Record.Record, *Http.HttpError) {
 	if c.FuncRecord == nil {
-		return nil, &Error.SchemaPathErr{
-			Code:    http.StatusInternalServerError,
-			PathErr: fmt.Errorf("field funcRecord is nil"),
-		}
+		return nil, Http.NewHttpError("field funcRecord is nil", http.StatusInternalServerError)
 	}
 	data, err := c.cacheData(dataType, dataId)
 	if err != nil {
@@ -112,10 +103,7 @@ func (c *Connection) GetRecord(dataType string, dataId string) (*Record.Record, 
 	}
 	record, ok := data.(*Record.Record)
 	if !ok {
-		return nil, &Error.SchemaPathErr{
-			Code:    http.StatusInternalServerError,
-			PathErr: fmt.Errorf("function schema return invalid data. failed convert it to Record.Record. [type]=[%s], id=[%s]", dataType, dataId),
-		}
+		return nil, Http.NewHttpError(fmt.Sprintf("function schema return invalid data. failed convert it to Record.Record. [type]=[%s], id=[%s]", dataType, dataId), http.StatusInternalServerError)
 	}
 	return record, nil
 }

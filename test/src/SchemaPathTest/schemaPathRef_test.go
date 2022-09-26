@@ -353,32 +353,32 @@ func TestInvalidPath(t *testing.T) {
 	if err == nil {
 		t.Fatalf("failed to get error on path=[%s]", path)
 	}
-	if err.Code != http.StatusBadRequest {
-		t.Fatalf("failed to detect bad Ref request. get code=[%d]. expect code=[%d]", err.Code, http.StatusBadRequest)
+	if err.Status != http.StatusBadRequest {
+		t.Fatalf("failed to detect bad Ref request. get status=[%d]. expect code=[%d]", err.Status, http.StatusBadRequest)
 	}
 	path = "CmtRef/cmtRef1/noRefArray[123]?ref"
 	_, err = QueryPath(conn, path)
 	if err == nil {
 		t.Fatalf("failed to get error on path=[%s]", path)
 	}
-	if err.Code != http.StatusBadRequest {
-		t.Fatalf("failed to detect bad Ref request. get code=[%d]. expect code=[%d]", err.Code, http.StatusBadRequest)
+	if err.Status != http.StatusBadRequest {
+		t.Fatalf("failed to detect bad Ref request. get status=[%d]. expect code=[%d]", err.Status, http.StatusBadRequest)
 	}
 	path = "CmtRef/cmtRef1/directRef/key1?ref"
 	_, err = QueryPath(conn, path)
 	if err == nil {
 		t.Fatalf("failed to get error on path=[%s]", path)
 	}
-	if err.Code != http.StatusBadRequest {
-		t.Fatalf("failed to detect bad Ref request. get code=[%d]. expect code=[%d]", err.Code, http.StatusBadRequest)
+	if err.Status != http.StatusBadRequest {
+		t.Fatalf("failed to detect bad Ref request. get status=[%d]. expect code=[%d]", err.Status, http.StatusBadRequest)
 	}
 	path = "CmtRef/cmtRef1/arrayRef[01_01]/key1?ref"
 	_, err = QueryPath(conn, path)
 	if err == nil {
 		t.Fatalf("failed to get error on path=[%s]", path)
 	}
-	if err.Code != http.StatusBadRequest {
-		t.Fatalf("failed to detect bad Ref request. get code=[%d]. expect code=[%d]", err.Code, http.StatusBadRequest)
+	if err.Status != http.StatusBadRequest {
+		t.Fatalf("failed to detect bad Ref request. get status=[%d]. expect code=[%d]", err.Status, http.StatusBadRequest)
 	}
 }
 

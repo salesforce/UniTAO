@@ -30,10 +30,10 @@ import (
 	"net/http"
 
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
-	"github.com/salesforce/UniTAO/lib/SchemaPath/Error"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/Node"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/PathCmd"
 	"github.com/salesforce/UniTAO/lib/Util"
+	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
 
 const (
@@ -62,7 +62,7 @@ func (c *CmdPathIterator) Name() string {
 	return PathCmd.CmdIter
 }
 
-func (c *CmdPathIterator) WalkValue() (interface{}, *Error.SchemaPathErr) {
+func (c *CmdPathIterator) WalkValue() (interface{}, *Http.HttpError) {
 	/*
 		TODO:
 		walk as the path but only record the * Idx on Array or Map.
@@ -79,15 +79,12 @@ func (c *CmdPathIterator) WalkValue() (interface{}, *Error.SchemaPathErr) {
 	}
 	result, cErr := Util.JsonCopy(iterResult)
 	if cErr != nil {
-		return nil, &Error.SchemaPathErr{
-			Code:    http.StatusInternalServerError,
-			PathErr: fmt.Errorf("failed to convert struct [IteratorResult] to json, Error:%s", cErr),
-		}
+		return nil, Http.WrapError(cErr, "failed to convert struct [IteratorResult] to json", http.StatusInternalServerError)
 	}
 	return result, nil
 }
 
-func (c *CmdPathIterator) GetNodeValue(node *Node.PathNode, parentData interface{}) ([]QueryResult, *Error.SchemaPathErr) {
+func (c *CmdPathIterator) GetNodeValue(node *Node.PathNode, parentData interface{}) ([]QueryResult, *Http.HttpError) {
 	nodeValue, err := Node.GetNodeValue(node, parentData)
 	if err != nil {
 		return nil, err
@@ -109,22 +106,19 @@ func (c *CmdPathIterator) GetNodeValue(node *Node.PathNode, parentData interface
 	return queryResult, nil
 }
 
-func (c *CmdPathIterator) GetNodeArrayAll(node *Node.PathNode, nodeValue interface{}) ([]QueryResult, *Error.SchemaPathErr) {
+func (c *CmdPathIterator) GetNodeArrayAll(node *Node.PathNode, nodeValue interface{}) ([]QueryResult, *Http.HttpError) {
 	parentValues, ok := nodeValue.([]interface{})
 	if !ok {
-		return nil, &Error.SchemaPathErr{
-			Code:    http.StatusInternalServerError,
-			PathErr: fmt.Errorf("idx=[%s] didn't return array on function[Node.GetNodeValue], @path=[%s]", PathCmd.ALL, node.FullPath()),
-		}
+		return nil, Http.NewHttpError(fmt.Sprintf("idx=[%s] didn't return array on function[Node.GetNodeValue], @path=[%s]", PathCmd.ALL, node.FullPath()), http.StatusInternalServerError)
 	}
 	result := []QueryResult{}
 	for idx, item := range parentValues {
 		nextResult, err := c.GetNodeValue(node.Next, item)
 		if err != nil {
-			if err.Code == http.StatusNotFound {
+			if err.Status == http.StatusNotFound {
 				continue
 			}
-			return nil, Error.AppendErr(err, fmt.Sprintf("failed to get %s[%d] @path=[%s]", node.AttrName, idx, node.FullPath()))
+			return nil, Http.WrapError(err, fmt.Sprintf("failed to get %s[%d] @path=[%s]", node.AttrName, idx, node.FullPath()), err.Status)
 		}
 		itemKey, err := GetItemKey(node, item)
 		if err != nil {
@@ -136,22 +130,19 @@ func (c *CmdPathIterator) GetNodeArrayAll(node *Node.PathNode, nodeValue interfa
 	return result, nil
 }
 
-func (c *CmdPathIterator) GetNodeMapAll(node *Node.PathNode, nodeValue interface{}) ([]QueryResult, *Error.SchemaPathErr) {
+func (c *CmdPathIterator) GetNodeMapAll(node *Node.PathNode, nodeValue interface{}) ([]QueryResult, *Http.HttpError) {
 	parentValues, ok := nodeValue.(map[string]interface{})
 	if !ok {
-		return nil, &Error.SchemaPathErr{
-			Code:    http.StatusInternalServerError,
-			PathErr: fmt.Errorf("idx=[%s] didn't return map on function[Node.GetNodeValue], @path=[%s]", PathCmd.ALL, node.FullPath()),
-		}
+		return nil, Http.NewHttpError(fmt.Sprintf("idx=[%s] didn't return map on function[Node.GetNodeValue], @path=[%s]", PathCmd.ALL, node.FullPath()), http.StatusInternalServerError)
 	}
 	result := []QueryResult{}
 	for key, item := range parentValues {
 		nextResult, err := c.GetNodeValue(node.Next, item)
 		if err != nil {
-			if err.Code == http.StatusNotFound {
+			if err.Status == http.StatusNotFound {
 				continue
 			}
-			return nil, Error.AppendErr(err, fmt.Sprintf("failed to get %s[%s] @path=[%s]", node.AttrName, key, node.FullPath()))
+			return nil, err
 		}
 		AppendIterator(nextResult, key)
 		result = append(result, nextResult...)
@@ -169,15 +160,12 @@ func (c *CmdPathIterator) BuildResult(value interface{}) []QueryResult {
 	return result
 }
 
-func GetItemKey(node *Node.PathNode, item interface{}) (string, *Error.SchemaPathErr) {
+func GetItemKey(node *Node.PathNode, item interface{}) (string, *Http.HttpError) {
 	itemType := node.AttrDef[JsonKey.Items].(map[string]interface{})[JsonKey.Type].(string)
 	if itemType == JsonKey.Object {
 		itemKey, err := node.Next.Schema.BuildKey(item.(map[string]interface{}))
 		if err != nil {
-			return "", &Error.SchemaPathErr{
-				Code:    http.StatusInternalServerError,
-				PathErr: fmt.Errorf("failed to build key at %s", node.Next.FullPath()),
-			}
+			return "", Http.NewHttpError(fmt.Sprintf("failed to build key at %s", node.Next.FullPath()), http.StatusInternalServerError)
 		}
 		return itemKey, nil
 	}

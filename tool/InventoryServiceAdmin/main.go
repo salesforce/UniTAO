@@ -162,19 +162,17 @@ func (a *Admin) Run() error {
 }
 
 func (a *Admin) addDsRecord() error {
-	_, code, err := a.handler.GetData(Schema.Inventory, a.args.ops.id)
+	_, err := a.handler.GetData(Schema.Inventory, a.args.ops.id)
 	if err == nil {
-		err = fmt.Errorf("data server record already exists, [%s]=[%s]", Record.DataId, a.args.ops.id)
-		return err
+		return fmt.Errorf("data server record already exists, [%s]=[%s]", Record.DataId, a.args.ops.id)
 	}
-	if code != http.StatusNotFound {
-		err = fmt.Errorf("failed to query Data Service record, [%s]=[%s], CODE:%d, Error:%s", Record.DataId, a.args.ops.id, code, err)
-		return err
+	if err.Status != http.StatusNotFound {
+		return fmt.Errorf("failed to query Data Service record, [%s]=[%s], Status:%d, Error:%s", Record.DataId, a.args.ops.id, err.Status, err)
 	}
 	dsRecord := InvRecord.NewDsInfo(a.args.ops.id, a.args.ops.url)
-	payload, err := Util.StructToMap(dsRecord)
-	if err != nil {
-		return err
+	payload, e := Util.StructToMap(dsRecord)
+	if e != nil {
+		return e
 	}
 	a.handler.Db.Create(Schema.Inventory, payload)
 	return nil
@@ -184,27 +182,27 @@ func (a *Admin) syncDsSchema() error {
 	if a.args.ops.id != "" {
 		return a.syncSchemaWithId(a.args.ops.id)
 	}
-	idList, _, err := a.handler.List(Schema.Inventory)
+	idList, err := a.handler.List(Schema.Inventory)
 	if err != nil {
 		return fmt.Errorf("failed to list all inventorys. Error: %s", err)
 	}
 	for _, dsId := range idList {
-		err = a.syncSchemaWithId(dsId)
-		if err != nil {
-			return fmt.Errorf("failed to get schema from DS_Id=[%s], Error:%s", dsId, err)
+		e := a.syncSchemaWithId(dsId)
+		if e != nil {
+			return fmt.Errorf("failed to get schema from DS_Id=[%s], Error:%s", dsId, e)
 		}
 	}
 	return nil
 }
 
 func (a *Admin) getCurrentTypeList(dsId string) ([]string, error) {
-	typeList, _, err := a.handler.List(RefRecord.Referral)
+	typeList, err := a.handler.List(RefRecord.Referral)
 	if err != nil {
 		return nil, err
 	}
 	currentTypes := []string{}
 	for _, dataType := range typeList {
-		referral, _, err := a.handler.GetReferral(dataType)
+		referral, err := a.handler.GetReferral(dataType)
 		if err != nil {
 			a.removeType(dsId, dataType)
 			continue
@@ -217,19 +215,19 @@ func (a *Admin) getCurrentTypeList(dsId string) ([]string, error) {
 }
 
 func (a *Admin) getDsTypeList(dsId string) ([]string, error) {
-	ds, _, err := a.handler.GetDsInfo(dsId)
+	ds, err := a.handler.GetDsInfo(dsId)
 	if err != nil {
 		return nil, err
 	}
-	dsUrl, err := ds.GetUrl()
-	if err != nil {
-		return nil, err
+	dsUrl, e := ds.GetUrl()
+	if e != nil {
+		return nil, e
 	}
-	schemaUrl, err := Http.URLPathJoin(dsUrl, JsonKey.Schema)
-	if err != nil {
+	schemaUrl, e := Http.URLPathJoin(dsUrl, JsonKey.Schema)
+	if e != nil {
 		return nil, fmt.Errorf("failed to parse url from DS record [%s]=[%s], Err:%s", Record.DataId, a.args.ops.id, err)
 	}
-	result, code, err := Http.GetRestData(*schemaUrl)
+	result, code, e := Http.GetRestData(*schemaUrl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to Rest Data from [path]=[%s], Code:%d", *schemaUrl, code)
 	}
@@ -265,18 +263,18 @@ func (a *Admin) syncSchemaWithId(dsId string) error {
 }
 
 func (a *Admin) addType(dsId string, dataType string) error {
-	dsInfo, _, err := a.handler.GetDsInfo(dsId)
+	dsInfo, err := a.handler.GetDsInfo(dsId)
 	if err != nil {
 		return err
 	}
-	dsUrl, err := dsInfo.GetUrl()
-	if err != nil {
-		return err
+	dsUrl, e := dsInfo.GetUrl()
+	if e != nil {
+		return e
 	}
 	schemaUrl := fmt.Sprintf("%s/%s/%s", dsUrl, JsonKey.Schema, dataType)
-	schemaRecord, _, err := Http.GetRestData(schemaUrl)
-	if err != nil {
-		return err
+	schemaRecord, _, e := Http.GetRestData(schemaUrl)
+	if e != nil {
+		return e
 	}
 	a.removeData(JsonKey.Schema, dataType)
 	a.handler.Db.Create(JsonKey.Schema, schemaRecord)

@@ -32,10 +32,10 @@ import (
 
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
-	"github.com/salesforce/UniTAO/lib/SchemaPath/Error"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/Node"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/PathCmd"
 	"github.com/salesforce/UniTAO/lib/Util"
+	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
 
 type CmdQueryFlat struct {
@@ -46,7 +46,7 @@ func (c *CmdQueryFlat) Name() string {
 	return PathCmd.CmdFlat
 }
 
-func (c *CmdQueryFlat) WalkValue() (interface{}, *Error.SchemaPathErr) {
+func (c *CmdQueryFlat) WalkValue() (interface{}, *Http.HttpError) {
 	/*
 		TODO:
 		1, get schema of current path.
@@ -66,10 +66,7 @@ func (c *CmdQueryFlat) WalkValue() (interface{}, *Error.SchemaPathErr) {
 		if reflect.TypeOf(nodeValue).Kind() == reflect.Slice {
 			dedupeList, nErr := Util.DeDupeList(nodeValue.([]interface{}))
 			if nErr != nil {
-				return nil, &Error.SchemaPathErr{
-					Code:    http.StatusInternalServerError,
-					PathErr: fmt.Errorf("failed to dedupe result. Error:%s", nErr),
-				}
+				return nil, Http.WrapError(nErr, "failed to dedupe result.", http.StatusInternalServerError)
 			}
 			return dedupeList, nil
 		}
@@ -82,10 +79,7 @@ func (c *CmdQueryFlat) WalkValue() (interface{}, *Error.SchemaPathErr) {
 		}
 		dedupeList, nErr := Util.DeDupeList(valueList.([]interface{}))
 		if nErr != nil {
-			return nil, &Error.SchemaPathErr{
-				Code:    http.StatusInternalServerError,
-				PathErr: fmt.Errorf("failed to dedupe result. Error:%s", nErr),
-			}
+			return nil, Http.WrapError(nErr, "failed to dedupe result.", http.StatusInternalServerError)
 		}
 		return dedupeList, nil
 	}
@@ -111,13 +105,10 @@ func FlatMergeEmbedArray(arrayValue []interface{}) ([]interface{}, error) {
 	return resultAry, nil
 }
 
-func FlatNodeArray(node *Node.PathNode, nodeValue []interface{}) (interface{}, *Error.SchemaPathErr) {
+func FlatNodeArray(node *Node.PathNode, nodeValue []interface{}) (interface{}, *Http.HttpError) {
 	valueAry, err := FlatMergeEmbedArray(nodeValue)
 	if err != nil {
-		return nil, &Error.SchemaPathErr{
-			Code:    http.StatusInternalServerError,
-			PathErr: err,
-		}
+		return nil, Http.NewHttpError(err.Error(), http.StatusInternalServerError)
 	}
 	err = ValidateFlatArray(valueAry)
 	if err == nil {
@@ -130,31 +121,22 @@ func FlatNodeArray(node *Node.PathNode, nodeValue []interface{}) (interface{}, *
 	if node.AttrName == "" {
 		resultAry, err := FlatSchemaArray(node.Schema, valueAry)
 		if err != nil {
-			return nil, &Error.SchemaPathErr{
-				Code:    http.StatusInternalServerError,
-				PathErr: err,
-			}
+			return nil, Http.NewHttpError(err.Error(), http.StatusInternalServerError)
 		}
 		return resultAry, nil
 	}
 	itemSchema, ok := node.Schema.SubDocs[node.AttrName]
 	if !ok {
-		return nil, &Error.SchemaPathErr{
-			Code:    http.StatusInternalServerError,
-			PathErr: fmt.Errorf("missing subDoc for attr=[%s] @path=[%s]", node.AttrName, node.FullPath()),
-		}
+		return nil, Http.NewHttpError(fmt.Sprintf("missing subDoc for attr=[%s] @path=[%s]", node.AttrName, node.FullPath()), http.StatusInternalServerError)
 	}
 	resultAry, err := FlatSchemaArray(itemSchema, valueAry)
 	if err != nil {
-		return nil, &Error.SchemaPathErr{
-			Code:    http.StatusInternalServerError,
-			PathErr: err,
-		}
+		return nil, Http.NewHttpError(err.Error(), http.StatusInternalServerError)
 	}
 	return resultAry, nil
 }
 
-func FlatNodeMap(node *Node.PathNode, nodeValue map[string]interface{}) (interface{}, *Error.SchemaPathErr) {
+func FlatNodeMap(node *Node.PathNode, nodeValue map[string]interface{}) (interface{}, *Http.HttpError) {
 	for node.Next != nil {
 		node = node.Next
 	}
@@ -164,10 +146,7 @@ func FlatNodeMap(node *Node.PathNode, nodeValue map[string]interface{}) (interfa
 		if !ok {
 			simpleValue, err := FlatSimpleValue(attrValue)
 			if err != nil {
-				return nil, &Error.SchemaPathErr{
-					Code:    http.StatusBadRequest,
-					PathErr: fmt.Errorf("attr=[%s] not defined in schema, cannot convert its value to simple value. Error:%s", attr, err),
-				}
+				return nil, Http.WrapError(err, fmt.Sprintf("attr=[%s] not defined in schema, cannot convert its value to simple value.", attr), http.StatusBadRequest)
 			}
 			result[attr] = simpleValue
 			continue
@@ -178,17 +157,11 @@ func FlatNodeMap(node *Node.PathNode, nodeValue map[string]interface{}) (interfa
 			if itemDef[JsonKey.Type].(string) == JsonKey.Object {
 				itemSchema, ok := node.Schema.SubDocs[attr]
 				if !ok {
-					return nil, &Error.SchemaPathErr{
-						Code:    http.StatusInternalServerError,
-						PathErr: fmt.Errorf("missing subDoc for attr=[%s] @path=[%s]", attr, node.FullPath()),
-					}
+					return nil, Http.NewHttpError(fmt.Sprintf("missing subDoc for attr=[%s] @path=[%s]", attr, node.FullPath()), http.StatusInternalServerError)
 				}
 				attrAryValue, err := FlatSchemaArray(itemSchema, attrValue.([]interface{}))
 				if err != nil {
-					return nil, &Error.SchemaPathErr{
-						Code:    http.StatusInternalServerError,
-						PathErr: fmt.Errorf("failed to flat array with schema, attr=[%s], path=[%s], Error:%s", attr, node.FullPath(), err),
-					}
+					return nil, Http.WrapError(err, fmt.Sprintf("failed to flat array with schema, attr=[%s], path=[%s]", attr, node.FullPath()), http.StatusInternalServerError)
 				}
 				result[attr] = attrAryValue
 			} else {

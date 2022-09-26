@@ -81,10 +81,6 @@ func NewHttpError(msg string, status int) *HttpError {
 
 func WrapError(err error, newMsg string, newStatus int) *HttpError {
 	newErr := NewHttpError(newMsg, newStatus)
-	if !IsHttpError(err) {
-		AppendError(newErr, NewHttpError(err.Error(), http.StatusInternalServerError))
-	} else {
-		AppendError(newErr, err.(*HttpError))
-	}
+	newErr.Context = append(newErr.Context, err)
 	return newErr
 }

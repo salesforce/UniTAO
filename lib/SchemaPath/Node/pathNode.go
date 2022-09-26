@@ -32,8 +32,8 @@ import (
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/Data"
-	"github.com/salesforce/UniTAO/lib/SchemaPath/Error"
 	"github.com/salesforce/UniTAO/lib/Util"
+	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
 
 type PathNode struct {
@@ -50,23 +50,7 @@ type PathNode struct {
 	Next     *PathNode
 }
 
-func ParseRecordId(dataPath string) (string, string, string, error) {
-	if dataPath == "" {
-		return "", "", "", nil
-	}
-	dataType, nextPath := Util.ParsePath(dataPath)
-	if nextPath == "" {
-		return dataType, "", "", &Error.SchemaPathErr{
-			Code:    http.StatusBadRequest,
-			PathErr: fmt.Errorf("missing data id in path. dataType=[%s]", dataType),
-		}
-	}
-	dataId, nextPath := Util.ParsePath(nextPath)
-	return dataType, dataId, nextPath, nil
-
-}
-
-func New(conn *Data.Connection, dataType string, dataId string, nextPath string, prev *PathNode, schema *SchemaDoc.SchemaDoc) (*PathNode, *Error.SchemaPathErr) {
+func New(conn *Data.Connection, dataType string, dataId string, nextPath string, prev *PathNode, schema *SchemaDoc.SchemaDoc) (*PathNode, *Http.HttpError) {
 	fullPath := ""
 	if prev != nil {
 		fullPath = prev.FullPath()
@@ -103,49 +87,40 @@ func (p *PathNode) FullPath() string {
 	return fullPath
 }
 
-func (p *PathNode) SyncSchema() *Error.SchemaPathErr {
+func (p *PathNode) SyncSchema() *Http.HttpError {
 	if p.DataType != "" {
 		schema, err := p.Conn.GetSchema(p.DataType)
 		if err != nil {
-			return Error.AppendErr(err, fmt.Sprintf("failed to get schema, @path=[%s]", p.FullPath()))
+			return Http.WrapError(err, fmt.Sprintf("failed to get schema, @path=[%s]", p.FullPath()), http.StatusBadRequest)
 		}
 		p.Schema = schema
 		if p.DataId == "" && p.Prev == nil {
-			return &Error.SchemaPathErr{
-				Code:    http.StatusBadRequest,
-				PathErr: fmt.Errorf("missing data Id in path @[%s], next=[%s]", p.FullPath(), p.NextPath),
-			}
+			return Http.NewHttpError(fmt.Sprintf("missing data Id in path @[%s], next=[%s]", p.FullPath(), p.NextPath), http.StatusBadRequest)
 		}
 		return nil
 	}
 	if p.Prev == nil {
-		return &Error.SchemaPathErr{
-			Code:    http.StatusInternalServerError,
-			PathErr: fmt.Errorf("root node should container dataType and dataId"),
-		}
+		return Http.NewHttpError(fmt.Sprintf("root node should container dataType and dataId"), http.StatusInternalServerError)
 	}
 	return nil
 }
 
-func (p *PathNode) GetRecordData() (interface{}, *Error.SchemaPathErr) {
+func (p *PathNode) GetRecordData() (interface{}, *Http.HttpError) {
 	if p.DataType != "" {
 		if p.DataId != "" {
 			record, err := p.Conn.GetRecord(p.DataType, p.DataId)
 			if err != nil {
-				return nil, Error.AppendErr(err, fmt.Sprintf("failed get record, @path=[%s]", p.FullPath()))
+				return nil, Http.WrapError(err, fmt.Sprintf("failed get record, @path=[%s]", p.FullPath()), http.StatusNotFound)
 			}
 			return record.Data, nil
 		}
-		return nil, &Error.SchemaPathErr{
-			Code:    http.StatusInternalServerError,
-			PathErr: fmt.Errorf("please set CMT dataId from Prev before calling GetRecordData"),
-		}
+		return nil, Http.NewHttpError(fmt.Sprintf("please set CMT dataId from Prev before calling GetRecordData"), http.StatusInternalServerError)
 	}
 	return nil, nil
 }
 
 // build path node chain with only schema link to validate path correctness
-func (p *PathNode) BuildPath() *Error.SchemaPathErr {
+func (p *PathNode) BuildPath() *Http.HttpError {
 	if p.NextPath == "" {
 		return nil
 	}
@@ -153,17 +128,14 @@ func (p *PathNode) BuildPath() *Error.SchemaPathErr {
 		prevType := p.Prev.AttrDef[JsonKey.Type].(string)
 		if prevType == JsonKey.Array || (prevType == JsonKey.Object && SchemaDoc.IsMap(p.Prev.AttrDef)) {
 			if p.Prev.Idx == "" {
-				return &Error.SchemaPathErr{
-					Code:    http.StatusBadRequest,
-					PathErr: fmt.Errorf("invalid path. need to specify key to walk into array/map. @path=[%s]", p.Prev.FullPath()),
-				}
+				return Http.NewHttpError(fmt.Sprintf("invalid path. need to specify key to walk into array/map. @path=[%s]", p.Prev.FullPath()), http.StatusBadRequest)
 			}
 		}
 	}
 	attrPath, nextPath := Util.ParsePath(p.NextPath)
 	attrName, attrIdx, err := Util.ParseArrayPath(attrPath)
 	if err != nil {
-		return Error.AppendErr(err, fmt.Sprintf("failed to parse ArrayPath @[path]=[%s]", p.FullPath()))
+		return Http.WrapError(err, fmt.Sprintf("failed to parse ArrayPath @[path]=[%s]", p.FullPath()), http.StatusBadRequest)
 	}
 	if attrIdx != "" {
 		p.Idx = attrIdx
@@ -172,10 +144,7 @@ func (p *PathNode) BuildPath() *Error.SchemaPathErr {
 	iAttrDef, ok := p.Schema.Data[JsonKey.Properties].(map[string]interface{})[attrName]
 	if !ok {
 		if nextPath != "" {
-			return &Error.SchemaPathErr{
-				Code:    http.StatusBadRequest,
-				PathErr: fmt.Errorf("attr=[%s] is not a defined attribute. cannot walk any further @[path]=[%s] nextPath=[%s]", attrName, p.FullPath(), nextPath),
-			}
+			return Http.NewHttpError(fmt.Sprintf("attr=[%s] is not a defined attribute. cannot walk any further @[path]=[%s] nextPath=[%s]", attrName, p.FullPath(), nextPath), http.StatusBadRequest)
 		}
 		return nil
 	}
@@ -183,10 +152,7 @@ func (p *PathNode) BuildPath() *Error.SchemaPathErr {
 	p.AttrDef = attrDef
 	attrType := attrDef[JsonKey.Type].(string)
 	if attrIdx != "" && !(attrType == JsonKey.Array || (attrType == JsonKey.Object && SchemaDoc.IsMap(attrDef))) {
-		return &Error.SchemaPathErr{
-			Code:    http.StatusBadRequest,
-			PathErr: fmt.Errorf("only [%s, %s] support idx path, attr [%s] type=[%s], @[path]=[%s]", JsonKey.Array, JsonKey.Map, attrName, attrType, p.FullPath()),
-		}
+		return Http.NewHttpError(fmt.Sprintf("only [%s, %s] support idx path, attr [%s] type=[%s], @[path]=[%s]", JsonKey.Array, JsonKey.Map, attrName, attrType, p.FullPath()), http.StatusBadRequest)
 	}
 	if attrIdx == "" && attrType == JsonKey.Object && SchemaDoc.IsMap(attrDef) {
 		attrIdx, nextPath = Util.ParsePath(nextPath)
@@ -196,7 +162,7 @@ func (p *PathNode) BuildPath() *Error.SchemaPathErr {
 	return p.buildNextPathType(p.AttrDef, nextPath)
 }
 
-func (p *PathNode) buildNextPathType(valueDef map[string]interface{}, nextPath string) *Error.SchemaPathErr {
+func (p *PathNode) buildNextPathType(valueDef map[string]interface{}, nextPath string) *Http.HttpError {
 	valueType := valueDef[JsonKey.Type].(string)
 	switch valueType {
 	case JsonKey.Array:
@@ -212,54 +178,36 @@ func (p *PathNode) buildNextPathType(valueDef map[string]interface{}, nextPath s
 		if nextPath == "" {
 			return nil
 		}
-		return &Error.SchemaPathErr{
-			Code:    http.StatusBadRequest,
-			PathErr: fmt.Errorf("attr=[%s], type=[%s] does not support walk further. @path=[%s]", p.AttrName, valueType, p.FullPath()),
-		}
+		return Http.NewHttpError(fmt.Sprintf("attr=[%s], type=[%s] does not support walk further. @path=[%s]", p.AttrName, valueType, p.FullPath()), http.StatusBadRequest)
 	}
 }
 
-func (p *PathNode) buildNextPathArray(nextPath string) *Error.SchemaPathErr {
+func (p *PathNode) buildNextPathArray(nextPath string) *Http.HttpError {
 	itemDef, ok := p.AttrDef[JsonKey.Items].(map[string]interface{})
 	if !ok {
-		return &Error.SchemaPathErr{
-			Code:    http.StatusBadRequest,
-			PathErr: fmt.Errorf("missing field=[%s] in schema, for attr=[%s], @path=[%s]", JsonKey.Items, p.AttrName, p.FullPath()),
-		}
+		return Http.NewHttpError(fmt.Sprintf("missing field=[%s] in schema, for attr=[%s], @path=[%s]", JsonKey.Items, p.AttrName, p.FullPath()), http.StatusBadRequest)
 	}
 	itemType := itemDef[JsonKey.Type].(string)
 	if itemType == JsonKey.Array || (itemType == JsonKey.Object && SchemaDoc.IsMap(itemDef)) {
-		return &Error.SchemaPathErr{
-			Code:    http.StatusBadRequest,
-			PathErr: fmt.Errorf("walk on [%s,%s] in [%s] is not supported. attr=[%s], @path=[%s]", JsonKey.Array, JsonKey.Map, JsonKey.Array, p.AttrName, p.FullPath()),
-		}
+		return Http.NewHttpError(fmt.Sprintf("walk on [%s,%s] in [%s] is not supported. attr=[%s], @path=[%s]", JsonKey.Array, JsonKey.Map, JsonKey.Array, p.AttrName, p.FullPath()), http.StatusBadRequest)
 	}
 	if p.Idx == "" {
 		if nextPath != "" {
-			return &Error.SchemaPathErr{
-				Code:    http.StatusBadRequest,
-				PathErr: fmt.Errorf("cannot walk into array attr=[%s] with empty idx", p.AttrName),
-			}
+			return Http.NewHttpError(fmt.Sprintf("cannot walk into array attr=[%s] with empty idx", p.AttrName), http.StatusBadRequest)
 		}
 		return nil
 	}
 	return p.buildNextPathType(itemDef, nextPath)
 }
 
-func (p *PathNode) buildNextPathMap(nextPath string) *Error.SchemaPathErr {
+func (p *PathNode) buildNextPathMap(nextPath string) *Http.HttpError {
 	itemDef, ok := p.AttrDef[JsonKey.AdditionalProperties].(map[string]interface{})
 	if !ok {
-		return &Error.SchemaPathErr{
-			Code:    http.StatusBadRequest,
-			PathErr: fmt.Errorf("missing field=[%s] in schema, for attr=[%s], @path=[%s]", JsonKey.Items, p.AttrName, p.FullPath()),
-		}
+		return Http.NewHttpError(fmt.Sprintf("missing field=[%s] in schema, for attr=[%s], @path=[%s]", JsonKey.Items, p.AttrName, p.FullPath()), http.StatusBadRequest)
 	}
 	itemType := itemDef[JsonKey.Type].(string)
 	if itemType == JsonKey.Array || (itemType == JsonKey.Object && SchemaDoc.IsMap(itemDef)) {
-		return &Error.SchemaPathErr{
-			Code:    http.StatusBadRequest,
-			PathErr: fmt.Errorf("walk on [%s,%s] in [%s] is not supported. attr=[%s], @path=[%s]", JsonKey.Array, JsonKey.Map, JsonKey.Map, p.AttrName, p.FullPath()),
-		}
+		return Http.NewHttpError(fmt.Sprintf("walk on [%s,%s] in [%s] is not supported. attr=[%s], @path=[%s]", JsonKey.Array, JsonKey.Map, JsonKey.Map, p.AttrName, p.FullPath()), http.StatusBadRequest)
 	}
 	if p.Idx == "" {
 		// for map, if p.Idx == "", it means nextPath is already empty
@@ -269,13 +217,10 @@ func (p *PathNode) buildNextPathMap(nextPath string) *Error.SchemaPathErr {
 	return p.buildNextPathType(itemDef, nextPath)
 }
 
-func (p *PathNode) buildNextPathObj(nextPath string) *Error.SchemaPathErr {
+func (p *PathNode) buildNextPathObj(nextPath string) *Http.HttpError {
 	itemDoc, ok := p.Schema.SubDocs[p.AttrName]
 	if !ok {
-		return &Error.SchemaPathErr{
-			Code:    http.StatusBadRequest,
-			PathErr: fmt.Errorf("path not walkable, attr value has no definition @path=[%s/%s]", p.FullPath(), p.AttrName),
-		}
+		return Http.NewHttpError(fmt.Sprintf("path not walkable, attr value has no definition @path=[%s/%s]", p.FullPath(), p.AttrName), http.StatusBadRequest)
 	}
 	nextNode, err := New(p.Conn, "", "", nextPath, p, itemDoc)
 	if err != nil {
@@ -285,17 +230,14 @@ func (p *PathNode) buildNextPathObj(nextPath string) *Error.SchemaPathErr {
 	return p.Next.BuildPath()
 }
 
-func (p *PathNode) buildNextPathCmt(nextPath string) *Error.SchemaPathErr {
+func (p *PathNode) buildNextPathCmt(nextPath string) *Http.HttpError {
 	cmtRef, ok := p.Schema.CmtRefs[p.AttrName]
 	if !ok {
 		// just a normal string attribute. not a CMT ref.
 		return nil
 	}
 	if cmtRef.CmtType != JsonKey.Inventory {
-		return &Error.SchemaPathErr{
-			Code:    http.StatusInternalServerError,
-			PathErr: fmt.Errorf("schema path does not support [%s]=[%s/%s]", JsonKey.ContentMediaType, cmtRef.CmtType, cmtRef.ContentType),
-		}
+		return Http.NewHttpError(fmt.Sprintf("schema path does not support [%s]=[%s/%s]", JsonKey.ContentMediaType, cmtRef.CmtType, cmtRef.ContentType), http.StatusInternalServerError)
 	}
 	nextNode, err := New(p.Conn, cmtRef.ContentType, "", nextPath, p, nil)
 	if err != nil {

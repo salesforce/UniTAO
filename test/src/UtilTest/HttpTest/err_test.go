@@ -71,10 +71,13 @@ func TestAppendErr(t *testing.T) {
 func TestWrapErr(t *testing.T) {
 	err01 := fmt.Errorf("test01")
 	err := Http.WrapError(err01, "wrapTest", http.StatusBadRequest)
-	if len(err.Message) != 2 {
+	if len(err.Message) != 1 {
 		t.Fatalf("failed to wrap message as 2 line")
 	}
 	if err.Message[0] != "wrapTest" {
 		t.Fatalf("failed to add new title message")
+	}
+	if len(err.Context) != 1 {
+		t.Fatalf("failed to include the sub err in context")
 	}
 }

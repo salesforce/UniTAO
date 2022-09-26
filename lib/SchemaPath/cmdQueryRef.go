@@ -30,9 +30,9 @@ import (
 	"net/http"
 
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
-	"github.com/salesforce/UniTAO/lib/SchemaPath/Error"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/Node"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/PathCmd"
+	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
 
 type CmdQueryRef struct {
@@ -43,20 +43,17 @@ func (c *CmdQueryRef) Name() string {
 	return PathCmd.CmdRef
 }
 
-func (c *CmdQueryRef) WalkValue() (interface{}, *Error.SchemaPathErr) {
+func (c *CmdQueryRef) WalkValue() (interface{}, *Http.HttpError) {
 	return c.GetNodeValue(c.p, nil)
 }
 
-func (c *CmdQueryRef) GetNodeValue(node *Node.PathNode, nodeValue interface{}) (interface{}, *Error.SchemaPathErr) {
+func (c *CmdQueryRef) GetNodeValue(node *Node.PathNode, nodeValue interface{}) (interface{}, *Http.HttpError) {
 	nodeValue, err := Node.GetNodeValue(node, nodeValue)
 	if err != nil {
 		return nil, err
 	}
 	if node.Next == nil {
-		return nil, &Error.SchemaPathErr{
-			Code:    http.StatusBadRequest,
-			PathErr: fmt.Errorf("path does not contain Ref attribute. @path=[%s]", node.FullPath()),
-		}
+		return nil, Http.NewHttpError(fmt.Sprintf("path does not contain Ref attribute. @path=[%s]", node.FullPath()), http.StatusBadRequest)
 	}
 	if node.Next.NextPath == "" {
 		return c.GetNodeRef(node, nodeValue)
@@ -75,7 +72,7 @@ func (c *CmdQueryRef) GetNodeValue(node *Node.PathNode, nodeValue interface{}) (
 	return nodeValue, nil
 }
 
-func (c *CmdQueryRef) GetNodeRef(node *Node.PathNode, nodeValue interface{}) (interface{}, *Error.SchemaPathErr) {
+func (c *CmdQueryRef) GetNodeRef(node *Node.PathNode, nodeValue interface{}) (interface{}, *Http.HttpError) {
 	itemType := node.AttrDef[JsonKey.Type].(string)
 	// Array, map, object and string
 	switch itemType {
@@ -88,15 +85,12 @@ func (c *CmdQueryRef) GetNodeRef(node *Node.PathNode, nodeValue interface{}) (in
 	}
 }
 
-func (c *CmdQueryRef) GetNodeArrayRef(node *Node.PathNode, nodeValue interface{}) (interface{}, *Error.SchemaPathErr) {
+func (c *CmdQueryRef) GetNodeArrayRef(node *Node.PathNode, nodeValue interface{}) (interface{}, *Http.HttpError) {
 	itemType := node.AttrDef[JsonKey.Items].(map[string]interface{})[JsonKey.Type].(string)
 	if node.Idx == PathCmd.ALL {
 		valueList, ok := nodeValue.([]interface{})
 		if !ok {
-			return nil, &Error.SchemaPathErr{
-				Code:    http.StatusInternalServerError,
-				PathErr: fmt.Errorf("invalid node value cannot convert to []interface{}, @path=[%s]", node.FullPath()),
-			}
+			return nil, Http.NewHttpError(fmt.Sprintf("invalid node value cannot convert to []interface{}, @path=[%s]", node.FullPath()), http.StatusInternalServerError)
 		}
 		if itemType == JsonKey.String {
 			return valueList, nil
@@ -105,10 +99,7 @@ func (c *CmdQueryRef) GetNodeArrayRef(node *Node.PathNode, nodeValue interface{}
 		for idx, itemObj := range valueList {
 			itemKey, err := node.Next.Schema.BuildKey(itemObj.(map[string]interface{}))
 			if err != nil {
-				return nil, &Error.SchemaPathErr{
-					Code:    http.StatusInternalServerError,
-					PathErr: fmt.Errorf("failed to get key, %s[%d], @path=[%s]", node.AttrName, idx, node.FullPath()),
-				}
+				return nil, Http.WrapError(err, fmt.Sprintf("failed to get key, %s[%d], @path=[%s]", node.AttrName, idx, node.FullPath()), http.StatusInternalServerError)
 			}
 			result = append(result, itemKey)
 		}
@@ -120,15 +111,12 @@ func (c *CmdQueryRef) GetNodeArrayRef(node *Node.PathNode, nodeValue interface{}
 	return node.Idx, nil
 }
 
-func (c *CmdQueryRef) GetNodeMapRef(node *Node.PathNode, nodeValue interface{}) (interface{}, *Error.SchemaPathErr) {
+func (c *CmdQueryRef) GetNodeMapRef(node *Node.PathNode, nodeValue interface{}) (interface{}, *Http.HttpError) {
 	itemType := node.AttrDef[JsonKey.Items].(map[string]interface{})[JsonKey.Type].(string)
 	if node.Idx == PathCmd.ALL {
 		valueMap, ok := nodeValue.(map[string]interface{})
 		if !ok {
-			return nil, &Error.SchemaPathErr{
-				Code:    http.StatusInternalServerError,
-				PathErr: fmt.Errorf("invalid node value cannot convert to map[string]interface{}, @path=[%s]", node.FullPath()),
-			}
+			return nil, Http.NewHttpError(fmt.Sprintf("invalid node value cannot convert to map[string]interface{}, @path=[%s]", node.FullPath()), http.StatusInternalServerError)
 		}
 		result := make([]string, 0, len(valueMap))
 		for key, keyValue := range valueMap {
@@ -137,10 +125,7 @@ func (c *CmdQueryRef) GetNodeMapRef(node *Node.PathNode, nodeValue interface{}) 
 			} else {
 				itemKey, err := node.Next.Schema.BuildKey(keyValue.(map[string]interface{}))
 				if err != nil {
-					return nil, &Error.SchemaPathErr{
-						Code:    http.StatusInternalServerError,
-						PathErr: fmt.Errorf("failed to get key, %s[%s], @path=[%s]", node.AttrName, key, node.FullPath()),
-					}
+					return nil, Http.WrapError(err, fmt.Sprintf("failed to get key, %s[%s], @path=[%s]", node.AttrName, key, node.FullPath()), http.StatusInternalServerError)
 				}
 				result = append(result, itemKey)
 			}
@@ -152,52 +137,43 @@ func (c *CmdQueryRef) GetNodeMapRef(node *Node.PathNode, nodeValue interface{}) 
 	}
 	itemKey, err := node.Next.Schema.BuildKey(nodeValue.(map[string]interface{}))
 	if err != nil {
-		return nil, &Error.SchemaPathErr{
-			Code:    http.StatusInternalServerError,
-			PathErr: fmt.Errorf("failed to get key, %s[%s], @path=[%s]", node.AttrName, node.Idx, node.FullPath()),
-		}
+		return nil, Http.WrapError(err, fmt.Sprintf("failed to get key, %s[%s], @path=[%s]", node.AttrName, node.Idx, node.FullPath()), http.StatusInternalServerError)
 	}
 	return itemKey, nil
 }
 
-func (c *CmdQueryRef) GetNodeArrayAll(node *Node.PathNode, nodeValue interface{}) (interface{}, *Error.SchemaPathErr) {
+func (c *CmdQueryRef) GetNodeArrayAll(node *Node.PathNode, nodeValue interface{}) (interface{}, *Http.HttpError) {
 	parentValues, ok := nodeValue.([]interface{})
 	if !ok {
-		return nil, &Error.SchemaPathErr{
-			Code:    http.StatusInternalServerError,
-			PathErr: fmt.Errorf("idx=[%s] didn't return array on function[Node.GetNodeValue], @path=[%s]", PathCmd.ALL, node.FullPath()),
-		}
+		return nil, Http.NewHttpError(fmt.Sprintf("idx=[%s] didn't return array on function[Node.GetNodeValue], @path=[%s]", PathCmd.ALL, node.FullPath()), http.StatusInternalServerError)
 	}
 	result := make([]interface{}, 0, len(parentValues))
 	for idx, item := range parentValues {
 		itemValue, err := c.GetNodeValue(node.Next, item)
 		if err != nil {
-			if err.Code == http.StatusNotFound {
+			if err.Status == http.StatusNotFound {
 				continue
 			}
-			return nil, Error.AppendErr(err, fmt.Sprintf("failed to get %s[%d] @path=[%s]", node.AttrName, idx, node.FullPath()))
+			return nil, Http.WrapError(err, fmt.Sprintf("failed to get %s[%d] @path=[%s]", node.AttrName, idx, node.FullPath()), err.Status)
 		}
 		result = append(result, itemValue)
 	}
 	return result, nil
 }
 
-func (c *CmdQueryRef) GetNodeMapAll(node *Node.PathNode, nodeValue interface{}) (interface{}, *Error.SchemaPathErr) {
+func (c *CmdQueryRef) GetNodeMapAll(node *Node.PathNode, nodeValue interface{}) (interface{}, *Http.HttpError) {
 	parentValues, ok := nodeValue.(map[string]interface{})
 	if !ok {
-		return nil, &Error.SchemaPathErr{
-			Code:    http.StatusInternalServerError,
-			PathErr: fmt.Errorf("idx=[%s] didn't return map on function[Node.GetNodeValue], @path=[%s]", PathCmd.ALL, node.FullPath()),
-		}
+		return nil, Http.NewHttpError(fmt.Sprintf("idx=[%s] didn't return map on function[Node.GetNodeValue], @path=[%s]", PathCmd.ALL, node.FullPath()), http.StatusInternalServerError)
 	}
 	result := make([]interface{}, 0, len(parentValues))
 	for key, item := range parentValues {
 		itemValue, err := c.GetNodeValue(node.Next, item)
 		if err != nil {
-			if err.Code == http.StatusNotFound {
+			if err.Status == http.StatusNotFound {
 				continue
 			}
-			return nil, Error.AppendErr(err, fmt.Sprintf("failed to get %s[%s] @path=[%s]", node.AttrName, key, node.FullPath()))
+			return nil, Http.WrapError(err, fmt.Sprintf("failed to get %s[%s] @path=[%s]", node.AttrName, key, node.FullPath()), err.Status)
 		}
 		result = append(result, itemValue)
 	}
