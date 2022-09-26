@@ -12,7 +12,7 @@
     "http": {
         "type": "http",
         "dns": "localhost",
-        "port": "8002",
+        "port": "8001",
         "id": "DataService_01",
         "headers": {}
     },

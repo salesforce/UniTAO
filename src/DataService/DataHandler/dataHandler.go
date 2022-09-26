@@ -39,7 +39,7 @@ import (
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
-	"github.com/salesforce/UniTAO/lib/Util"
+	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
 
 type Handler struct {
@@ -61,12 +61,11 @@ func New(config Config.Confuguration, connectDb func(db DbConfig.DatabaseConfig)
 	return &handler, nil
 }
 
-func (h *Handler) List(dataType string) ([]string, int, error) {
+func (h *Handler) List(dataType string) ([]string, *Http.HttpError) {
 	if dataType != JsonKey.Schema && dataType != "" {
-		_, code, err := h.GetData(JsonKey.Schema, dataType)
+		_, err := h.GetData(JsonKey.Schema, dataType)
 		if err != nil {
-			err = fmt.Errorf("failed to get schema for type=[%s], Err:%s", dataType, err)
-			return nil, code, err
+			return nil, Http.WrapError(err, fmt.Sprintf("object of type “%s” does not exist", dataType), err.Status)
 		}
 	}
 	args := make(map[string]interface{})
@@ -75,9 +74,9 @@ func (h *Handler) List(dataType string) ([]string, int, error) {
 	if args[Record.DataType] == "" {
 		args[Record.DataType] = JsonKey.Schema
 	}
-	recordList, err := h.db.Get(args)
-	if err != nil {
-		return nil, http.StatusInternalServerError, err
+	recordList, e := h.db.Get(args)
+	if e != nil {
+		return nil, Http.NewHttpError(e.Error(), http.StatusInternalServerError)
 	}
 	result := make([]string, 0, len(recordList))
 	for _, record := range recordList {
@@ -86,124 +85,122 @@ func (h *Handler) List(dataType string) ([]string, int, error) {
 			result = append(result, record[Record.DataId].(string))
 		}
 	}
-	return result, http.StatusOK, nil
+	return result, nil
 }
 
-func (h *Handler) Get(dataType string, dataId string) (map[string]interface{}, int, error) {
+func (h *Handler) Get(dataType string, dataId string) (map[string]interface{}, *Http.HttpError) {
 	if dataType == JsonKey.Schema {
 		return h.GetData(JsonKey.Schema, dataId)
 	}
-	_, code, err := h.GetData(JsonKey.Schema, dataType)
+	_, err := h.GetData(JsonKey.Schema, dataType)
 	if err != nil {
-		err = fmt.Errorf("failed to get schema for type=[%s], Err:%s", dataType, err)
-		return nil, code, err
+		return nil, Http.WrapError(err, fmt.Sprintf("object of type “%s” does not exist", dataType), err.Status)
 	}
 	return h.GetData(dataType, dataId)
 }
 
-func (h *Handler) GetData(dataType string, dataId string) (map[string]interface{}, int, error) {
+func (h *Handler) GetData(dataType string, dataId string) (map[string]interface{}, *Http.HttpError) {
 	args := make(map[string]interface{})
 	args[DbIface.Table] = h.config.DataTable.Data
 	args[Record.DataType] = dataType
 	args[Record.DataId] = dataId
 	recordList, err := h.db.Get(args)
 	if err != nil {
-		return nil, http.StatusInternalServerError, err
+		return nil, Http.NewHttpError(err.Error(), http.StatusInternalServerError)
 	}
 	if len(recordList) == 0 {
-		return nil, http.StatusNotFound, fmt.Errorf("failed to find [{type}/{id}]=[%s/%s]", dataType, dataId)
+		return nil, Http.NewHttpError(fmt.Sprintf("object of type '%s' with id '%s' not found", dataType, dataId), http.StatusNotFound)
 	}
-	return recordList[0], http.StatusOK, nil
+	return recordList[0], nil
 }
 
-func (h *Handler) Lock(dataType string, dataId string) (int, error) {
+func (h *Handler) Lock(dataType string, dataId string) *Http.HttpError {
 	if dataType == JsonKey.Schema {
-		return http.StatusAccepted, nil
+		return nil
 	}
-	_, code, err := h.GetData(JsonKey.Schema, dataType)
+	_, err := h.GetData(JsonKey.Schema, dataType)
 	if err != nil {
-		err = fmt.Errorf("failed to get schema for data type=[%s], Err:%s", dataType, err)
-		return code, err
+		return Http.WrapError(err, fmt.Sprintf("object of type “%s” does not exist", dataType), err.Status)
 	}
-	return http.StatusAccepted, err
+	return nil
 }
 
-func (h *Handler) localSchema(dataType string) (*Schema.SchemaOps, int, error) {
+func (h *Handler) localSchema(dataType string) (*Schema.SchemaOps, *Http.HttpError) {
 	schema, ok := h.schemaMap[dataType]
 	if ok {
-		return schema, http.StatusOK, nil
+		return schema, nil
 	}
-	data, code, err := h.GetData(JsonKey.Schema, dataType)
+	data, err := h.GetData(JsonKey.Schema, dataType)
 	if err != nil {
-		err = fmt.Errorf("failed to get schema for type=[%s], Err:%s", dataType, err)
-		return nil, code, err
+		return nil, Http.WrapError(err, fmt.Sprintf("object of type “%s” does not exist", dataType), err.Status)
 	}
-	record, err := Record.LoadMap(data)
-	if err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("failed to load schema record. [type]=[%s], Error:%s", dataType, err)
+	record, e := Record.LoadMap(data)
+	if e != nil {
+		return nil, Http.WrapError(e, fmt.Sprintf("failed to load schema record. [type]=[%s]", dataType), http.StatusInternalServerError)
 	}
-	schema, err = Schema.LoadSchemaOpsRecord(record)
-	if err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("failed to load Schema Record, [%s]=[%s], Err:\n%s", Record.DataType, dataType, err)
+	schema, e = Schema.LoadSchemaOpsRecord(record)
+	if e != nil {
+		return nil, Http.WrapError(e, fmt.Sprintf("failed to load Schema Record, [%s]=[%s]", Record.DataType, dataType), http.StatusInternalServerError)
 	}
 	h.schemaMap[dataType] = schema
-	return schema, http.StatusOK, nil
+	return schema, nil
 }
 
-func (h *Handler) inventoryData(dataType string, value string) (map[string]interface{}, int, error) {
+func (h *Handler) inventoryData(dataType string, value string) (map[string]interface{}, *Http.HttpError) {
 	if h.config.Inv.Url == "" {
-		return nil, http.StatusInternalServerError, fmt.Errorf("missing inventory URL in configuration [inventory/url]. at Data Service=[%s]", h.config.Http.Id)
+		return nil, Http.NewHttpError(fmt.Sprintf("missing inventory URL in configuration [inventory/url]. at Data Service=[%s]", h.config.Http.Id), http.StatusInternalServerError)
 	}
-	dataUrl, err := Util.URLPathJoin(h.config.Inv.Url, dataType, value)
+	dataUrl, err := Http.URLPathJoin(h.config.Inv.Url, dataType, value)
 	if err != nil {
-		return nil, http.StatusBadRequest, fmt.Errorf("failed to build ref data url. [url/type/id]=[%s/%s/%s]", h.config.Inv.Url, dataType, value)
+		return nil, Http.NewHttpError(fmt.Sprintf("failed to build ref data url. [url/type/id]=[%s/%s/%s]", h.config.Inv.Url, dataType, value), http.StatusBadRequest)
 	}
-	data, code, err := Util.GetRestData(*dataUrl)
+	data, code, err := Http.GetRestData(*dataUrl)
 	if err == nil {
 		mapData, ok := data.(map[string]interface{})
 		if !ok {
-			return nil, http.StatusBadRequest, fmt.Errorf("return data is not an object. [url]=[%s]", *dataUrl)
+			return nil, Http.NewHttpError(fmt.Sprintf("return data is not an object. [url]=[%s]", *dataUrl), http.StatusBadRequest)
 		}
-		return mapData, code, err
+		return mapData, nil
 	}
-	return nil, code, err
+	return nil, Http.NewHttpError(err.Error(), code)
 }
 
-func (h *Handler) Validate(record *Record.Record) (int, error) {
+func (h *Handler) Validate(record *Record.Record) *Http.HttpError {
 	if record.Type == Record.KeyRecord {
-		return http.StatusBadRequest, fmt.Errorf("should not validate schema of %s", Record.KeyRecord)
+		return Http.NewHttpError(fmt.Sprintf("should not validate schema of %s", Record.KeyRecord), http.StatusBadRequest)
 	}
-	schema, code, err := h.localSchema(record.Type)
+	schema, err := h.localSchema(record.Type)
 	if err != nil {
-		return code, err
+		return err
 	}
-	err = schema.ValidateRecord(record)
-	if err != nil {
-		return http.StatusBadRequest, fmt.Errorf("failed to validate payload against schema for type %s, Err: \n%s", record.Type, err)
+	e := schema.ValidateRecord(record)
+	if e != nil {
+		return Http.WrapError(e, fmt.Sprintf("failed to validate payload against schema for type %s", record.Type), http.StatusBadRequest)
 	}
 	if record.Type != JsonKey.Schema {
-		code, err = h.ValidateDataRefs(schema.Schema, record.Data, path.Join(record.Type, record.Id))
+		err = h.ValidateDataRefs(schema.Schema, record.Data, path.Join(record.Type, record.Id))
 		if err != nil {
-			return code, err
+			return err
 		}
 	}
-	return code, nil
+	return nil
 }
 
-func (h *Handler) ValidateDataRefs(doc *SchemaDoc.SchemaDoc, data interface{}, dataPath string) (int, error) {
+func (h *Handler) ValidateDataRefs(doc *SchemaDoc.SchemaDoc, data interface{}, dataPath string) *Http.HttpError {
 	dataMap, ok := data.(map[string]interface{})
 	if !ok {
-		return http.StatusBadRequest, fmt.Errorf("failed to convert data to map")
+		return Http.NewHttpError("failed to convert data to map", http.StatusBadRequest)
 	}
-	code, err := h.validateCmtRefs(doc, dataMap, dataPath)
+	err := h.validateCmtRefs(doc, dataMap, dataPath)
 	if err != nil {
-		return code, err
+		return err
 	}
 	return h.validateSubDoc(doc, dataMap, dataPath)
 }
 
 // Validate Content Media Type Reference Values
-func (h *Handler) validateCmtRefs(doc *SchemaDoc.SchemaDoc, data map[string]interface{}, dataPath string) (int, error) {
+func (h *Handler) validateCmtRefs(doc *SchemaDoc.SchemaDoc, data map[string]interface{}, dataPath string) *Http.HttpError {
+	errList := []*Http.HttpError{}
 	for _, ref := range doc.CmtRefs {
 		value, ok := data[ref.Name]
 		if !ok {
@@ -214,54 +211,77 @@ func (h *Handler) validateCmtRefs(doc *SchemaDoc.SchemaDoc, data map[string]inte
 		case reflect.String:
 			hasRef, err := h.validateCmtRefValue(ref, value.(string))
 			if err != nil {
-				return http.StatusBadRequest, fmt.Errorf("failed to validate value with [type]=[%s], [path]=[%s], Err:%s", ref.ContentType, refPath, err)
+				return err
+				errList = append(errList,
+					Http.WrapError(err, fmt.Sprintf("broken reference @[%s], '%s:%s' value validate failed.", refPath, ref.ContentType, value),
+						http.StatusBadRequest))
+				continue
 			}
 			if !hasRef {
-				return http.StatusBadRequest, fmt.Errorf("ref does not exists,[type]=[%s], [path]=[%s], [ref]=[%s]", ref.ContentType, refPath, value)
+				errList = append(errList, Http.NewHttpError(
+					fmt.Sprintf("broken reference @[%s], '%s:%s' does not exists", refPath, ref.ContentType, value),
+					http.StatusBadRequest))
 			}
 		case reflect.Slice:
 			for idx, item := range value.([]interface{}) {
 				idxPath := fmt.Sprintf("%s[%d]", refPath, idx)
 				hasRef, err := h.validateCmtRefValue(ref, item.(string))
 				if err != nil {
-					return http.StatusBadRequest, fmt.Errorf("failed to validate value with [type]=[%s], [path]=[%s], Err:%s", ref.ContentType, idxPath, err)
+					errList = append(errList,
+						Http.WrapError(err, fmt.Sprintf("broken reference @[%s], '%s:%s' value validate failed.", idxPath, ref.ContentType, item),
+							http.StatusBadRequest))
+					continue
 				}
 				if !hasRef {
-					return http.StatusBadRequest, fmt.Errorf("ref does not exists,[type]=[%s], [path]=[%s], [ref]=[%s]", ref.ContentType, idxPath, item.(string))
+					errList = append(errList, Http.NewHttpError(
+						fmt.Sprintf("broken reference @[%s], '%s:%s' does not exist.", idxPath, ref.ContentType, item),
+						http.StatusBadRequest))
 				}
 			}
 		default:
-			return http.StatusBadRequest, fmt.Errorf("failed to validate, ref only support on string or array, [path]=[%s]", refPath)
+			errList = append(errList, Http.NewHttpError(
+				fmt.Sprintf("broken reference @[%s], 'dataType=[%s]' are not supported. only support string or array", refPath, reflect.TypeOf(value).Kind()),
+				http.StatusBadRequest))
 		}
 	}
-	return http.StatusAccepted, nil
+	if len(errList) > 0 {
+		if len(errList) > 1 {
+			err := Http.NewHttpError("broken references:", http.StatusBadRequest)
+			for _, itemErr := range errList {
+				Http.AppendError(err, itemErr)
+			}
+			return err
+		}
+		return errList[0]
+	}
+	return nil
 }
 
-func (h *Handler) validateCmtRefValue(ref *SchemaDoc.CMTDocRef, value string) (bool, error) {
+func (h *Handler) validateCmtRefValue(ref *SchemaDoc.CMTDocRef, value string) (bool, *Http.HttpError) {
 	if ref.CmtType != Schema.Inventory {
 		// ContentMediaType not start with inventory, we don't understand
 		return true, nil
 	}
 	if ref.ContentType == JsonKey.Schema {
-		return false, fmt.Errorf("should not refer to schema of schema as data type")
+		return false, Http.NewHttpError("should not refer to schema of schema as data type", http.StatusBadRequest)
 	}
-	_, code, err := h.localSchema(ref.ContentType)
-	if err != nil && code != http.StatusNotFound {
-		return false, err
-	}
-	if code == http.StatusNotFound {
-		_, code, err := h.inventoryData(ref.ContentType, value)
-		if err != nil && code != http.StatusNotFound {
-			return false, fmt.Errorf("failed to query data from inventory, [type/id]=[%s/%s]", ref.ContentType, value)
+	_, err := h.localSchema(ref.ContentType)
+	if err != nil {
+		if err.Status != http.StatusNotFound {
+			return false, err
 		}
-		if code == http.StatusNotFound {
+		_, err := h.inventoryData(ref.ContentType, value)
+		if err != nil {
+			if err.Status != http.StatusNotFound {
+				return false, err
+			}
 			return false, nil
 		}
 		return true, nil
 	}
-	_, code, err = h.GetData(ref.ContentType, value)
+	_, err = h.GetData(ref.ContentType, value)
 	if err != nil {
-		if code == http.StatusNotFound {
+		if err.Status == http.StatusNotFound {
 			return false, nil
 		}
 		return false, err
@@ -269,7 +289,7 @@ func (h *Handler) validateCmtRefValue(ref *SchemaDoc.CMTDocRef, value string) (b
 	return true, nil
 }
 
-func (h *Handler) validateSubDoc(doc *SchemaDoc.SchemaDoc, data map[string]interface{}, dataPath string) (int, error) {
+func (h *Handler) validateSubDoc(doc *SchemaDoc.SchemaDoc, data map[string]interface{}, dataPath string) *Http.HttpError {
 	for pname, pDoc := range doc.SubDocs {
 		subPath := path.Join(dataPath, pname)
 		subData, ok := data[pname]
@@ -280,80 +300,80 @@ func (h *Handler) validateSubDoc(doc *SchemaDoc.SchemaDoc, data map[string]inter
 		switch reflect.TypeOf(subData).Kind() {
 		case reflect.Map:
 			// Object, validate directly
-			code, err := h.ValidateDataRefs(pDoc, subData, subPath)
+			err := h.ValidateDataRefs(pDoc, subData, subPath)
 			if err != nil {
-				return code, err
+				return err
 			}
 		case reflect.Slice:
 			// check each item value of array
 			for idx, idxData := range subData.([]interface{}) {
 				idxPath := fmt.Sprintf("%s[%d]", subPath, idx)
-				code, err := h.ValidateDataRefs(pDoc, idxData, idxPath)
+				err := h.ValidateDataRefs(pDoc, idxData, idxPath)
 				if err != nil {
-					return code, err
+					return err
 				}
 			}
 		default:
 			// data value does not match schema
-			return http.StatusBadRequest, fmt.Errorf("data is not [%s or %s] @[path]=[%s]", reflect.Map, reflect.Slice, subPath)
+			return Http.NewHttpError(fmt.Sprintf("data is not [%s or %s] @[path]=[%s]", reflect.Map, reflect.Slice, subPath), http.StatusBadRequest)
 		}
 		// itemized data type passed
-		return http.StatusAccepted, nil
+		return nil
 	}
 
-	return http.StatusAccepted, nil
+	return nil
 }
 
-func (h *Handler) Add(record *Record.Record) (int, error) {
-	code, err := h.Validate(record)
+func (h *Handler) Add(record *Record.Record) *Http.HttpError {
+	err := h.Validate(record)
 	if err != nil {
-		return code, err
+		return err
 	}
-	code, err = h.Lock(record.Type, record.Id)
+	err = h.Lock(record.Type, record.Id)
 	if err != nil {
-		return code, err
+		return err
 	}
-	_, code, err = h.GetData(record.Type, record.Id)
+	_, err = h.GetData(record.Type, record.Id)
 	if err == nil {
-		return http.StatusConflict, fmt.Errorf("data [type/id]=[%s/%s] already exists", record.Type, record.Id)
+		return Http.NewHttpError(fmt.Sprintf("data [type/id]=[%s/%s] already exists", record.Type, record.Id), http.StatusConflict)
 	}
-	if code != http.StatusNotFound {
-		return code, fmt.Errorf("failed to check exists for add [type/id]=[%s/%s], Err:%s", record.Type, record.Id, err)
+	if err.Status != http.StatusNotFound {
+		return Http.WrapError(err, fmt.Sprintf("failed to check exists for add [type/id]=[%s/%s]", record.Type, record.Id), err.Status)
 	}
-	err = h.db.Create(h.config.DataTable.Data, record.Map())
-	if err != nil {
-		return http.StatusInternalServerError, fmt.Errorf("failed to create record [{type}/{id}]=[%s]/%s, Err:%s", record.Type, record.Id, err)
+	e := h.db.Create(h.config.DataTable.Data, record.Map())
+	if e != nil {
+		return Http.WrapError(e, fmt.Sprintf("failed to create record [{type}/{id}]=[%s]/%s", record.Type, record.Id), http.StatusInternalServerError)
 	}
-	return http.StatusAccepted, nil
+	return nil
 }
 
-func (h *Handler) Set(record *Record.Record) (int, error) {
-	code, err := h.Validate(record)
+func (h *Handler) Set(record *Record.Record) *Http.HttpError {
+	err := h.Validate(record)
 	if err != nil {
-		return code, err
+		return err
 	}
-	code, err = h.Lock(record.Type, record.Id)
+	err = h.Lock(record.Type, record.Id)
 	if err != nil {
-		return code, err
+		return err
 	}
-	err = h.db.Create(h.config.DataTable.Data, record.Map())
-	if err != nil {
-		return http.StatusInternalServerError, fmt.Errorf("failed to create record [{type}/{id}]=[%s]/%s, Err:%s", record.Type, record.Id, err)
+	e := h.db.Create(h.config.DataTable.Data, record.Map())
+	if e != nil {
+		return Http.NewHttpError(e.Error(), http.StatusInternalServerError)
 	}
-	return http.StatusAccepted, nil
+	return nil
 }
 
-func (h *Handler) Delete(dataType string, dataId string) (int, error) {
-	code, err := h.Lock(dataType, dataId)
+func (h *Handler) Delete(dataType string, dataId string) *Http.HttpError {
+	err := h.Lock(dataType, dataId)
 	if err != nil {
-		return code, err
+		return err
 	}
 	keys := make(map[string]interface{})
 	keys[Record.DataType] = dataType
 	keys[Record.DataId] = dataId
-	err = h.db.Delete(h.config.DataTable.Data, keys)
-	if err != nil {
-		return http.StatusInternalServerError, fmt.Errorf("failed to delete record [type/id]=[%s/%s], Err:%s", dataType, dataId, err)
+	e := h.db.Delete(h.config.DataTable.Data, keys)
+	if e != nil {
+		return Http.WrapError(e, fmt.Sprintf("failed to delete record [type/id]=[%s/%s]", dataType, dataId), http.StatusInternalServerError)
 	}
-	return http.StatusAccepted, nil
+	return nil
 }

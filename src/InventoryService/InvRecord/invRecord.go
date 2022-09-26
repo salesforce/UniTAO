@@ -29,22 +29,31 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/salesforce/UniTAO/lib/Schema"
+	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Util"
+	"github.com/salesforce/UniTAO/lib/Util/Http"
+)
+
+const (
+	LatestVer = "0.0.1"
 )
 
 type DataServiceInfo struct {
-	Id           string   `json:"__id"`
+	Id           string   `json:"dsId"`
 	URL          []string `json:"url"`
 	LastSyncTime string   `json:"lastSynctime"`
 	goodUrl      string
 }
 
-func NewDsInfo(id string, url string) *DataServiceInfo {
+func NewDsInfo(id string, url string) *Record.Record {
 	dsInfo := DataServiceInfo{
 		Id:  id,
 		URL: []string{url},
 	}
-	return &dsInfo
+	dsMap, _ := Util.StructToMap(dsInfo)
+	record := Record.NewRecord(Schema.Inventory, LatestVer, id, dsMap)
+	return record
 }
 
 func CreateDsInfo(payload interface{}) (*DataServiceInfo, error) {
@@ -60,26 +69,11 @@ func CreateDsInfo(payload interface{}) (*DataServiceInfo, error) {
 	return &dsInfo, nil
 }
 
-func (ds *DataServiceInfo) ToIface() (interface{}, error) {
-	ds_marshalled, err := json.Marshal(ds)
-	if err != nil {
-		err = fmt.Errorf("failed to marshal DataServiceInfo to bytes, Error:%s", err)
-		return nil, err
-	}
-	var payload interface{}
-	err = json.Unmarshal(ds_marshalled, &payload)
-	if err != nil {
-		err = fmt.Errorf("failed to unmarshal bytes to interface{}, Error:%s", err)
-		return nil, err
-	}
-	return payload, nil
-}
-
 func (ds *DataServiceInfo) GetUrl() (string, error) {
-	if ds.goodUrl == "" || !Util.SiteReachable(ds.goodUrl) {
+	if ds.goodUrl == "" || !Http.SiteReachable(ds.goodUrl) {
 		ds.goodUrl = ""
 		for _, url := range ds.URL {
-			if Util.SiteReachable(url) {
+			if Http.SiteReachable(url) {
 				ds.goodUrl = url
 			}
 		}
