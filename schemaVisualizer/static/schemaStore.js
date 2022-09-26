@@ -10,7 +10,7 @@ class schemaStore {
      
         if (configs.serverURL) {
             if (! (idList)) {
-                idList = await this.getRest("schema", null);
+                idList = await this.getRest(this.buildUrl("schema",null));
             }   
             this.lock = new promiseLock();
             this.fetchSchema(idList);
@@ -34,8 +34,8 @@ class schemaStore {
                 continue;
             console.log("missing schema: "+id);    
             this.lock.start(1);
-            this.getRest(this.buildUrl("_schema",id)).then((resolve, reject) => {  
-                this.schemaList[id] = resolve;
+            this.getRest(this.buildUrl("schema",id)).then((resolve, reject) => {
+                this.schemaList[id] = resolve.data;
                 this.callback(this.schemaList[id], id);
                 this.lock.complete();
             })

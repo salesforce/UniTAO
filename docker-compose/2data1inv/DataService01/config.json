@@ -13,7 +13,8 @@
         "type": "http",
         "dns": "localhost",
         "port": "80",
-        "id": "DataService_01"
+        "id": "DataService_01",
+        "headers": {}
     },
     "inventory": {
         "url": "http://unitao-inv-service"

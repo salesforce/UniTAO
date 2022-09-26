@@ -26,25 +26,21 @@ This copyright notice and license applies to all files in this directory or sub-
 package Util
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
-	"net/url"
 	"os"
-	"path"
 	"reflect"
 	"strings"
-	"time"
 )
 
 type HttpConfig struct {
-	HttpType string `json:"type"`
-	DnsName  string `json:"dns"`
-	Port     string `json:"port"`
-	Id       string `json:"id"`
+	HttpType  string                 `json:"type"`
+	DnsName   string                 `json:"dns"`
+	Port      string                 `json:"port"`
+	Id        string                 `json:"id"`
+	HeaderCfg map[string]interface{} `json:"headers"`
 }
 
 func ParsePath(path string) (string, string) {
@@ -76,19 +72,6 @@ func ParseArrayPath(path string) (string, string, error) {
 		return "", "", fmt.Errorf("invalid array path=[%s], key empty", path)
 	}
 	return attrName, key, nil
-}
-
-func ResponseJson(w http.ResponseWriter, data interface{}, status int) {
-	jsonData, err := json.MarshalIndent(data, "", "    ")
-	if err != nil {
-		log.Fatal(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.WriteHeader(status)
-	w.Write(jsonData)
 }
 
 func LoadJsonFile(filePath string) (interface{}, error) {
@@ -140,51 +123,6 @@ func LoadJSONPayload(r *http.Request, payload map[string]interface{}) (int, erro
 	return 0, nil
 }
 
-func GetRestData(url string) (interface{}, int, error) {
-	response, err := http.Get(url)
-	if err != nil {
-		return nil, http.StatusBadRequest, fmt.Errorf("failed to get response, [url]=[%s], Err:%s", url, err)
-	}
-	responseData, err := ioutil.ReadAll(response.Body)
-	if response.StatusCode >= 200 && response.StatusCode <= 299 {
-		if err != nil {
-			return nil, http.StatusInternalServerError, fmt.Errorf("failed to read data from response.Body. [url]=[%s], Err:%s", url, err)
-		}
-		var payload interface{}
-		err = json.Unmarshal(responseData, &payload)
-		if err != nil {
-			return nil, http.StatusInternalServerError, fmt.Errorf("failed to parse response.[url]=[%s], Err:%s", url, err)
-		}
-		return payload, response.StatusCode, nil
-	}
-	return nil, response.StatusCode, fmt.Errorf("invalid response from url=[%s], Err:%s", url, string(responseData))
-}
-
-func PostRestData(dataUrl string, payload interface{}) (int, error) {
-	json_data, err := json.Marshal(payload)
-	if err != nil {
-		return http.StatusBadRequest, fmt.Errorf("failed to marshal payload. Error: %s", err)
-	}
-	resp, err := http.Post(dataUrl, "application/json", bytes.NewBuffer(json_data))
-	if err != nil {
-		return resp.StatusCode, fmt.Errorf("failed to post data to [url]=[%s], Error:%s", dataUrl, err)
-	}
-	return http.StatusAccepted, nil
-}
-
-func SiteReachable(url string) bool {
-	timeout := 1 * time.Second
-	client := http.Client{
-		Timeout: timeout,
-	}
-	_, err := client.Get(url)
-	if err != nil {
-		log.Println("Site unreachable, error: ", err)
-		return false
-	}
-	return true
-}
-
 func SearchStrList(searchAry []string, value string) bool {
 	for _, item := range searchAry {
 		if item == value {
@@ -215,19 +153,6 @@ func DeDupeList(itemList []interface{}) ([]interface{}, error) {
 		}
 	}
 	return result, nil
-}
-
-func URLPathJoin(sUrl string, sPath ...string) (*string, error) {
-	u, err := url.Parse(sUrl)
-	if err != nil {
-		return nil, err
-	}
-	pathList := []string{u.Path}
-	pathList = append(pathList, sPath...)
-	u.Path = path.Join(pathList...)
-	jUrl := u.String()
-	return &jUrl, nil
-
 }
 
 func DirExists(dirPath string) bool {
@@ -274,4 +199,12 @@ func ObjCopy(src interface{}, target interface{}) error {
 		return fmt.Errorf("Util.JsonCopy failed to UnMarshal data, Error: %s", err)
 	}
 	return nil
+}
+
+func PrefixStrLst(strList []string, prefix string) []string {
+	newList := make([]string, 0, len(strList))
+	for _, line := range strList {
+		newList = append(newList, fmt.Sprintf("%s%s", prefix, line))
+	}
+	return newList
 }

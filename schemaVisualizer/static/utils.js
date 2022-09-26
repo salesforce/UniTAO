@@ -36,3 +36,14 @@ class promiseLock {
         return this.outsideResolve;
     }
 }
+
+class utils {
+
+    static isEmpty(object) {
+        for (const property in object) {
+          return false;
+        }
+        return true;
+      }
+}
+

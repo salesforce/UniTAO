@@ -23,45 +23,61 @@ This copyright notice and license applies to all files in this directory or sub-
 ************************************************************************************************************
 */
 
-package PathCmd
+package HttpErrorTest
 
 import (
 	"fmt"
 	"net/http"
-	"strings"
+	"testing"
 
 	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
 
-func Parse(path string) (string, string, *Http.HttpError) {
-	if strings.HasSuffix(path, CmdFlatPath) {
-		qPath := path[:len(path)-len(CmdFlatPath)]
-		return qPath, CmdRef, nil
+func TestIsHttpError(t *testing.T) {
+	err := fmt.Errorf("test")
+	if Http.IsHttpError(err) {
+		t.Fatalf("should not be a HttpError")
 	}
-	qIdx := strings.Index(path, CmdPrefix)
-	if qIdx < 0 {
-		return path, CmdValue, nil
+	httpErr := Http.NewHttpError("test", http.StatusBadRequest)
+	if !Http.IsHttpError(httpErr) {
+		t.Fatalf("fail to detect HttpError")
 	}
-	qPath := path[:qIdx]
-	qCmd := path[qIdx:]
-	dupIdx := strings.Index(qCmd[1:], CmdPrefix)
-	if dupIdx > -1 {
-		return "", "", Http.NewHttpError(fmt.Sprintf("invalid format of PathCmd, more than 1 ? in path. path=[%s]", path), http.StatusBadRequest)
-
-	}
-	err := Validate(qCmd)
-	if err != nil {
-		return "", "", Http.NewHttpError(fmt.Sprintf("path command validate failed. Error: %s, @path=[%s]", err, path), http.StatusBadRequest)
-
-	}
-	return qPath, qCmd, nil
 }
 
-func Validate(cmd string) *Http.HttpError {
-	for _, c := range []string{CmdRef, CmdFlat, CmdSchema, CmdValue, CmdIter} {
-		if c == cmd {
-			return nil
-		}
+func TestNewHttpErr(t *testing.T) {
+	msg := `123
+	234`
+	err := Http.NewHttpError(msg, http.StatusOK)
+	if err.Status != http.StatusOK {
+		t.Fatalf("created the wrong err. status=[%d], expect [%d]", err.Status, http.StatusOK)
 	}
-	return Http.NewHttpError(fmt.Sprintf("unknown path cmd=[%s]", cmd), http.StatusBadRequest)
+	if len(err.Message) != 2 {
+		t.Fatalf("invalid split err msg. line number [%d] expect [2]", len(err.Message))
+	}
+}
+
+func TestAppendErr(t *testing.T) {
+	err01 := Http.NewHttpError("test", http.StatusOK)
+	err02 := Http.NewHttpError("testTab", http.StatusOK)
+	Http.AppendError(err01, err02)
+	if len(err01.Message) != 2 {
+		t.Fatalf("failed to append message to 2")
+	}
+	if len(err01.Context) != 1 {
+		t.Fatalf("failed to append err02 into Context")
+	}
+}
+
+func TestWrapErr(t *testing.T) {
+	err01 := fmt.Errorf("test01")
+	err := Http.WrapError(err01, "wrapTest", http.StatusBadRequest)
+	if len(err.Message) != 1 {
+		t.Fatalf("failed to wrap message as 2 line")
+	}
+	if err.Message[0] != "wrapTest" {
+		t.Fatalf("failed to add new title message")
+	}
+	if len(err.Context) != 1 {
+		t.Fatalf("failed to include the sub err in context")
+	}
 }

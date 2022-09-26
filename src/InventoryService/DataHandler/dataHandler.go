@@ -42,12 +42,8 @@ import (
 	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
 	"github.com/salesforce/UniTAO/lib/SchemaPath"
 	SchemaPathData "github.com/salesforce/UniTAO/lib/SchemaPath/Data"
-	"github.com/salesforce/UniTAO/lib/SchemaPath/Error"
 	"github.com/salesforce/UniTAO/lib/Util"
-)
-
-const (
-	Referral = "referral"
+	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
 
 type Handler struct {
@@ -75,7 +71,7 @@ func (h *Handler) init() error {
 	if err != nil {
 		return err
 	}
-	for _, name := range []string{JsonKey.Schema, Schema.Inventory, Referral} {
+	for _, name := range []string{JsonKey.Schema, Schema.Inventory, RefRecord.Referral} {
 		tblExists := false
 		for _, tbl := range tbList {
 			if *tbl == name {
@@ -94,151 +90,123 @@ func (h *Handler) init() error {
 	return nil
 }
 
-func (h *Handler) List(dataType string) ([]string, int, error) {
-	if Util.SearchStrList([]string{JsonKey.Schema, Schema.Inventory, Referral}, dataType) {
-		result, code, err := h.ListData(dataType)
+func (h *Handler) List(dataType string) ([]string, *Http.HttpError) {
+	if Util.SearchStrList([]string{JsonKey.Schema, Schema.Inventory, RefRecord.Referral}, dataType) {
+		result, err := h.ListData(dataType)
 		if err != nil {
-			return nil, code, err
+			return nil, err
 		}
 		dsList := make([]string, 0, len(result))
 		dataKey := Record.DataId
-		if dataType == Referral {
-			dataKey = Record.DataType
-		}
 		for _, data := range result {
 			dsList = append(dsList, data[dataKey].(string))
 		}
-		return dsList, http.StatusOK, nil
+		return dsList, nil
 	}
-	_, code, err := h.GetData(JsonKey.Schema, dataType)
+	_, err := h.GetData(JsonKey.Schema, dataType)
 	if err != nil {
-		return nil, code, err
+		return nil, err
 	}
-	dsInfo, code, err := h.GetDataServiceInfo(dataType)
+	referral, err := h.GetReferral(dataType)
 	if err != nil {
-		return nil, code, err
+		return nil, err
 	}
-	dsUrl, err := dsInfo.GetUrl()
-	if err != nil {
-		return nil, http.StatusInternalServerError, err
+	dsUrl, e := referral.DsInfo.GetUrl()
+	if e != nil {
+		return nil, Http.NewHttpError(e.Error(), http.StatusInternalServerError)
 	}
-	urlPath, err := Util.URLPathJoin(dsUrl, dataType)
-	if err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("failed to parse url from data service [%s]=[%s], url=[%s], Error:%s", Record.DataId, dsInfo.Id, dsInfo.URL, err)
+	urlPath, e := Http.URLPathJoin(dsUrl, dataType)
+	if e != nil {
+		return nil, Http.WrapError(e, fmt.Sprintf("failed to parse url from data service [%s]=[%s], url=[%s]", Record.DataId, referral.DsInfo.Id, dsUrl), http.StatusInternalServerError)
 	}
-	dataList, code, err := Util.GetRestData(*urlPath)
-	if err != nil {
-		return nil, code, fmt.Errorf("failed to get data from REST URL=[%s], Code=[%d], Err:%s", *urlPath, code, err)
+	dataList, code, e := Http.GetRestData(*urlPath)
+	if e != nil {
+		return nil, Http.WrapError(e, fmt.Sprintf("failed to get data from REST URL=[%s]", *urlPath), code)
+
 	}
 	idList := []string{}
 	for _, id := range dataList.([]interface{}) {
 		idList = append(idList, id.(string))
 	}
-	return idList, http.StatusOK, nil
+	return idList, nil
 }
 
-func (h *Handler) Get(dataType string, dataPath string) (interface{}, int, error) {
+func (h *Handler) Get(dataType string, dataPath string) (interface{}, *Http.HttpError) {
 	// if we get to this function, it means dataPath is not empty string already
 	idPath, nextPath := Util.ParsePath(dataPath)
 	if dataType == JsonKey.Schema {
 		if nextPath != "" {
-			return nil, http.StatusBadRequest, fmt.Errorf("path=[%s] not supported on type=[%s]", dataPath, dataType)
+			return nil, Http.NewHttpError(fmt.Sprintf("path=[%s] not supported on type=[%s]", dataPath, dataType), http.StatusBadRequest)
+
 		}
 		return h.GetData(JsonKey.Schema, idPath)
 	}
 	if dataType == Schema.Inventory {
 		if nextPath != "" {
-			return nil, http.StatusBadRequest, fmt.Errorf("path=[%s] not supported on type=[%s]", dataPath, dataType)
+			return nil, Http.NewHttpError(fmt.Sprintf("path=[%s] not supported on type=[%s]", dataPath, dataType), http.StatusBadRequest)
 		}
 		// retrieve data service record from Inventory
-		dsInfo, code, err := h.GetDsInfo(idPath)
+		dsRecord, err := h.GetDsRecord(idPath)
 		if err != nil {
-			return nil, code, err
+			return nil, err
 		}
-		return dsInfo, http.StatusOK, nil
+		return dsRecord, nil
 	}
-	if dataType == Referral {
+	if dataType == RefRecord.Referral {
 		if nextPath != "" {
-			return nil, http.StatusBadRequest, fmt.Errorf("path=[%s] not supported on type=[%s]", dataPath, dataType)
+			return nil, Http.NewHttpError(fmt.Sprintf("path=[%s] not supported on type=[%s]", dataPath, dataType), http.StatusBadRequest)
 		}
-		referral, code, err := h.GetReferral(idPath)
+		referral, err := h.GetReferral(idPath)
 		if err != nil {
-			return nil, code, err
+			return nil, err
 		}
-		dsInfo, code, err := h.GetDsInfo(referral.DsId)
-		if err != nil {
-			return nil, code, err
-		}
-		err = referral.SetDsInfo(dsInfo)
-		if err != nil {
-			return nil, http.StatusInternalServerError, err
-		}
-		code, err = referral.GetSchema()
-		if err != nil {
-			return nil, code, err
-		}
-		return referral, http.StatusOK, nil
+		return referral.GetRecord(), nil
 	}
 	return h.GetDataByPath(dataType, idPath, nextPath)
 }
 
-func (h *Handler) ListData(dataType string) ([]map[string]interface{}, int, error) {
-	if !Util.SearchStrList([]string{JsonKey.Schema, Schema.Inventory, Referral}, dataType) {
-		return nil, http.StatusBadRequest, fmt.Errorf("[type]=[%s] is not supported", dataType)
+func (h *Handler) ListData(dataType string) ([]map[string]interface{}, *Http.HttpError) {
+	if !Util.SearchStrList([]string{JsonKey.Schema, Schema.Inventory, RefRecord.Referral}, dataType) {
+		return nil, Http.NewHttpError(fmt.Sprintf("[type]=[%s] is not supported", dataType), http.StatusBadRequest)
 	}
 	args := make(map[string]interface{})
 	args[DbIface.Table] = dataType
 	result, err := h.Db.Get(args)
 	if err != nil {
-		return nil, http.StatusInternalServerError, err
+		return nil, Http.NewHttpError(err.Error(), http.StatusInternalServerError)
 	}
-	return result, http.StatusOK, nil
+	return result, nil
 }
 
-func (h *Handler) GetSchema(dataType string) (*SchemaDoc.SchemaDoc, *Error.SchemaPathErr) {
-	data, code, err := h.GetData(JsonKey.Schema, dataType)
+func (h *Handler) GetSchema(dataType string) (*SchemaDoc.SchemaDoc, *Http.HttpError) {
+	data, err := h.GetData(JsonKey.Schema, dataType)
 	if err != nil {
-		return nil, &Error.SchemaPathErr{
-			Code:    code,
-			PathErr: fmt.Errorf("failed to get schema=[%s], Error: %s", dataType, err),
-		}
+		return nil, Http.WrapError(err, fmt.Sprintf("object of type “%s” does not exist", dataType), err.Status)
 	}
-	record, err := Record.LoadMap(data.(map[string]interface{}))
-	if err != nil {
-		return nil, &Error.SchemaPathErr{
-			Code:    http.StatusInternalServerError,
-			PathErr: fmt.Errorf("failed to load schema record data. [type]=[%s], Error: %s", dataType, err),
-		}
+	record, e := Record.LoadMap(data.(map[string]interface{}))
+	if e != nil {
+		return nil, Http.WrapError(e, fmt.Sprintf("failed to load schema record data. [type]=[%s]", dataType), http.StatusInternalServerError)
 	}
-	doc, err := SchemaDoc.New(record.Data, dataType, nil)
-	if err != nil {
-		return nil, &Error.SchemaPathErr{
-			Code:    http.StatusInternalServerError,
-			PathErr: fmt.Errorf("failed to schema doc from schema record. [id]=[%s], Error: %s", dataType, err),
-		}
+	doc, e := SchemaDoc.New(record.Data, dataType, nil)
+	if e != nil {
+		return nil, Http.WrapError(e, fmt.Sprintf("failed to schema doc from schema record. [id]=[%s]", dataType), http.StatusInternalServerError)
 	}
 	return doc, nil
 }
 
-func (h *Handler) GetDataServiceRecord(dataType string, dataId string) (*Record.Record, *Error.SchemaPathErr) {
-	data, code, err := h.GetDataServiceData(dataType, dataId)
+func (h *Handler) GetDataServiceRecord(dataType string, dataId string) (*Record.Record, *Http.HttpError) {
+	data, err := h.GetDataServiceData(dataType, dataId)
 	if err != nil {
-		return nil, &Error.SchemaPathErr{
-			Code:    code,
-			PathErr: err,
-		}
+		return nil, err
 	}
-	record, err := Record.LoadMap(data.(map[string]interface{}))
-	if err != nil {
-		return nil, &Error.SchemaPathErr{
-			Code:    http.StatusInternalServerError,
-			PathErr: fmt.Errorf("failed to load data as Record. Error:%s", err),
-		}
+	record, e := Record.LoadMap(data.(map[string]interface{}))
+	if e != nil {
+		return nil, Http.NewHttpError("failed to load data as Record", http.StatusInternalServerError)
 	}
 	return record, nil
 }
 
-func (h *Handler) GetDataByPath(dataType string, idPath string, nextPath string) (interface{}, int, error) {
+func (h *Handler) GetDataByPath(dataType string, idPath string, nextPath string) (interface{}, *Http.HttpError) {
 	conn := SchemaPathData.Connection{
 		FuncSchema: h.GetSchema,
 		FuncRecord: h.GetDataServiceRecord,
@@ -249,96 +217,128 @@ func (h *Handler) GetDataByPath(dataType string, idPath string, nextPath string)
 	}
 	query, err := SchemaPath.CreateQuery(&conn, dataType, dataPath)
 	if err != nil {
-		return nil, err.Code, err.PathErr
+		return nil, err
 	}
 	result, err := query.WalkValue()
 	if err != nil {
-		return nil, http.StatusBadRequest, fmt.Errorf("failed to walk SchemaPath. from [path]=[%s], Error: %s", dataPath, err)
+		return nil, err
 	}
 	if result == nil {
-		return nil, http.StatusNotFound, fmt.Errorf("walk SchemaPath with no value.from [path]=[%s]", dataPath)
+		return nil, Http.NewHttpError(fmt.Sprintf("walk SchemaPath with no value.from [path]=[%s]", dataPath), http.StatusNotFound)
 	}
-	return result, http.StatusOK, nil
+	return result, nil
 }
 
-func (h *Handler) GetDataServiceData(dataType string, dataId string) (interface{}, int, error) {
-	dsInfo, code, err := h.GetDataServiceInfo(dataType)
+func (h *Handler) GetDataServiceData(dataType string, dataId string) (interface{}, *Http.HttpError) {
+	referral, err := h.GetReferral(dataType)
 	if err != nil {
-		return nil, code, err
+		return nil, err
 	}
-	dsUrl, err := dsInfo.GetUrl()
-	if err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("no good url for DataService=[%s], Error: %s", dsInfo.Id, err)
+	dsUrl, e := referral.DsInfo.GetUrl()
+	if e != nil {
+		return nil, Http.WrapError(e, fmt.Sprintf("no good url for DataService=[%s]", referral.DsId), http.StatusInternalServerError)
 	}
-	idPath, err := Util.URLPathJoin(dsUrl, dataType, dataId)
-	if err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("failed to parse url from data service [%s]=[%s], url=[%s], Error:%s", Record.DataId, dsInfo.Id, dsInfo.URL, err)
+	idPath, e := Http.URLPathJoin(dsUrl, dataType, dataId)
+	if e != nil {
+		return nil, Http.WrapError(e, fmt.Sprintf("failed to parse url from data service [%s]=[%s], url=[%s]", Record.DataId, referral.DsId, dsUrl), http.StatusInternalServerError)
 	}
-	data, code, err := Util.GetRestData(*idPath)
-	if err != nil {
+	data, code, e := Http.GetRestData(*idPath)
+	if e != nil {
 		if code == http.StatusNotFound {
-			return data, code, err
+			return nil, Http.NewHttpError(e.Error(), code)
 		}
-		return nil, http.StatusInternalServerError, fmt.Errorf("failed to get data from REST URL=[%s], Code=[%d], Err:%s", *idPath, code, err)
+		return nil, Http.NewHttpError(fmt.Sprintf("failed to get data from REST URL=[%s]", *idPath), code)
+
 	}
 	result, ok := data.(map[string]interface{})
 	if !ok {
-		err = fmt.Errorf("data from [%s] is not a validate record data map[string]interface{}", *idPath)
-		return nil, http.StatusInternalServerError, err
+		return nil, Http.NewHttpError(fmt.Sprintf("data from [%s] is not a validate record data map[string]interface{}", *idPath), http.StatusInternalServerError)
 	}
-	return result, http.StatusOK, nil
+	return result, nil
 }
 
-func (h *Handler) GetData(dataType string, dataId string) (interface{}, int, error) {
+func (h *Handler) GetData(dataType string, dataId string) (interface{}, *Http.HttpError) {
 	args := make(map[string]interface{})
 	args[DbIface.Table] = dataType
 	args[Record.DataId] = dataId
 	recordList, err := h.Db.Get(args)
 	if err != nil {
-		return nil, http.StatusInternalServerError, err
+		return nil, Http.NewHttpError(err.Error(), http.StatusInternalServerError)
 	}
 	if len(recordList) == 0 {
-		return nil, http.StatusNotFound, fmt.Errorf("failed to find [{type}/{id}]=[%s/%s]", dataType, dataId)
+		return nil, Http.NewHttpError(fmt.Sprintf("object of type “%s” with id <%s> not found", dataType, dataId), http.StatusNotFound)
+
 	}
-	return recordList[0], http.StatusOK, nil
+	return recordList[0], nil
 }
 
-func (h *Handler) GetDataServiceInfo(dataType string) (*InvRecord.DataServiceInfo, int, error) {
-	referral, code, err := h.GetReferral(dataType)
+func (h *Handler) GetReferralRecord(dataType string) (*Record.Record, *Http.HttpError) {
+	referralData, err := h.GetData(RefRecord.Referral, dataType)
 	if err != nil {
-		return nil, code, err
+		return nil, err
 	}
-	dsInfo, code, err := h.GetDsInfo(referral.DsId)
-	if err != nil {
-		return nil, code, err
+	referralMap, ok := referralData.(map[string]interface{})
+	if !ok {
+		return nil, Http.NewHttpError(fmt.Sprintf("failed to convert data of [%s] to map[string]interface{}", dataType), http.StatusInternalServerError)
+
 	}
-	err = referral.SetDsInfo(dsInfo)
-	if err != nil {
-		return nil, http.StatusInternalServerError, err
+	record, e := Record.LoadMap(referralMap)
+	if e != nil {
+		return nil, Http.WrapError(e, fmt.Sprintf("failed to load referral data of [%s] as Record", dataType), http.StatusInternalServerError)
 	}
-	return referral.DsInfo, http.StatusOK, nil
+	return record, nil
 }
 
-func (h *Handler) GetReferral(dataType string) (*RefRecord.Referral, int, error) {
-	referralData, code, err := h.GetData(Referral, dataType)
+func (h *Handler) GetReferral(dataType string) (*RefRecord.ReferralData, *Http.HttpError) {
+	record, err := h.GetReferralRecord(dataType)
 	if err != nil {
-		return nil, code, fmt.Errorf("failed to get referral record for [type]=[%s]", dataType)
+		return nil, err
 	}
-	referral, err := RefRecord.LoadMap(referralData.(map[string]interface{}))
+	referral, e := RefRecord.LoadMap(record.Data)
+	if e != nil {
+		return nil, Http.NewHttpError(e.Error(), http.StatusBadRequest)
+	}
+	dsRecord, err := h.GetDsRecord(referral.DsId)
 	if err != nil {
-		return nil, http.StatusBadRequest, err
+		return nil, err
 	}
-	return referral, http.StatusOK, nil
+	dsInfo, e := InvRecord.CreateDsInfo(dsRecord.Data)
+	if e != nil {
+		return nil, Http.NewHttpError(e.Error(), http.StatusBadRequest)
+	}
+	referral.DsInfo = dsInfo
+	err = referral.GetSchema()
+	if err != nil {
+		return nil, err
+	}
+	return referral, nil
 }
 
-func (h *Handler) GetDsInfo(dsId string) (*InvRecord.DataServiceInfo, int, error) {
-	dsInfoData, code, err := h.GetData(Schema.Inventory, dsId)
+func (h *Handler) GetDsRecord(dsId string) (*Record.Record, *Http.HttpError) {
+	dsInfoData, err := h.GetData(Schema.Inventory, dsId)
 	if err != nil {
-		return nil, code, err
+		return nil, err
 	}
-	dsInfo, err := InvRecord.CreateDsInfo(dsInfoData)
+	recordMap, ok := dsInfoData.(map[string]interface{})
+	if !ok {
+		return nil, Http.NewHttpError(fmt.Sprintf("%s:%s invalid data. convert to map[string]interface{} failed", Schema.Inventory, dsId), http.StatusInternalServerError)
+
+	}
+	record, e := Record.LoadMap(recordMap)
+	if e != nil {
+		return nil, Http.NewHttpError(fmt.Sprintf("%s:%s invalid data. failed to load as Record", Schema.Inventory, dsId), http.StatusInternalServerError)
+	}
+	return record, nil
+}
+
+func (h *Handler) GetDsInfo(dsId string) (*InvRecord.DataServiceInfo, *Http.HttpError) {
+	record, err := h.GetDsRecord(dsId)
 	if err != nil {
-		return nil, http.StatusInternalServerError, err
+		return nil, err
 	}
-	return dsInfo, http.StatusOK, nil
+	dsInfo, e := InvRecord.CreateDsInfo(record.Data)
+	if e != nil {
+		return nil, Http.NewHttpError(e.Error(), http.StatusInternalServerError)
+	}
+	return dsInfo, nil
 }

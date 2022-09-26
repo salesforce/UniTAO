@@ -35,9 +35,9 @@ import (
 	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
 	"github.com/salesforce/UniTAO/lib/SchemaPath"
 	SchemaPathData "github.com/salesforce/UniTAO/lib/SchemaPath/Data"
-	"github.com/salesforce/UniTAO/lib/SchemaPath/Error"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/Node"
 	"github.com/salesforce/UniTAO/lib/Util"
+	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
 
 func TestParseArrayPath(t *testing.T) {
@@ -60,53 +60,35 @@ func TestParseArrayPath(t *testing.T) {
 }
 
 func PrepareConn(schemaStr string, recordStr string) *SchemaPathData.Connection {
-	getSchema := func(dataType string) (*SchemaDoc.SchemaDoc, *Error.SchemaPathErr) {
+	getSchema := func(dataType string) (*SchemaDoc.SchemaDoc, *Http.HttpError) {
 		schemaMap := map[string]interface{}{}
 		err := json.Unmarshal([]byte(schemaStr), &schemaMap)
 		if err != nil {
-			return nil, &Error.SchemaPathErr{
-				Code:    http.StatusInternalServerError,
-				PathErr: fmt.Errorf("failed to ummarshal schema map str, Error:%s", err),
-			}
+			return nil, Http.WrapError(err, "failed to ummarshal schema map str", http.StatusInternalServerError)
 		}
 		schemaData, ok := schemaMap[dataType].(map[string]interface{})
 		if !ok {
-			return nil, &Error.SchemaPathErr{
-				Code:    http.StatusNotFound,
-				PathErr: fmt.Errorf("schema [type]=[%s] does not exists", dataType),
-			}
+			return nil, Http.NewHttpError(fmt.Sprintf("schema [type]=[%s] does not exists", dataType), http.StatusNotFound)
 		}
 		doc, err := SchemaDoc.New(schemaData, dataType, nil)
 		if err != nil {
-			return nil, &Error.SchemaPathErr{
-				Code:    http.StatusInternalServerError,
-				PathErr: fmt.Errorf("failed to schema data type=[%s], Error:%s", dataType, err),
-			}
+			return nil, Http.NewHttpError(fmt.Sprintf("failed to schema data type=[%s]", dataType), http.StatusInternalServerError)
 		}
 		return doc, nil
 	}
-	getRecord := func(dataType string, dataId string) (*Record.Record, *Error.SchemaPathErr) {
+	getRecord := func(dataType string, dataId string) (*Record.Record, *Http.HttpError) {
 		recordMap := map[string]interface{}{}
 		err := json.Unmarshal([]byte(recordStr), &recordMap)
 		if err != nil {
-			return nil, &Error.SchemaPathErr{
-				Code:    http.StatusInternalServerError,
-				PathErr: fmt.Errorf("failed to ummarshal schema map str, Error:%s", err),
-			}
+			return nil, Http.WrapError(err, "failed to ummarshal schema map str", http.StatusInternalServerError)
 		}
 		data, ok := recordMap[dataType].(map[string]interface{})[dataId].(map[string]interface{})
 		if !ok {
-			return nil, &Error.SchemaPathErr{
-				Code:    http.StatusNotFound,
-				PathErr: fmt.Errorf("record [%s/%s] does not exists", dataType, dataId),
-			}
+			return nil, Http.NewHttpError(fmt.Sprintf("record [%s/%s] does not exists", dataType, dataId), http.StatusNotFound)
 		}
 		record, err := Record.LoadMap(data)
 		if err != nil {
-			return nil, &Error.SchemaPathErr{
-				Code:    http.StatusInternalServerError,
-				PathErr: fmt.Errorf("failed to load data as Record. Error:%s", err),
-			}
+			return nil, Http.WrapError(err, fmt.Sprintf("failed to load data as Record."), http.StatusInternalServerError)
 		}
 		return record, nil
 	}
@@ -244,348 +226,15 @@ func TestPathNode(t *testing.T) {
 	}
 }
 
-func QueryPath(conn *SchemaPathData.Connection, path string) (interface{}, *Error.SchemaPathErr) {
+func QueryPath(conn *SchemaPathData.Connection, path string) (interface{}, *Http.HttpError) {
 	dataType, nextPath := Util.ParsePath(path)
 	query, err := SchemaPath.CreateQuery(conn, dataType, nextPath)
 	if err != nil {
-		return nil, Error.AppendErr(err, fmt.Sprintf("failed to generate SchemaPath. from [path]=[%s]", path))
+		return nil, err
 	}
 	value, err := query.WalkValue()
 	if err != nil {
-		return nil, Error.AppendErr(err, fmt.Sprintf("failed to parse value from [path]=[%s]", path))
+		return nil, err
 	}
 	return value, nil
 }
-
-/*
-
-
-
-
-
-
-
-func TestWalkInRef(t *testing.T) {
-	schemaStr := `
-		{
-			"schemaWithRef": {
-				"name": "schemaWitArray",
-				"description": "schema of object with array of object in attribute",
-				"properties": {
-					"itemArray": {
-						"type": "array",
-						"items": {
-							"type": "object",
-							"$ref": "#/definitions/itemObj"
-						}
-					}
-				},
-				"definitions": {
-					"itemObj": {
-						"description": "item object of an array",
-						"key": "{key1}_{key2}",
-						"properties": {
-							"key1": {
-								"type": "string"
-							},
-							"key2": {
-								"type": "string"
-							},
-							"refIdx": {
-								"type": "string",
-								"contentMediaType": "inventory/schemaRef"
-							}
-						}
-					}
-				}
-			},
-			"schemaRef": {
-				"name": "schemaRef",
-				"description": "schema of ref object",
-				"properties": {
-					"data": {
-						"type": "object",
-						"$ref": "#/definitions/data"
-					}
-				},
-				"definitions": {
-					"data": {
-						"description": "data wrapper for the keyed map",
-						"properties": {
-							"name": {
-								"type": "string"
-							},
-							"items": {
-								"type": "map",
-								"items": {
-									"type": "object",
-									"$ref": "#/definitions/itemData"
-								}
-							}
-						}
-					},
-					"itemData": {
-						"description": "mapped item data schema",
-						"properties": {
-							"attr01": {
-								"type": "string"
-							},
-							"attr02": {
-								"type": "string"
-							}
-						}
-					}
-				}
-			}
-		}
-	`
-	recordStr := `
-	{
-		"schemaWithRef": {
-			"refData01": {
-				"__id": "refData01",
-				"__type": "schemaWithRef",
-				"__ver": "0.0.1",
-				"data": {
-					"itemArray": [
-						{
-							"key1": "01",
-							"key2": "01",
-							"refIdx": "ref01/data/items/item01/attr01"
-						},
-						{
-							"key1": "01",
-							"key2": "02",
-							"refIdx": "ref02/data/items/item02/attr02"
-						}
-					]
-				}
-			}
-		},
-		"schemaRef": {
-			"ref01": {
-				"__id": "ref01",
-				"__type": "schemaRef",
-				"__ver": "0.0.1",
-				"data" : {
-					"data": {
-						"name": "ref01",
-						"items": {
-							"item01": {
-								"attr01": "value01-01-01",
-								"attr02": "value01-01-02"
-							}
-						}
-					}
-				}
-			},
-			"ref02": {
-				"__id": "ref02",
-				"__type": "schemaRef",
-				"__ver": "0.0.1",
-				"data" : {
-					"data": {
-						"name": "ref02",
-						"items": {
-							"item02": {
-								"attr01": "value02-02-01",
-								"attr02": "value02-02-02"
-							}
-						}
-					}
-				}
-			}
-		}
-	}`
-	conn := PrepareConn(schemaStr, recordStr)
-	queryPath := "schemaWithRef/refData01/itemArray[01_01]/refIdx"
-	value, err := QueryPath(conn, queryPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if value == nil {
-		t.Errorf("failed to get the value of idx=[01_01], @[path]=[%s]", queryPath)
-	}
-	if value.(string) != "value01-01-01" {
-		t.Errorf("expect [value01-01-01]!=[%s] from [path]=[%s]", value.(string), queryPath)
-	}
-	queryPath = "schemaWithRef/refData01/itemArray[01_01]/refIdx/$"
-	value, err = QueryPath(conn, queryPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if value == nil {
-		t.Errorf("failed to get the value of idx=[01_01], @[path]=[%s]", queryPath)
-	}
-	if value.(string) != "ref01/data/items/item01/attr01" {
-		t.Errorf("failed to get the correct value. [%s]!=[ref01/data/items/item01/attr01]", value.(string))
-	}
-	queryPath = "schemaWithRef/refData01/itemArray[01_01]/refIdx?ref"
-	value, err = QueryPath(conn, queryPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if value == nil {
-		t.Errorf("failed to get the value of idx=[01_01], @[path]=[%s]", queryPath)
-	}
-	if value.(string) != "ref01/data/items/item01/attr01" {
-		t.Errorf("failed to get the correct value. [%s]!=[ref01/data/items/item01/attr01]", value.(string))
-	}
-}
-
-
-
-func TestWalkFlat(t *testing.T) {
-	schemaStr := `
-	{
-		"schemaWithRef": {
-			"name": "schemaWitArray",
-			"description": "schema of object with array of object in attribute",
-			"properties": {
-				"itemArray": {
-					"type": "array",
-					"items": {
-						"type": "object",
-						"$ref": "#/definitions/itemObj"
-					}
-				}
-			},
-			"definitions": {
-				"itemObj": {
-					"description": "item object of an array",
-					"key": "{key1}_{key2}",
-					"properties": {
-						"key1": {
-							"type": "string"
-						},
-						"key2": {
-							"type": "string"
-						},
-						"refIdx": {
-							"type": "string",
-							"contentMediaType": "inventory/schemaRef"
-						}
-					}
-				}
-			}
-		},
-		"schemaRef": {
-			"name": "schemaRef",
-			"description": "schema of ref object",
-			"properties": {
-				"data": {
-					"type": "object",
-					"$ref": "#/definitions/data"
-				}
-			},
-			"definitions": {
-				"data": {
-					"description": "data wrapper for the keyed map",
-					"properties": {
-						"name": {
-							"type": "string"
-						},
-						"items": {
-							"type": "map",
-							"items": {
-								"type": "object",
-								"$ref": "#/definitions/itemData"
-							}
-						}
-					}
-				},
-				"itemData": {
-					"description": "mapped item data schema",
-					"properties": {
-						"attr01": {
-							"type": "string"
-						},
-						"attr02": {
-							"type": "string"
-						}
-					}
-				}
-			}
-		}
-	}
-`
-	recordStr := `
-	{
-		"schemaWithRef": {
-			"refData01": {
-				"__id": "refData01",
-				"__type": "schemaWithRef",
-				"__ver": "0.0.1",
-				"data": {
-					"itemArray": [
-						{
-							"key1": "01",
-							"key2": "01",
-							"refIdx": "ref01/data/items/item01/attr01"
-						},
-						{
-							"key1": "01",
-							"key2": "02",
-							"refIdx": "ref02/data/items/item02/attr02"
-						}
-					]
-				}
-			}
-		},
-		"schemaRef": {
-			"ref01": {
-				"__id": "ref01",
-				"__type": "schemaRef",
-				"__ver": "0.0.1",
-				"data" : {
-					"data": {
-						"name": "ref01",
-						"items": {
-							"item01": {
-								"attr01": "value01-01-01",
-								"attr02": "value01-01-02"
-							}
-						}
-					}
-				}
-			},
-			"ref02": {
-				"__id": "ref02",
-				"__type": "schemaRef",
-				"__ver": "0.0.1",
-				"data" : {
-					"data": {
-						"name": "ref02",
-						"items": {
-							"item02": {
-								"attr01": "value02-02-01",
-								"attr02": "value02-02-02"
-							}
-						}
-					}
-				}
-			}
-		}
-	}`
-	conn := PrepareConn(schemaStr, recordStr)
-	queryPath := "schemaWithRef/refData01?flat"
-	value, err := QueryPath(conn, queryPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if value == nil {
-		t.Errorf("failed to get the value of idx=[01_01], @[path]=[%s]", queryPath)
-	}
-	flatMap, ok := value.(map[string]interface{})
-	if !ok {
-		t.Errorf("return value is not map. @[path]=[%s]", queryPath)
-	}
-	flatAry, ok := flatMap["itemArray"].([]interface{})
-	if !ok {
-		t.Errorf("return value has no key itemArray, or failed to convert it to array of interface{}. @[path]=[%s]", queryPath)
-	}
-	if flatAry[0].(string) != "01_01" {
-		t.Errorf("failed to extract key of item 0 of itemArray, expect [01_01] != [%s], @[path]=[%s]", flatAry[0], queryPath)
-	}
-}
-*/

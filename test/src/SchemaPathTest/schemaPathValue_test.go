@@ -116,16 +116,16 @@ func TestWalkInObjectAndMap(t *testing.T) {
 	if err == nil {
 		t.Fatalf("key not exists should return error")
 	}
-	if err.Code != http.StatusNotFound {
-		t.Fatalf("query of not exists key return err.Code=[%d], expect err.Code=[%d]", err.Code, http.StatusNotFound)
+	if err.Status != http.StatusNotFound {
+		t.Fatalf("query of not exists key return err.Code=[%d], expect err.Code=[%d]", err.Status, http.StatusNotFound)
 	}
 	queryPath = "schema1/data1/mapStr[keyNotExists]"
 	_, err = QueryPath(conn, queryPath)
 	if err == nil {
 		t.Fatalf("key not exists should return error")
 	}
-	if err.Code != http.StatusNotFound {
-		t.Fatalf("query of not exists key return err.Code=[%d], expect err.Code=[%d]", err.Code, http.StatusNotFound)
+	if err.Status != http.StatusNotFound {
+		t.Fatalf("query of not exists key return err.Code=[%d], expect err.Code=[%d]", err.Status, http.StatusNotFound)
 	}
 }
 
