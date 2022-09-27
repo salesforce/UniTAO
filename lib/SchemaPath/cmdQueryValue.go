@@ -30,9 +30,9 @@ import (
 	"net/http"
 
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
-	"github.com/salesforce/UniTAO/lib/SchemaPath/Error"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/Node"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/PathCmd"
+	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
 
 type CmdQueryValue struct {
@@ -44,7 +44,7 @@ func (c *CmdQueryValue) Name() string {
 	return PathCmd.CmdRef
 }
 
-func (c *CmdQueryValue) WalkValue() (interface{}, *Error.SchemaPathErr) {
+func (c *CmdQueryValue) WalkValue() (interface{}, *Http.HttpError) {
 	/*
 		TODO:
 		walk as normal value except at last step if it is a
@@ -54,7 +54,7 @@ func (c *CmdQueryValue) WalkValue() (interface{}, *Error.SchemaPathErr) {
 	return c.GetNodeValue(c.p, nil)
 }
 
-func (c *CmdQueryValue) GetNodeValue(node *Node.PathNode, parentData interface{}) (interface{}, *Error.SchemaPathErr) {
+func (c *CmdQueryValue) GetNodeValue(node *Node.PathNode, parentData interface{}) (interface{}, *Http.HttpError) {
 	nodeValue, err := Node.GetNodeValue(node, parentData)
 	if err != nil {
 		return nil, err
@@ -76,44 +76,38 @@ func (c *CmdQueryValue) GetNodeValue(node *Node.PathNode, parentData interface{}
 	return nodeValue, nil
 }
 
-func (c *CmdQueryValue) GetNodeArrayAll(node *Node.PathNode, nodeValue interface{}) (interface{}, *Error.SchemaPathErr) {
+func (c *CmdQueryValue) GetNodeArrayAll(node *Node.PathNode, nodeValue interface{}) (interface{}, *Http.HttpError) {
 	parentValues, ok := nodeValue.([]interface{})
 	if !ok {
-		return nil, &Error.SchemaPathErr{
-			Code:    http.StatusInternalServerError,
-			PathErr: fmt.Errorf("idx=[%s] didn't return array on function[Node.GetNodeValue], @path=[%s]", PathCmd.ALL, node.FullPath()),
-		}
+		return nil, Http.NewHttpError(fmt.Sprintf("idx=[%s] didn't return array on function[Node.GetNodeValue], @path=[%s]", PathCmd.ALL, node.FullPath()), http.StatusInternalServerError)
 	}
 	result := make([]interface{}, 0, len(parentValues))
 	for idx, item := range parentValues {
 		itemValue, err := c.GetNodeValue(node.Next, item)
 		if err != nil {
-			if err.Code == http.StatusNotFound {
+			if err.Status == http.StatusNotFound {
 				continue
 			}
-			return nil, Error.AppendErr(err, fmt.Sprintf("failed to get %s[%d] @path=[%s]", node.AttrName, idx, node.FullPath()))
+			return nil, Http.WrapError(err, fmt.Sprintf("failed to get %s[%d] @path=[%s]", node.AttrName, idx, node.FullPath()), err.Status)
 		}
 		result = append(result, itemValue)
 	}
 	return result, nil
 }
 
-func (c *CmdQueryValue) GetNodeMapAll(node *Node.PathNode, nodeValue interface{}) (interface{}, *Error.SchemaPathErr) {
+func (c *CmdQueryValue) GetNodeMapAll(node *Node.PathNode, nodeValue interface{}) (interface{}, *Http.HttpError) {
 	parentValues, ok := nodeValue.(map[string]interface{})
 	if !ok {
-		return nil, &Error.SchemaPathErr{
-			Code:    http.StatusInternalServerError,
-			PathErr: fmt.Errorf("idx=[%s] didn't return map on function[Node.GetNodeValue], @path=[%s]", PathCmd.ALL, node.FullPath()),
-		}
+		return nil, Http.NewHttpError(fmt.Sprintf("idx=[%s] didn't return map on function[Node.GetNodeValue], @path=[%s]", PathCmd.ALL, node.FullPath()), http.StatusInternalServerError)
 	}
 	result := make([]interface{}, 0, len(parentValues))
 	for key, item := range parentValues {
 		itemValue, err := c.GetNodeValue(node.Next, item)
 		if err != nil {
-			if err.Code == http.StatusNotFound {
+			if err.Status == http.StatusNotFound {
 				continue
 			}
-			return nil, Error.AppendErr(err, fmt.Sprintf("failed to get %s[%s] @path=[%s]", node.AttrName, key, node.FullPath()))
+			return nil, Http.WrapError(err, fmt.Sprintf("failed to get %s[%s] @path=[%s]", node.AttrName, key, node.FullPath()), err.Status)
 		}
 		result = append(result, itemValue)
 	}

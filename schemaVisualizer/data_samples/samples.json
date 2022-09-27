@@ -1,0 +1,227 @@
+{   "policies": [
+        {   "id": "CC2IAM",
+            "description": "connect all CC nodes to Falcon IAM services",
+            "node": "CC_Nodes",
+            "service": "IAMservicesGroup",
+            "status": "enable"
+        }
+    ],
+    "services": [
+        { 
+            "id": "matlock",
+            "name": "Matlock",
+            "owner": "IAMteam"
+            "description": "IAM protocol"
+            "flowDescriptors": [
+                { 
+                "protocol": "tcp",
+                "dstPorts": ["636"]
+                }
+            ],
+        },
+        {
+            "id": "secds
+            "name": "SecDS",
+            "flowDescriptors": [
+                {
+                "protocol": "tcp",
+                "dstPorts": ["2083"]
+                }
+            ],
+        },
+        {   "id": "IAMservicesGroup",
+            "name": "IAM Services group",
+            "members": ["matlock", "secds"]
+        }
+    ],
+  "locations": [
+    {
+      "name": "LOC-FD-101",
+      "region": "us-west-2",
+      "environment": "production"
+    },
+    {
+      "name": "LOC-FD-201",
+      "region": "us-west-2",
+      "environment": "development"
+    },
+    {
+      "name": "LOC-CCPOD-00A",
+      "region": "us-west-2",
+      "environment": "production"
+    },
+    {
+      "name": "LOC-CCPOD-00B",
+      "region": "us-west-2",
+      "environment": "production"
+    }
+  ],
+  "locationpaths": [
+    {
+      "source": "LOC-CCPOD-00B",
+      "destinations": ["LOC-FD-101", "LOC-FD-201", "LOC-FD-301"]
+    },
+    {
+      "source": "LOC-CCPOD-00A",
+      "destinations": ["LOC-FD-201", "LOC-FD-101", "LOC-FD-301"]
+    }
+  ],
+  "providers": [
+    {
+      "name": "matlockprovider1.fd101.com",
+      "address": "matlockprovider1.fd101.com",
+      "location": "LOC-FD-101",
+      "status": "operational"
+    },
+    {
+      "name": "matlockprovider2.fd101.com",
+      "address": "10.20.30.40",
+      "location": "LOC-FD-101",
+      "status": "onboarding"
+    },
+    {
+      "name": "matlockprovider3.fd201.com",
+      "address": "matlockprovider3.fd201.com",
+      "location": "LOC-FD-201"
+    },
+    {
+      "name": "secdsprovider1.fd101.com",
+      "address": "secdsprovider1.fd101.com",
+      "location": "LOC-FD-101"
+    },
+    {
+      "name": "secdsprovider2.fd101.com",
+      "address": "secdsprovider1.fd101.com",
+      "location": "LOC-FD-101"
+    },
+    {
+      "name": "secdsprovider3.fd201.com",
+      "address": "secdsprovider3.fd201.com",
+      "location": "LOC-FD-201"
+    },
+    {
+      "name": "matlockproviders",
+      "members": [
+        "matlockprovider1.fd101.com",
+        "matlockprovider2.fd101.com",
+        "matlockprovider3.fd201.com"
+      ]
+    },
+    {
+      "name": "secdsproviders",
+      "members": [
+        "secdsprovider1.fd201.com",
+        "secdsprovider2.fd101.com",
+        "secdsprovider3.fd201.com"
+      ]
+    }
+  ],
+  
+  "haprofiles": [
+    {
+      "name": "leastprofile",
+      "peersperlocation": 3,
+      "locations": 1
+    },
+    {
+      "name": "desiredprofile",
+      "peersperlocation": 3,
+      "locations": 5
+    }
+  ],
+
+  [{"op": "get", "type": "netsec.acl.node", "id": "raven-node-a1" }
+   {"op": "follow", "property": "location1"}
+  ] 
+
+  "nodes": [
+    {
+      "name": "raven-node-a1",
+      "cn": "canonical name",
+      "location1": "LOC-CCPOD-00A",
+      "location2": "LOC-CCPOD-012",
+      "status": "operational"
+    },
+    {
+      "name": "raven-node-a2",
+      "cn": "canonicalname",
+      "location": "LOC-CCPOD-00A",
+      "status": "onboarding"
+    },
+    {
+      "name": "raven-node-b1",
+      "cn": "canonicalname",
+      "location": "LOC-CCPOD-00B"
+    },
+    {
+      "name": "raven-node-b2",
+      "cn": "canonicalname",
+      "location": "LOC-CCPOD-00B"
+    },
+    {
+      "name": "raven-node-x1",
+      "cn": "canonicalname",
+      "location": "LOC-FD-101"
+    },
+    {
+      "name": "raven-node-x2",
+      "cn": "canonicalname",
+      "location": "LOC-FD-101"
+    },
+    {
+      "name": "raven-node-y1",
+      "cn": "canonicalname",
+      "location": "LOC-FD-201"
+    },
+    {
+      "name": "raven-node-y2",
+      "cn": "canonicalname",
+      "location": "LOC-FD-201"
+    },
+    {
+      "name": "NG-CCPOD-00A",
+      "members": ["raven-node-a1", "raven-node-a2"]
+    },
+    {
+      "name": "NG-CCPOD-00B",
+      "members": ["raven-node-b1", "raven-node-b2"]
+    },
+    {
+      "name": "All CCPODs",
+      "members": ["NG-CCPOD-00A", "NG-CCPOD-00B"]
+    },
+    {
+      "name": "NG-FD-101",
+      "members": ["raven-node-x1", "raven-node-x2"]
+    },
+    {
+      "name": "NG-FD-201",
+      "members": ["raven-node-y1", "raven-node-y2"]
+    },
+    {
+      "name": "All IAM FDs",
+      "members": ["NG-FD-101", "NG-FD-201"],
+      "tunnel_keepalive": 15,
+      "allowed_ips": "0.0.0.0/0"
+    }
+  ],
+  "addresspools": [
+    {
+      "name": "wireguard-interfaces",
+      "pools": ["10.10.150.0/24"],
+      "assignments": [
+        {
+          "node": "nodename",
+          "ipv4": "10.10.150.1"
+        }
+      ]
+    }
+  ],
+  "policies": [
+    {
+      "nodes": ["NG-CCPOD-00A"],
+      "service": "IAM Services],
+      "action": "allow"
+    }
+  ]
+}

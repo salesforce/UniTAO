@@ -29,10 +29,8 @@ import (
 	"Data/DbConfig"
 	"Data/DbIface"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
-	"path/filepath"
 	"testing"
 
 	"DataService/Config"
@@ -186,8 +184,8 @@ func TestDataHander(t *testing.T) {
 		t.Fatalf("failed to load data as record. Error:%s", err)
 	}
 	log.Printf("[type]=[%s],[id]=[%s]", record.Type, record.Id)
-	_, err = handler.Validate(record)
-	if err != nil {
+	e := handler.Validate(record)
+	if e != nil {
 		t.Fatalf("failed to validate positive data. Error:%s", err)
 	}
 	log.Printf("positive data validate passed")
@@ -197,43 +195,47 @@ func TestDataHander(t *testing.T) {
 		t.Fatalf("failed to load negativeData as record. Error:%s", err)
 	}
 	log.Printf("[type]=[%s],[id]=[%s]", record.Type, record.Id)
-	_, err = handler.Validate(record)
-	if err == nil {
+	e = handler.Validate(record)
+	if e == nil {
 		t.Fatalf("failed to validate negative data.")
 	}
 	log.Printf("negative data validate passed")
 }
 
 func TestParseRecord(t *testing.T) {
-	server := DataServer.Server{}
 	payload := make(map[string]interface{})
 	dataType := "test"
 	typeVer := "00_00_00"
 	dataId := "test_01"
 	record := Record.NewRecord(dataType, typeVer, dataId, payload)
-	_, code, _ := server.ParseRecord([]string{}, record.Map(), dataType, dataId)
-	if code != http.StatusAccepted {
+	_, err := DataServer.ParseRecord([]string{}, record.Map(), "", "")
+	if err != nil {
 		t.Fatalf("failed to parse record. type=[%s], id=[%s]", dataType, dataId)
 	}
-	pRecord, _, err := server.ParseRecord([]string{"true"}, record.Data, dataType, dataId)
+	_, err = DataServer.ParseRecord([]string{}, record.Map(), dataType, dataId)
+	if err.Status != http.StatusBadRequest {
+		t.Fatalf("failed to validate post/put url path. type and id should be empty")
+	}
+	_, err = DataServer.ParseRecord([]string{}, record.Map(), dataType, "")
+	if err.Status != http.StatusBadRequest {
+		t.Fatalf("failed to parse record. type='%s', id=''", dataType)
+	}
+	_, err = DataServer.ParseRecord([]string{}, record.Map(), "", dataId)
+	if err.Status != http.StatusBadRequest {
+		t.Fatalf("failed to parse record. type='', id='%s'", dataId)
+	}
+	pRecord, err := DataServer.ParseRecord([]string{"true"}, record.Data, dataType, dataId)
 	if err != nil {
 		t.Fatalf("failed to parse record with no Reacod header. Error:%s", err)
 	}
 	if pRecord.Version != "0_00_00" {
 		t.Fatalf("failed to create record with correct version")
 	}
-}
-
-func loadConfig() (*Config.Confuguration, error) {
-	config := Config.Confuguration{}
-	configPathStr := "../../data/DataService01/config.json"
-	configPath, err := filepath.Abs(configPathStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get ABS Path [%s], Error:%s", configPathStr, err)
+	_, err = DataServer.ParseRecord([]string{"true"}, record.Data, "", "")
+	if err == nil {
+		t.Fatalf("failed to catch missing type and id error. Error:%s", err)
 	}
-	err = Config.Read(configPath, &config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read Data Service config file, [%s], Error:%s", configPath, err)
+	if err.Status != http.StatusBadRequest {
+		t.Fatalf("invalid status code for missing type and id error. expecte [%d]!=[%d]", http.StatusBadRequest, err.Status)
 	}
-	return &config, nil
 }

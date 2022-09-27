@@ -25,9 +25,11 @@ This copyright notice and license applies to all files in this directory or sub-
 
 package PathCmd
 
-import "github.com/salesforce/UniTAO/lib/SchemaPath/Error"
+import (
+	"github.com/salesforce/UniTAO/lib/Util/Http"
+)
 
 type QueryIface interface {
 	Name() string
-	WalkValue() (interface{}, *Error.SchemaPathErr)
+	WalkValue() (interface{}, *Http.HttpError)
 }

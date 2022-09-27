@@ -1,0 +1,88 @@
+{
+  "nodes": [
+    {
+      "id": "raven-util1.cc-pod807",
+      "display_name": "raven-util1.cc-pod807; mandatory",
+      "cn": "raven-util1.cc-pod807.eng.sfdc.net; mandatory",
+      "location": "cc-pod807; mandatory",
+      "ha_least": "leastprofile",
+      "ha_desired": "desiredprofile",
+      "status": "operational",
+      "description": "arbitrary notes"
+    },
+    {
+      "id": "raven-util2.cc-pod807",
+      "display_name": "raven-util2.cc-pod807",
+      "cn": "raven-util2.cc-pod807.eng.sfdc.net",
+      "location": "cc-pod807",
+      "status": "operational"
+    },
+    {
+      "id": "raven-node1.cc-pod807",
+      "display_name": "raven-node1.cc-pod807",
+      "cn": "raven-node1.cc-pod807.eng.sfdc.net",
+      "location": "cc-pod807",
+      "status": "onboarding"
+    },
+    {
+      "id": "raven-node1.infra-iam.dev1-uswest2",
+      "display_name": "raven-node1.infra-iam.dev1-uswest2",
+      "cn": "raven-node1.infra-iam.dev1-uswest2.aws.sfdc.cl",
+      "public_address": "raven-node-nlb-2c35de91e0ede9f8.elb.us-west-2.amazonaws.com; server nodes to have public exposed, for clients to connect to this address",
+      "tunnel_address": "assigned from address pools, used for tunnel interface ip",
+      "location": "infra-iam.dev1-uswest2",
+      "status": "operational",
+      "private_address": "scanned by agent, realized through registry, used for service nat",
+      "private_key": "path to certificate key; realized through registry",
+      "public_key": "path to certificate; realized through registry"
+    },
+    {
+      "id": "raven-node2.infra-iam.dev1-uswest2",
+      "display_name": "raven-node2.infra-iam.dev1-uswest2",
+      "cn": "raven-node2.infra-iam.dev1-uswest2.aws.sfdc.cl",
+      "address": "raven-node-nlb-2c35de91e0ede9f8.elb.us-west-2.amazonaws.com",
+      "location": "infra-iam.dev1-uswest2",
+      "status": "onboarding"
+    },
+    {
+      "id": "ng:infra-iam.dev1-uswest2",
+      "display_name": "ng:infra-iam.dev1-uswest2",
+      "members": ["raven-node1.infra-iam.dev1-uswest2", "raven-node1.infra-iam.dev1-uswest2"]
+    },
+    {
+      "id": "ng:cc-pod807",
+      "display_name": "ng:cc-pod807",
+      "members": ["raven-util1.cc-pod807", "raven-util2.cc-pod807"]
+    },
+    {
+      "id": "ng:cc-pod105",
+      "display_name": "ng:cc-pod105",
+      "members": []
+    },
+    {
+      "id": "ng:cc-pod106",
+      "display_name": "ng:cc-pod106",
+      "members": []
+    },
+    {
+      "id": "ng:cc-pod107",
+      "display_name": "ng:cc-pod107",
+      "members": []
+    },
+    {
+      "id": "All_Development_CCPODs",
+      "display_name": "All Development CCPODs",
+      "members": ["ng:cc-pod807"]
+    },
+    {
+      "id": "All_Production_CCPODs_Gen8",
+      "display_name": "All Production CCPODs (Gen8)",
+      "members": ["ng:cc-pod105", "ng:cc-pod106", "ng:cc-pod107"]
+    },
+    {
+      "id": "All_IAM_Falcon_development_instances",
+      "display_name": "All IAM Falcon development instances",
+      "members": ["ng:infra-iam.dev1-uswest2"]
+    }
+  ]
+}

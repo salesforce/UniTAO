@@ -35,6 +35,7 @@ import (
 	"InventoryService/DataHandler"
 
 	"github.com/salesforce/UniTAO/lib/Util"
+	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
 
 type Server struct {
@@ -106,29 +107,29 @@ func (srv *Server) Run() {
 
 func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
-		http.Error(w, "Inventory Server only support GET method", http.StatusMethodNotAllowed)
+		err := Http.NewHttpError("Inventory Server only support GET method", http.StatusMethodNotAllowed)
+		Http.ResponseJson(w, err, err.Status, srv.config.Http)
 		return
 	}
 	dataType, dataPath := Util.ParsePath(r.RequestURI)
 	if dataType == "" {
-		respObj := make(map[string]string)
-		respObj["error message"] = "please use inventory{type}[/{id}]"
-		Util.ResponseJson(w, respObj, http.StatusOK)
+		err := Http.NewHttpError("please use inventory{type}[/{id}], dataType is empty", http.StatusBadRequest)
+		Http.ResponseJson(w, err, err.Status, srv.config.Http)
 		return
 	}
 	if dataPath == "" {
-		idList, code, err := srv.data.List(dataType)
+		idList, err := srv.data.List(dataType)
 		if err != nil {
-			http.Error(w, err.Error(), code)
+			Http.ResponseJson(w, err, err.Status, srv.config.Http)
 			return
 		}
-		Util.ResponseJson(w, idList, code)
+		Http.ResponseJson(w, idList, http.StatusOK, srv.config.Http)
 		return
 	}
-	data, code, err := srv.data.Get(dataType, dataPath)
+	data, err := srv.data.Get(dataType, dataPath)
 	if err != nil {
-		http.Error(w, err.Error(), code)
+		Http.ResponseJson(w, err, err.Status, srv.config.Http)
 		return
 	}
-	Util.ResponseJson(w, data, http.StatusOK)
+	Http.ResponseJson(w, data, http.StatusOK, srv.config.Http)
 }

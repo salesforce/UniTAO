@@ -23,37 +23,64 @@ This copyright notice and license applies to all files in this directory or sub-
 ************************************************************************************************************
 */
 
-package Error
+package Http
 
 import (
-	"fmt"
+	"encoding/json"
 	"net/http"
+	"strings"
+
+	"github.com/salesforce/UniTAO/lib/Util"
 )
 
-type SchemaPathErr struct {
-	Code    int
-	PathErr error
+const TAB = "    "
+
+type HttpError struct {
+	Status  int           `json:"httpStatus"`
+	Message []string      `json:"message"`
+	Code    int           `json:"code"`
+	Context []interface{} `json:"context"`
+	Payload interface{}   `json:"payload"`
 }
 
-func IsSchemaPathErr(err error) bool {
-	_, ok := err.(*SchemaPathErr)
+func (e HttpError) Error() string {
+	errTxtBytes, err := json.MarshalIndent(e, "", "    ")
+	if err != nil {
+		newErr := HttpError{
+			Status: http.StatusInternalServerError,
+			Message: []string{
+				"failed to parse HttpError to string",
+				"Error:",
+			},
+			Code: e.Status,
+		}
+
+		return newErr.Error()
+	}
+	return string(errTxtBytes)
+}
+
+func AppendError(srcErr *HttpError, err *HttpError) {
+	tabErrMessage := Util.PrefixStrLst(err.Message, TAB)
+	srcErr.Message = append(srcErr.Message, tabErrMessage...)
+	srcErr.Context = append(srcErr.Context, err)
+}
+
+func IsHttpError(err error) bool {
+	_, ok := err.(*HttpError)
 	return ok
 }
 
-func (e *SchemaPathErr) Error() string {
-	return fmt.Sprintf("Code=[%d], Error: %s", e.Code, e.PathErr)
+func NewHttpError(msg string, status int) *HttpError {
+	return &HttpError{
+		Status:  status,
+		Message: strings.Split(msg, "\n"),
+		Context: []interface{}{},
+	}
 }
 
-func AppendErr(err error, newMsg string) *SchemaPathErr {
-	newErr := fmt.Errorf("%s Error: %s", newMsg, err)
-	if !IsSchemaPathErr(err) {
-		return &SchemaPathErr{
-			Code:    http.StatusInternalServerError,
-			PathErr: newErr,
-		}
-	}
-	return &SchemaPathErr{
-		Code:    err.(*SchemaPathErr).Code,
-		PathErr: newErr,
-	}
+func WrapError(err error, newMsg string, newStatus int) *HttpError {
+	newErr := NewHttpError(newMsg, newStatus)
+	newErr.Context = append(newErr.Context, err)
+	return newErr
 }
