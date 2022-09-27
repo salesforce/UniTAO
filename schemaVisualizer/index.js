@@ -10,6 +10,10 @@ const PORT = 3000;
 
 // app.use(cors())
 
+app.use(cors({
+  origin: '*'
+}));
+
 app.use(express.static('static'));
 //app.use(express.static('/Users/sherzog/code/schemaVisualizer/static'));
 //app.use(express.static('/Users/sherzog/documents/schemaVisualizer'));

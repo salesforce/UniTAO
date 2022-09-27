@@ -16,11 +16,18 @@ class schemaVisualizer {
     async init(schemaForest, visual) {
         this.placeIndex = 0;
         this.colors = new colorPalette();
-        if (visual)
-            this.visual = visual;  
+        if (!utils.isEmpty(visual)) {
+            this.visual = visual;
+        }    
+        else if (localStorage.schemaVisualizer) {
+            this.visual = JSON.parse(localStorage.schemaVisualizer)
+        } else {
+            this.visual = {}
+        }
         this.items = {};
         this.state = {};
         await this.scmStore.init(schemaForest, this.schemaFetched.bind(this));
+        localStorage.schemaVisualizer = JSON.stringify(this.visual);
         this.render();
     }
 
@@ -191,7 +198,12 @@ class schemaVisualizer {
         document.removeEventListener("mousemove", this.moveMethod);  
         let id = this.state.mousemove.id;
         this.items[id].locX += this.state.mousemove.diffX; 
-        this.items[id].locY += this.state.mousemove.diffY;     
+        this.items[id].locY += this.state.mousemove.diffY;
+        this.visual[id] = {
+            "locX": this.items[id].locX, 
+            "locY": this.items[id].locY
+        };
+        localStorage.schemaVisualizer = JSON.stringify(this.visual);     
   
         console.log(`up`);
         this.resetState();
