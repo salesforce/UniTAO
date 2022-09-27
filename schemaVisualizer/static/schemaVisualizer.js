@@ -127,39 +127,52 @@ class schemaVisualizer {
     renderAllLinks() {
         for (let id in this.items) {
             let item = this.items[id];
+            let propertyIdx = 0;
             for (let property in item.properties) {
                 let to = item.properties[property];
-                this.renderArrow(id, property, to, this.items[to.destination].color);
+                this.renderArrow(id, property, to, this.items[to.destination].color, propertyIdx++);
             }    
         }    
     }
     
-    renderArrow(from, property, to, color) {
+    renderArrow(from, property, to, color, propertyIdx) {
 
         let fromBox = document.getElementById(`${from}:${property}`).getBoundingClientRect();
         let toBox   = document.getElementById(`itemWrapper:${to.destination}`).getBoundingClientRect();
-        let direction = -1; // line goes to left
-        let fromX = fromBox.left
-        let fromY = fromBox.top + fromBox.height / 2;
-        let toX = toBox.left + toBox.width / 2;
+        let fromX = fromBox.left + fromBox.width / 2;  // mid x,y point of attribute name
+        let fromY = fromBox.top + fromBox.height / 2;  
+        let toX = toBox.left + toBox.width / 2;        // mid x, top y of object
         let toY = toBox.top;
-        let offsetY = 30;
-        let offsetX = (toBox.width * 3 / 5);
-        if (fromBox.left + fromBox.width / 2 < toX) {
-            direction = 1;
-            offsetX *= -1;
-            fromX += fromBox.width;
+
+
+  
+        
+        let toDirection = (fromX < toX) ? 1 : -1;                                // -1 => arrow left of from object
+        let toOffsetX = toBox.width*3/5 * -1 * toDirection;
+        let toOffsetY = 30;
+        let fromOffsetX = 30;
+        let toMidPointX = toX + toOffsetX;
+
+        let fromDirection;                            // -1 => arrow left from property name
+        let midPoints = "";
+        if (toY > fromY )
+            fromDirection = (fromX < toX) ? 1 : -1;  
+        else {  
+            if ((Math.abs(toX - fromX))  < (Math.abs(toOffsetX) + fromBox.width/2  + fromOffsetX))
+                fromDirection = toDirection * -1;
+            else
+                fromDirection = toDirection;
+
+            // fromDirection = ( 0 < toDirection * (toMidPointX - (fromX + toDirection * -1 * (4 +toOffsetX)))) ? 1 : -1;
+            midPoints = `L ${toMidPointX} ${toY-toOffsetY}`;
         }
-        let midPoint = "";
-        if (fromY > toY ) {
-            midPoint = `L ${toX + offsetX} ${toY-offsetY}`;
-        }
+        fromX += fromDirection * fromBox.width / 2;
     
-        let arrayIcon = to.array ? this.drawMultipleRect(fromX + 30 * direction, fromY, color) : ""; 
+        let arrayIcon = to.array ? this.drawMultipleRect(fromX + 30 * fromDirection, fromY, color) : ""; 
         let gEl = document.createElementNS('http://www.w3.org/2000/svg','g');
         gEl.style.zIndex = -1000;
         gEl.innerHTML = `
-                        <path d="M ${fromX+4*direction} ${fromY} l ${direction * 30} 0 ${midPoint} L ${toX} ${toY-offsetY} L ${toX} ${toY-15}" fill="transparent" stroke="${color}" stroke-width="3"/>
+                        <path d="M ${fromX+4*fromDirection} ${fromY} l ${fromDirection * fromOffsetX} 0 ${midPoints} L ${toX} ${toY-toOffsetY} L ${toX} ${toY-15}" fill="transparent" stroke="${color}" stroke-width="3"/>
                         <path d="M ${toX} ${toY} l -10 -15 l 20 0 l -10 15" fill="red" stroke="black" stroke-width="2"/>
                         <circle cx="${fromX}" cy="${fromY}" r="4" stroke="black" fill="red" />
                         ${arrayIcon}`;
