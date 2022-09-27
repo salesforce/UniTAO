@@ -12,8 +12,9 @@
     "http": {
         "type": "http",
         "dns": "localhost",
-        "port": "8003",
-        "id": "DataService_01"
+        "port": "8002",
+        "id": "DataService_01",
+        "headers": {}
     },
     "inventory": {
         "url": "http://localhost:8004"

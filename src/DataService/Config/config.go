@@ -34,6 +34,7 @@ import (
 	"Data/DbConfig"
 
 	"github.com/salesforce/UniTAO/lib/Util"
+	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
 
 const (
@@ -44,7 +45,7 @@ const (
 type Confuguration struct {
 	Database  DbConfig.DatabaseConfig `json:"database"`
 	DataTable DataTableConfig         `json:"table"`
-	Http      Util.HttpConfig         `json:"http"`
+	Http      Http.Config             `json:"http"`
 	Inv       InvConfig               `json:"inventory"`
 }
 

@@ -1,0 +1,45 @@
+
+{   id: "CHX",
+    type: "DC",
+    networks: {
+       publicSub: PUBLIC_SUBNET_CHX, 
+       slSUb: SLEDGE_SLB_CHX
+    }
+  }
+
+ { id: acl-src-only
+   type: _schema,
+   properties: {
+       data-center: {type: multiplierString},  
+       source-addresses: {type: array,... } 
+   }   
+ }
+
+
+ { id: GUID or something
+   type: acl-src-only
+   data-center: {data_center}
+   source-addresses: [data-center.netsworks.publicSub, data-center.networks.slSub] 
+ }
+
+
+ Step1:
+
+ { data-center: "CHX"}
+
+ step2:
+
+  { data-center: "CHX",
+    source-address: [......]
+  }
+
+  step3:
+
+  comment: acl from datacenter CHX
+  from [.....]
+
+  Template:
+
+  "comment: acl from datacenter {data-center}
+   from {source-address}
+ "    

@@ -9,6 +9,11 @@
         "type": "http",
         "dns": "localhost",
         "port": "80",
-        "id": "Inventory"
+        "id": "Inventory",
+        "headers": {
+            "Access-Control-Allow-Origin": [
+                "http://localhost:8005"
+            ]
+        }
     }
 }

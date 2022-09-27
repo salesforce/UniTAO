@@ -33,12 +33,12 @@ import (
 
 	"Data/DbConfig"
 
-	"github.com/salesforce/UniTAO/lib/Util"
+	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
 
 type ServerConfig struct {
 	Database DbConfig.DatabaseConfig `json:"database"`
-	Http     Util.HttpConfig         `json:"http"`
+	Http     Http.Config             `json:"http"`
 }
 
 func Read(configPath string, config *ServerConfig) error {

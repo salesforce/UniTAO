@@ -1,13 +1,13 @@
 {
- "__id": "DataService_02",
- "lastSynctime": "",
- "typeList": [
-  "FalconDomainInstance",
-  "FalconInstance",
-  "FalconService"
- ],
- "url": [
-    "http://unitao-data-service02",
-    "http://localhost:8003"
- ]
+    "__id": "DataService_02",
+    "__type": "inventory",
+    "__ver": "0.0.1",
+    "data": {
+        "dsId": "DataService_02",
+        "lastSynctime": "",
+        "url": [
+            "http://unitao-data-service02",
+            "http://localhost:8002"
+        ]
+    }
 }
