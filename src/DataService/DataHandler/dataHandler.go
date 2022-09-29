@@ -212,10 +212,6 @@ func (h *Handler) validateCmtRefs(doc *SchemaDoc.SchemaDoc, data map[string]inte
 			hasRef, err := h.validateCmtRefValue(ref, value.(string))
 			if err != nil {
 				return err
-				errList = append(errList,
-					Http.WrapError(err, fmt.Sprintf("broken reference @[%s], '%s:%s' value validate failed.", refPath, ref.ContentType, value),
-						http.StatusBadRequest))
-				continue
 			}
 			if !hasRef {
 				errList = append(errList, Http.NewHttpError(

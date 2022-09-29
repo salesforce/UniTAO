@@ -91,7 +91,7 @@ func (h *Handler) init() error {
 }
 
 func (h *Handler) List(dataType string) ([]string, *Http.HttpError) {
-	if Util.SearchStrList([]string{JsonKey.Schema, Schema.Inventory, RefRecord.Referral}, dataType) {
+	if Util.SearchStrList([]string{JsonKey.Schema, Schema.Inventory, RefRecord.Referral, SchemaPath.PathName}, dataType) {
 		result, err := h.ListData(dataType)
 		if err != nil {
 			return nil, err
@@ -133,41 +133,52 @@ func (h *Handler) List(dataType string) ([]string, *Http.HttpError) {
 
 func (h *Handler) Get(dataType string, dataPath string) (interface{}, *Http.HttpError) {
 	// if we get to this function, it means dataPath is not empty string already
-	idPath, nextPath := Util.ParsePath(dataPath)
-	if dataType == JsonKey.Schema {
+	dataId, nextPath := Util.ParsePath(dataPath)
+	if Util.SearchStrList([]string{JsonKey.Schema, Schema.Inventory, RefRecord.Referral, SchemaPath.PathName}, dataType) {
 		if nextPath != "" {
 			return nil, Http.NewHttpError(fmt.Sprintf("path=[%s] not supported on type=[%s]", dataPath, dataType), http.StatusBadRequest)
+		}
+		return h.GetRecord(dataType, dataId)
+	}
+	return h.GetDataByPath(dataType, dataId, nextPath)
+}
 
-		}
-		return h.GetData(JsonKey.Schema, idPath)
-	}
-	if dataType == Schema.Inventory {
-		if nextPath != "" {
-			return nil, Http.NewHttpError(fmt.Sprintf("path=[%s] not supported on type=[%s]", dataPath, dataType), http.StatusBadRequest)
-		}
-		// retrieve data service record from Inventory
-		dsRecord, err := h.GetDsRecord(idPath)
-		if err != nil {
-			return nil, err
-		}
-		return dsRecord, nil
-	}
-	if dataType == RefRecord.Referral {
-		if nextPath != "" {
-			return nil, Http.NewHttpError(fmt.Sprintf("path=[%s] not supported on type=[%s]", dataPath, dataType), http.StatusBadRequest)
-		}
-		referral, err := h.GetReferral(idPath)
+func (h *Handler) GetRecord(dataType string, dataId string) (*Record.Record, *Http.HttpError) {
+	var data interface{}
+	var err *Http.HttpError
+	switch dataType {
+	case JsonKey.Schema:
+		data, err = h.GetData(JsonKey.Schema, dataId)
+	case Schema.Inventory:
+		data, err = h.GetData(Schema.Inventory, dataId)
+	case RefRecord.Referral:
+		referral, err := h.GetReferral(dataId)
 		if err != nil {
 			return nil, err
 		}
 		return referral.GetRecord(), nil
+	case SchemaPath.PathName:
+		data, err = h.GetData(SchemaPath.PathName, dataId)
+	default:
+		data, err = h.GetDataServiceData(dataType, dataId)
 	}
-	return h.GetDataByPath(dataType, idPath, nextPath)
+	if err != nil {
+		return nil, err
+	}
+	record, e := Record.LoadMap(data.(map[string]interface{}))
+	if e != nil {
+		return nil, Http.WrapError(e, "failed to load result data as Record", http.StatusInternalServerError)
+	}
+	return record, nil
 }
 
 func (h *Handler) ListData(dataType string) ([]map[string]interface{}, *Http.HttpError) {
-	if !Util.SearchStrList([]string{JsonKey.Schema, Schema.Inventory, RefRecord.Referral}, dataType) {
+	if !Util.SearchStrList([]string{JsonKey.Schema, Schema.Inventory, RefRecord.Referral, SchemaPath.PathName}, dataType) {
 		return nil, Http.NewHttpError(fmt.Sprintf("[type]=[%s] is not supported", dataType), http.StatusBadRequest)
+	}
+	err := h.Db.CreateTable(dataType, nil)
+	if err != nil {
+		return nil, Http.NewHttpError(err.Error(), http.StatusInternalServerError)
 	}
 	args := make(map[string]interface{})
 	args[DbIface.Table] = dataType
@@ -209,7 +220,7 @@ func (h *Handler) GetDataServiceRecord(dataType string, dataId string) (*Record.
 func (h *Handler) GetDataByPath(dataType string, idPath string, nextPath string) (interface{}, *Http.HttpError) {
 	conn := SchemaPathData.Connection{
 		FuncSchema: h.GetSchema,
-		FuncRecord: h.GetDataServiceRecord,
+		FuncRecord: h.GetRecord,
 	}
 	dataPath := idPath
 	if nextPath != "" {
@@ -258,6 +269,10 @@ func (h *Handler) GetDataServiceData(dataType string, dataId string) (interface{
 }
 
 func (h *Handler) GetData(dataType string, dataId string) (interface{}, *Http.HttpError) {
+	err := h.Db.CreateTable(dataType, nil)
+	if err != nil {
+		return nil, Http.NewHttpError(err.Error(), http.StatusInternalServerError)
+	}
 	args := make(map[string]interface{})
 	args[DbIface.Table] = dataType
 	args[Record.DataId] = dataId
@@ -341,4 +356,54 @@ func (h *Handler) GetDsInfo(dsId string) (*InvRecord.DataServiceInfo, *Http.Http
 		return nil, Http.NewHttpError(e.Error(), http.StatusInternalServerError)
 	}
 	return dsInfo, nil
+}
+
+func (h *Handler) PutData(data map[string]interface{}) (string, *Http.HttpError) {
+	record, err := Record.LoadMap(data)
+	if err != nil {
+		return "", Http.WrapError(err, "payload failed to be load as Record", http.StatusBadRequest)
+	}
+	if !Util.SearchStrList([]string{SchemaPath.PathName}, record.Type) {
+		return "", Http.NewHttpError(fmt.Sprintf("update on type=[%s] not supported", record.Type), http.StatusBadRequest)
+	}
+	err = h.Db.CreateTable(record.Type, nil)
+	if err != nil {
+		return "", Http.WrapError(err, fmt.Sprintf("failed to init table=[%s]", record.Type), http.StatusInternalServerError)
+	}
+	if record.Type == SchemaPath.PathName {
+		_, e := SchemaPath.LoadPathDataMap(record.Data)
+		if e != nil {
+			return "", e
+		}
+	}
+	err = h.Db.Replace(record.Type, nil, record.Map())
+	if err != nil {
+		return "", Http.NewHttpError(err.Error(), http.StatusInternalServerError)
+	}
+	return record.Id, nil
+}
+
+func (h *Handler) DeleteData(dataType string, dataId string) *Http.HttpError {
+	if dataType == "" || dataId == "" {
+		return Http.NewHttpError("invalid url for delete, expected=[{dataType}/{dataId}]", http.StatusBadRequest)
+	}
+	if !Util.SearchStrList([]string{SchemaPath.PathName}, dataType) {
+		return Http.NewHttpError(fmt.Sprintf("delete on type=[%s] not supported", dataType), http.StatusBadRequest)
+	}
+	err := h.Db.CreateTable(dataType, nil)
+	if err != nil {
+		return Http.WrapError(err, fmt.Sprintf("failed to init table=[%s]", dataType), http.StatusInternalServerError)
+	}
+	_, e := h.GetData(dataType, dataId)
+	if e != nil {
+		if e.Status == http.StatusNotFound {
+			return nil
+		}
+		return e
+	}
+	err = h.Db.Delete(dataType, map[string]interface{}{Record.DataId: dataId})
+	if err != nil {
+		return Http.NewHttpError(err.Error(), http.StatusInternalServerError)
+	}
+	return nil
 }

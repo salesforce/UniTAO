@@ -28,7 +28,8 @@ package PathCmd
 const (
 	ALL         = "*"
 	CmdPrefix   = "?"
-	CmdFlat     = "?flat" // return flat value at the last step
+	CmdPathName = "?pathName" // get alias from database and use the stored path to query value
+	CmdFlat     = "?flat"     // return flat value at the last step
 	CmdFlatPath = "/$"
 	CmdIter     = "?iterator" // return path information when there is a * in the path
 	CmdRef      = "?ref"      // return reference key of ContentMediaType

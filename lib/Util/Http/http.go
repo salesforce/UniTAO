@@ -38,6 +38,14 @@ import (
 	"time"
 )
 
+const (
+	DELETE = "DELETE"
+	GET    = "GET"
+	PATCH  = "PATCH"
+	POST   = "POST"
+	PUT    = "PUT"
+)
+
 type Config struct {
 	HttpType  string                 `json:"type"`
 	DnsName   string                 `json:"dns"`

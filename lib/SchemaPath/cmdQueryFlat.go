@@ -32,6 +32,7 @@ import (
 
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
+	"github.com/salesforce/UniTAO/lib/SchemaPath/Data"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/Node"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/PathCmd"
 	"github.com/salesforce/UniTAO/lib/Util"
@@ -40,6 +41,20 @@ import (
 
 type CmdQueryFlat struct {
 	p *Node.PathNode
+}
+
+func NewFlatQuery(conn *Data.Connection, dataType string, dataId string, path string) (*CmdQueryFlat, *Http.HttpError) {
+	node, err := Node.New(conn, dataType, dataId, path, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	err = node.BuildPath()
+	if err != nil {
+		return nil, err
+	}
+	return &CmdQueryFlat{
+		p: node,
+	}, nil
 }
 
 func (c *CmdQueryFlat) Name() string {

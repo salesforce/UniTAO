@@ -30,6 +30,7 @@ import (
 	"net/http"
 
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
+	"github.com/salesforce/UniTAO/lib/SchemaPath/Data"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/Node"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/PathCmd"
 	"github.com/salesforce/UniTAO/lib/Util/Http"
@@ -38,6 +39,20 @@ import (
 type CmdQueryValue struct {
 	p    *Node.PathNode
 	Data interface{}
+}
+
+func NewValueQuery(conn *Data.Connection, dataType string, dataId string, path string) (*CmdQueryValue, *Http.HttpError) {
+	node, err := Node.New(conn, dataType, dataId, path, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	err = node.BuildPath()
+	if err != nil {
+		return nil, err
+	}
+	return &CmdQueryValue{
+		p: node,
+	}, nil
 }
 
 func (c *CmdQueryValue) Name() string {

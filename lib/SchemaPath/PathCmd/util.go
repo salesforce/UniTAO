@@ -33,6 +33,8 @@ import (
 	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
 
+var CmdList = []string{CmdRef, CmdFlat, CmdSchema, CmdValue, CmdIter, CmdPathName}
+
 func Parse(path string) (string, string, *Http.HttpError) {
 	if strings.HasSuffix(path, CmdFlatPath) {
 		qPath := path[:len(path)-len(CmdFlatPath)]
@@ -51,17 +53,24 @@ func Parse(path string) (string, string, *Http.HttpError) {
 	}
 	err := Validate(qCmd)
 	if err != nil {
-		return "", "", Http.NewHttpError(fmt.Sprintf("path command validate failed. Error: %s, @path=[%s]", err, path), http.StatusBadRequest)
+		return "", "", err
 
 	}
 	return qPath, qCmd, nil
 }
 
 func Validate(cmd string) *Http.HttpError {
-	for _, c := range []string{CmdRef, CmdFlat, CmdSchema, CmdValue, CmdIter} {
+	for _, c := range CmdList {
 		if c == cmd {
 			return nil
 		}
 	}
-	return Http.NewHttpError(fmt.Sprintf("unknown path cmd=[%s]", cmd), http.StatusBadRequest)
+	if strings.HasPrefix(cmd, fmt.Sprintf("%s=", CmdPathName)) {
+		return nil
+	}
+	e := Http.NewHttpError(fmt.Sprintf("unknown path cmd=[%s]", cmd), http.StatusBadRequest)
+	e.Context = append(e.Context, map[string]interface{}{
+		"available options": CmdList,
+	})
+	return e
 }
