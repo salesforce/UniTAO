@@ -27,7 +27,6 @@ package SchemaPath
 
 import (
 	"github.com/salesforce/UniTAO/lib/SchemaPath/Data"
-	"github.com/salesforce/UniTAO/lib/SchemaPath/Node"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/PathCmd"
 	"github.com/salesforce/UniTAO/lib/Util"
 	"github.com/salesforce/UniTAO/lib/Util/Http"
@@ -39,31 +38,19 @@ func CreateQuery(conn *Data.Connection, dataType string, dataPath string) (PathC
 		return nil, pErr
 	}
 	dataId, nextPath := Util.ParsePath(qPath)
-	queryPath, err := Node.New(conn, dataType, dataId, nextPath, nil, nil)
-	if err != nil {
-		return nil, err
-	}
 	switch qCmd {
 	case PathCmd.CmdSchema:
-		return &CmdQuerySchema{
-			p: queryPath,
-		}, nil
+		return NewSchemaQuery(conn, dataType, dataId, nextPath)
 	case PathCmd.CmdFlat:
-		return &CmdQueryFlat{
-			p: queryPath,
-		}, nil
+		return NewFlatQuery(conn, dataType, dataId, nextPath)
 	case PathCmd.CmdRef:
-		return &CmdQueryRef{
-			p: queryPath,
-		}, nil
+		return NewRefQuery(conn, dataType, dataId, nextPath)
 	case PathCmd.CmdIter:
-		return &CmdPathIterator{
-			path: qPath,
-			p:    queryPath,
-		}, nil
+		return NewIteratorQuery(conn, dataType, dataId, nextPath)
 	default:
-		return &CmdQueryValue{
-			p: queryPath,
-		}, nil
+		if IsCmdPathName(qCmd) {
+			return NewPathQuery(conn, dataType, qPath, qCmd)
+		}
+		return NewValueQuery(conn, dataType, dataId, nextPath)
 	}
 }

@@ -30,6 +30,7 @@ import (
 	"net/http"
 
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
+	"github.com/salesforce/UniTAO/lib/SchemaPath/Data"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/Node"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/PathCmd"
 	"github.com/salesforce/UniTAO/lib/Util"
@@ -56,6 +57,25 @@ type IteratorResult struct {
 type CmdPathIterator struct {
 	path string
 	p    *Node.PathNode
+}
+
+func NewIteratorQuery(conn *Data.Connection, dataType string, dataId string, path string) (*CmdPathIterator, *Http.HttpError) {
+	node, err := Node.New(conn, dataType, dataId, path, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	err = node.BuildPath()
+	if err != nil {
+		return nil, err
+	}
+	qPath := dataId
+	if path != "" {
+		qPath = fmt.Sprintf("%s/%s", qPath, path)
+	}
+	return &CmdPathIterator{
+		path: qPath,
+		p:    node,
+	}, nil
 }
 
 func (c *CmdPathIterator) Name() string {

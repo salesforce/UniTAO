@@ -68,10 +68,6 @@ func New(conn *Data.Connection, dataType string, dataId string, nextPath string,
 	if err != nil {
 		return nil, err
 	}
-	err = node.BuildPath()
-	if err != nil {
-		return nil, err
-	}
 	return &node, nil
 }
 

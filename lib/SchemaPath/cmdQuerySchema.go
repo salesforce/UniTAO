@@ -37,8 +37,12 @@ type CmdQuerySchema struct {
 	p *Node.PathNode
 }
 
-func NewSchemaQuery(conn *Data.Connection, dataType string, dataId string, path string) (*CmdQuerySchema, error) {
+func NewSchemaQuery(conn *Data.Connection, dataType string, dataId string, path string) (*CmdQuerySchema, *Http.HttpError) {
 	node, err := Node.New(conn, dataType, dataId, path, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	err = node.BuildPath()
 	if err != nil {
 		return nil, err
 	}

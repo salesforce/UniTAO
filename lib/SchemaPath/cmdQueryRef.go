@@ -30,6 +30,7 @@ import (
 	"net/http"
 
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
+	"github.com/salesforce/UniTAO/lib/SchemaPath/Data"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/Node"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/PathCmd"
 	"github.com/salesforce/UniTAO/lib/Util/Http"
@@ -37,6 +38,20 @@ import (
 
 type CmdQueryRef struct {
 	p *Node.PathNode
+}
+
+func NewRefQuery(conn *Data.Connection, dataType string, dataId string, path string) (*CmdQueryRef, *Http.HttpError) {
+	node, err := Node.New(conn, dataType, dataId, path, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	err = node.BuildPath()
+	if err != nil {
+		return nil, err
+	}
+	return &CmdQueryRef{
+		p: node,
+	}, nil
 }
 
 func (c *CmdQueryRef) Name() string {

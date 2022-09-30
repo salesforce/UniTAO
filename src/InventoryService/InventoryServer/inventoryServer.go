@@ -106,14 +106,23 @@ func (srv *Server) Run() {
 }
 
 func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "GET" {
-		err := Http.NewHttpError("Inventory Server only support GET method", http.StatusMethodNotAllowed)
+	switch r.Method {
+	case Http.GET:
+		srv.handleGet(w, r)
+	case Http.PUT:
+		srv.handleUpdate(w, r)
+	case Http.DELETE:
+		srv.handlerDelete(w, r)
+	default:
+		err := Http.NewHttpError(fmt.Sprintf("method=[%s] not supported. only support method=[%s, %s]", r.Method, Http.PUT, Http.DELETE), http.StatusMethodNotAllowed)
 		Http.ResponseJson(w, err, err.Status, srv.config.Http)
-		return
 	}
+}
+
+func (srv *Server) handleGet(w http.ResponseWriter, r *http.Request) {
 	dataType, dataPath := Util.ParsePath(r.RequestURI)
 	if dataType == "" {
-		err := Http.NewHttpError("please use inventory{type}[/{id}], dataType is empty", http.StatusBadRequest)
+		err := Http.NewHttpError("please use inventory/{type}[/{id}], dataType is empty", http.StatusBadRequest)
 		Http.ResponseJson(w, err, err.Status, srv.config.Http)
 		return
 	}
@@ -132,4 +141,43 @@ func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	Http.ResponseJson(w, data, http.StatusOK, srv.config.Http)
+}
+
+func (srv *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
+	dataType, _ := Util.ParsePath(r.RequestURI)
+	if dataType != "" {
+		err := Http.NewHttpError("for PUT method, no path allowed", http.StatusBadRequest)
+		Http.ResponseJson(w, err, err.Status, srv.config.Http)
+		return
+	}
+	payload := make(map[string]interface{})
+	code, e := Util.LoadJSONPayload(r, payload)
+	if e != nil {
+		err := Http.WrapError(e, "failed to load payload", code)
+		Http.ResponseJson(w, err, err.Status, srv.config.Http)
+		return
+	}
+	dataId, err := srv.data.PutData(payload)
+	if err != nil {
+		Http.ResponseJson(w, err, err.Status, srv.config.Http)
+		return
+	}
+	Http.ResponseText(w, []byte(dataId), http.StatusAccepted, srv.config.Http)
+}
+
+func (srv *Server) handlerDelete(w http.ResponseWriter, r *http.Request) {
+	dataType, idPath := Util.ParsePath(r.RequestURI)
+	id, nextPath := Util.ParsePath(idPath)
+	if nextPath == "" {
+		err := Http.NewHttpError("invalid url for delete, expected format=[{dataType}/{dataId}]", http.StatusBadRequest)
+		Http.ResponseJson(w, err, err.Status, srv.config.Http)
+		return
+	}
+	err := srv.data.DeleteData(dataType, id)
+	if err != nil {
+		Http.ResponseJson(w, err, err.Status, srv.config.Http)
+		return
+	}
+	result := fmt.Sprintf("[%s/%s] deleted", dataType, id)
+	Http.ResponseText(w, []byte(result), http.StatusAccepted, srv.config.Http)
 }
