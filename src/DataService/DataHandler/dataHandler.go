@@ -34,6 +34,7 @@ import (
 	"Data/DbConfig"
 	"Data/DbIface"
 	"DataService/Config"
+	"DataService/DataLock"
 
 	"github.com/salesforce/UniTAO/lib/Schema"
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
@@ -46,8 +47,11 @@ type Handler struct {
 	db        DbIface.Database
 	schemaMap map[string]*Schema.SchemaOps
 	config    Config.Confuguration
+	lock      *DataLock.LockHash
 }
 
+// DataLock time max to 5 second.
+// move this number to config if necessary
 func New(config Config.Confuguration, connectDb func(db DbConfig.DatabaseConfig) (DbIface.Database, error)) (*Handler, error) {
 	db, err := connectDb(config.Database)
 	if err != nil {
@@ -57,6 +61,7 @@ func New(config Config.Confuguration, connectDb func(db DbConfig.DatabaseConfig)
 		schemaMap: make(map[string]*Schema.SchemaOps),
 		db:        db,
 		config:    config,
+		lock:      DataLock.NewHash(5),
 	}
 	return &handler, nil
 }
@@ -114,15 +119,23 @@ func (h *Handler) GetData(dataType string, dataId string) (map[string]interface{
 	return recordList[0], nil
 }
 
-func (h *Handler) Lock(dataType string, dataId string) *Http.HttpError {
-	if dataType == JsonKey.Schema {
-		return nil
+// TODO: for now we allow update on schema, eventually, we need to limit schema record to create/delete only.no update allowed
+func (h *Handler) Lock(dataType string, dataId string, nextPath string) (string, *Http.HttpError) {
+	if dataType != JsonKey.Schema {
+		_, err := h.GetData(JsonKey.Schema, dataType)
+		if err != nil {
+			return "", Http.WrapError(err, fmt.Sprintf("object of type “%s” does not exist", dataType), err.Status)
+		}
 	}
-	_, err := h.GetData(JsonKey.Schema, dataType)
-	if err != nil {
-		return Http.WrapError(err, fmt.Sprintf("object of type “%s” does not exist", dataType), err.Status)
+	dataPath := path.Join(dataType, dataId, nextPath)
+	// TODO: need to convert user info into user Id
+	// TODO: figure out how to determine the approperiate lock length
+	r := h.lock.NewRequest("", dataPath, 0)
+	handle, ex := h.lock.Lock(r)
+	if ex != nil {
+		return "", Http.NewHttpError(ex.Error(), http.StatusInternalServerError)
 	}
-	return nil
+	return handle, nil
 }
 
 func (h *Handler) localSchema(dataType string) (*Schema.SchemaOps, *Http.HttpError) {
@@ -325,10 +338,11 @@ func (h *Handler) Add(record *Record.Record) *Http.HttpError {
 	if err != nil {
 		return err
 	}
-	err = h.Lock(record.Type, record.Id)
+	handle, err := h.Lock(record.Type, record.Id, "")
 	if err != nil {
 		return err
 	}
+	defer h.lock.UnLock(handle)
 	_, err = h.GetData(record.Type, record.Id)
 	if err == nil {
 		return Http.NewHttpError(fmt.Sprintf("data [type/id]=[%s/%s] already exists", record.Type, record.Id), http.StatusConflict)
@@ -348,10 +362,11 @@ func (h *Handler) Set(record *Record.Record) *Http.HttpError {
 	if err != nil {
 		return err
 	}
-	err = h.Lock(record.Type, record.Id)
+	handle, err := h.Lock(record.Type, record.Id, "")
 	if err != nil {
 		return err
 	}
+	h.lock.UnLock(handle)
 	e := h.db.Create(h.config.DataTable.Data, record.Map())
 	if e != nil {
 		return Http.NewHttpError(e.Error(), http.StatusInternalServerError)
@@ -360,10 +375,11 @@ func (h *Handler) Set(record *Record.Record) *Http.HttpError {
 }
 
 func (h *Handler) Delete(dataType string, dataId string) *Http.HttpError {
-	err := h.Lock(dataType, dataId)
+	handle, err := h.Lock(dataType, dataId, "")
 	if err != nil {
 		return err
 	}
+	defer h.lock.UnLock(handle)
 	keys := make(map[string]interface{})
 	keys[Record.DataType] = dataType
 	keys[Record.DataId] = dataId
