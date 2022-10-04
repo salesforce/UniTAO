@@ -59,6 +59,10 @@ func TestPathNodeOneObj(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to build queryPath [%s/%s], nextPath=[%s]", dataType, dataId, nextPath)
 	}
+	err = queryNode.BuildPath()
+	if err != nil {
+		t.Fatalf("failed to build path. Error:%s", err)
+	}
 	if queryNode.Next != nil {
 		t.Fatalf("invalid path build, [%s/%s] should have only 1 node", dataType, dataId)
 	}
@@ -70,6 +74,10 @@ func TestPathNodeOneObj(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to build queryPath [%s/%s], nextPath=[%s]", dataType, dataId, nextPath)
 	}
+	err = queryNode.BuildPath()
+	if err != nil {
+		t.Fatalf("failed to build path. Error:%s", err)
+	}
 	if queryNode.Next != nil {
 		t.Fatalf("invalid path build, [%s/%s] should have only 1 node", dataType, dataId)
 	}
@@ -80,7 +88,11 @@ func TestPathNodeOneObj(t *testing.T) {
 		t.Fatalf("invalid path build, [%s/%s] AttrName=[attrNotExists], AttrDef expected to be nil", dataType, dataId)
 	}
 	nextPath = "attrNotExists/further"
-	_, err = Node.New(conn, dataType, dataId, nextPath, nil, nil)
+	queryNode, err = Node.New(conn, dataType, dataId, nextPath, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to generate node. Error:%s", err)
+	}
+	err = queryNode.BuildPath()
 	if err == nil {
 		t.Fatalf("failed to catch error for walk further on no schema attribute")
 	}
@@ -133,6 +145,10 @@ func TestPathNodeSubItem(t *testing.T) {
 	nextPath := "simpleObj"
 	queryNode, err := Node.New(conn, dataType, dataId, nextPath, nil, nil)
 	if err != nil {
+		t.Fatalf("failed to create query node. Error:%s", err)
+	}
+	err = queryNode.BuildPath()
+	if err != nil {
 		t.Fatalf("failed to build queryPath=[%s/%s/%s]", dataType, dataId, nextPath)
 	}
 	if queryNode.Next == nil {
@@ -146,6 +162,10 @@ func TestPathNodeSubItem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to build queryPath=[%s/%s/%s]", dataType, dataId, nextPath)
 	}
+	err = queryNode.BuildPath()
+	if err != nil {
+		t.Fatalf("failed to build queryPath=[%s/%s/%s]", dataType, dataId, nextPath)
+	}
 	if queryNode.Next.AttrName != "key1" {
 		t.Fatalf("failed to build queryPath=[%s/%s/%s], didn't catch attrName=[key1]", dataType, dataId, nextPath)
 	}
@@ -154,11 +174,19 @@ func TestPathNodeSubItem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to build queryPath=[%s/%s/%s]", dataType, dataId, nextPath)
 	}
+	err = queryNode.BuildPath()
+	if err != nil {
+		t.Fatalf("failed to build queryPath=[%s/%s/%s]", dataType, dataId, nextPath)
+	}
 	if queryNode.Next != nil {
 		t.Fatalf("failed to build queryPath=[%s/%s/%s], no Next when Idx is empty", dataType, dataId, nextPath)
 	}
 	nextPath = "arrayObj[anything]"
 	queryNode, err = Node.New(conn, dataType, dataId, nextPath, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to build queryPath=[%s/%s/%s]", dataType, dataId, nextPath)
+	}
+	err = queryNode.BuildPath()
 	if err != nil {
 		t.Fatalf("failed to build queryPath=[%s/%s/%s]", dataType, dataId, nextPath)
 	}
@@ -173,11 +201,19 @@ func TestPathNodeSubItem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to build queryPath=[%s/%s/%s]", dataType, dataId, nextPath)
 	}
+	err = queryNode.BuildPath()
+	if err != nil {
+		t.Fatalf("failed to build queryPath=[%s/%s/%s]", dataType, dataId, nextPath)
+	}
 	if queryNode.Next != nil {
 		t.Fatalf("failed to build queryPath=[%s/%s/%s], no Next when Idx is empty", dataType, dataId, nextPath)
 	}
 	nextPath = "mapObj[anything]"
 	queryNode, err = Node.New(conn, dataType, dataId, nextPath, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to build queryPath=[%s/%s/%s]", dataType, dataId, nextPath)
+	}
+	err = queryNode.BuildPath()
 	if err != nil {
 		t.Fatalf("failed to build queryPath=[%s/%s/%s]", dataType, dataId, nextPath)
 	}
@@ -189,6 +225,10 @@ func TestPathNodeSubItem(t *testing.T) {
 	}
 	nextPath = "mapObj/anything"
 	queryNode, err = Node.New(conn, dataType, dataId, nextPath, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to build queryPath=[%s/%s/%s]", dataType, dataId, nextPath)
+	}
+	err = queryNode.BuildPath()
 	if err != nil {
 		t.Fatalf("failed to build queryPath=[%s/%s/%s]", dataType, dataId, nextPath)
 	}
@@ -251,6 +291,10 @@ func TestPathNodeRefItem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to build queryPath=[%s/%s/%s]", dataType, dataId, nextPath)
 	}
+	err = queryNode.BuildPath()
+	if err != nil {
+		t.Fatalf("failed to build queryPath=[%s/%s/%s]", dataType, dataId, nextPath)
+	}
 	if queryNode.Next == nil {
 		t.Fatalf("failed to build queryPath=[%s/%s/%s], missing ref node", dataType, dataId, nextPath)
 	}
@@ -259,11 +303,19 @@ func TestPathNodeRefItem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to build queryPath=[%s/%s/%s]", dataType, dataId, nextPath)
 	}
+	err = queryNode.BuildPath()
+	if err != nil {
+		t.Fatalf("failed to build queryPath=[%s/%s/%s]", dataType, dataId, nextPath)
+	}
 	if queryNode.Next != nil {
 		t.Fatalf("failed to build queryPath=[%s/%s/%s], expect no Next when no Idx", dataType, dataId, nextPath)
 	}
 	nextPath = "arrayRef[anything]"
 	queryNode, err = Node.New(conn, dataType, dataId, nextPath, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to build queryPath=[%s/%s/%s]", dataType, dataId, nextPath)
+	}
+	err = queryNode.BuildPath()
 	if err != nil {
 		t.Fatalf("failed to build queryPath=[%s/%s/%s]", dataType, dataId, nextPath)
 	}
@@ -278,11 +330,19 @@ func TestPathNodeRefItem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to build queryPath=[%s/%s/%s]", dataType, dataId, nextPath)
 	}
+	err = queryNode.BuildPath()
+	if err != nil {
+		t.Fatalf("failed to build queryPath=[%s/%s/%s]", dataType, dataId, nextPath)
+	}
 	if queryNode.Next != nil {
 		t.Fatalf("failed to build queryPath=[%s/%s/%s], expect no Next when no Idx", dataType, dataId, nextPath)
 	}
 	nextPath = "mapRef[anything]"
 	queryNode, err = Node.New(conn, dataType, dataId, nextPath, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to build queryPath=[%s/%s/%s]", dataType, dataId, nextPath)
+	}
+	err = queryNode.BuildPath()
 	if err != nil {
 		t.Fatalf("failed to build queryPath=[%s/%s/%s]", dataType, dataId, nextPath)
 	}
@@ -294,6 +354,10 @@ func TestPathNodeRefItem(t *testing.T) {
 	}
 	nextPath = "mapRef/anything"
 	queryNode, err = Node.New(conn, dataType, dataId, nextPath, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to build queryPath=[%s/%s/%s]", dataType, dataId, nextPath)
+	}
+	err = queryNode.BuildPath()
 	if err != nil {
 		t.Fatalf("failed to build queryPath=[%s/%s/%s]", dataType, dataId, nextPath)
 	}
