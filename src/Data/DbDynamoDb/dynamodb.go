@@ -29,6 +29,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sync"
 
 	"Data/DbConfig"
 	"Data/DbIface"
@@ -54,10 +55,11 @@ type Database struct {
 	config   DbConfig.DatabaseConfig
 	sess     *session.Session
 	database *dynamodb.DynamoDB
+	mu       sync.Mutex
 }
 
 func ParseQueryOutput(output *dynamodb.QueryOutput) ([]map[string]interface{}, error) {
-	result := make([]map[string]interface{}, len(output.Items))
+	result := make([]map[string]interface{}, 0, len(output.Items))
 	for idx, value := range output.Items {
 		item := make(map[string]interface{})
 		err := dynamodbattribute.UnmarshalMap(value, &item)
@@ -65,7 +67,7 @@ func ParseQueryOutput(output *dynamodb.QueryOutput) ([]map[string]interface{}, e
 			err = fmt.Errorf("failed to unmarshal item: %d, Error:%s", idx, err)
 			return nil, err
 		}
-		result[idx] = item
+		result = append(result, item)
 	}
 	return result, nil
 }
@@ -211,15 +213,15 @@ func (db *Database) Create(table string, data interface{}) error {
 	return nil
 }
 
-func (db *Database) Update(table string, keys map[string]interface{}, cmd DbIface.UpdateCommand) (map[string]interface{}, error) {
-	return nil, nil
-}
-
 func (db *Database) Replace(table string, keys map[string]interface{}, data interface{}) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
 	return db.Create(table, data)
 }
 
 func (db *Database) Delete(table string, keys map[string]interface{}) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
 	av, err := dynamodbattribute.MarshalMap(keys)
 	if err != nil {
 		log.Printf("Got error marshalling map: %s", err)
@@ -235,6 +237,50 @@ func (db *Database) Delete(table string, keys map[string]interface{}) error {
 		return err
 	}
 	return nil
+}
+
+func (db *Database) Update(table string, keys map[string]interface{}, data interface{}) (map[string]interface{}, error) {
+	dataType, ok := keys[Record.DataType].(string)
+	if !ok {
+		return nil, fmt.Errorf("missing key=[%s]", Record.DataType)
+	}
+	dataId, ok := keys[Record.DataId].(string)
+	if !ok {
+		return nil, fmt.Errorf("missing key=[%s]", Record.DataId)
+	}
+	if dataType == "" || dataId == "" {
+		return nil, fmt.Errorf("missing dataType/dataId, expect format:[{dataType}/{dataId}/{dataPath}]")
+	}
+	queryPath, ok := keys[DbIface.PatchPath].(string)
+	if !ok {
+		return nil, fmt.Errorf("missing patch key=[%s]", DbIface.PatchPath)
+	}
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	patchData, err := db.Get(map[string]interface{}{
+		DbIface.Table:   table,
+		Record.DataType: dataType,
+		Record.DataId:   dataId,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(patchData) == 0 {
+		return nil, fmt.Errorf("data [%s/%s] does not exists", dataType, dataId)
+	}
+	subData, attrPath, err := DbIface.GetDataOnPath(patchData[0], queryPath, fmt.Sprintf("%s/%s/%s", dataType, dataId, queryPath))
+	if err != nil {
+		return nil, err
+	}
+	err = DbIface.SetPatchData(subData, attrPath, data)
+	if err != nil {
+		return nil, err
+	}
+	err = db.Create(table, patchData[0])
+	if err != nil {
+		return nil, err
+	}
+	return patchData[0], nil
 }
 
 func Connect(config DbConfig.DatabaseConfig) (DbIface.Database, error) {
@@ -275,6 +321,7 @@ func Connect(config DbConfig.DatabaseConfig) (DbIface.Database, error) {
 		config:   config,
 		sess:     dbSession,
 		database: dbSvc,
+		mu:       sync.Mutex{},
 	}
 	return &database, nil
 }

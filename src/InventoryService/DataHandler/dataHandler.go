@@ -50,6 +50,17 @@ type Handler struct {
 	Db DbIface.Database
 }
 
+var InvTypes = map[string]bool{
+	JsonKey.Schema:      true,
+	Schema.Inventory:    true,
+	RefRecord.Referral:  true,
+	SchemaPath.PathName: true,
+}
+
+var EditableTypes = map[string]bool{
+	SchemaPath.PathName: true,
+}
+
 func New(config DbConfig.DatabaseConfig) (*Handler, error) {
 	db, err := Data.ConnectDb(config)
 	if err != nil {
@@ -90,13 +101,13 @@ func (h *Handler) init() error {
 	return nil
 }
 
-func (h *Handler) List(dataType string) ([]string, *Http.HttpError) {
-	if Util.SearchStrList([]string{JsonKey.Schema, Schema.Inventory, RefRecord.Referral, SchemaPath.PathName}, dataType) {
+func (h *Handler) List(dataType string) ([]interface{}, *Http.HttpError) {
+	if _, ok := InvTypes[dataType]; ok {
 		result, err := h.ListData(dataType)
 		if err != nil {
 			return nil, err
 		}
-		dsList := make([]string, 0, len(result))
+		dsList := make([]interface{}, 0, len(result))
 		dataKey := Record.DataId
 		for _, data := range result {
 			dsList = append(dsList, data[dataKey].(string))
@@ -119,22 +130,18 @@ func (h *Handler) List(dataType string) ([]string, *Http.HttpError) {
 	if e != nil {
 		return nil, Http.WrapError(e, fmt.Sprintf("failed to parse url from data service [%s]=[%s], url=[%s]", Record.DataId, referral.DsInfo.Id, dsUrl), http.StatusInternalServerError)
 	}
-	dataList, code, e := Http.GetRestData(*urlPath)
+	data, code, e := Http.GetRestData(*urlPath)
 	if e != nil {
 		return nil, Http.WrapError(e, fmt.Sprintf("failed to get data from REST URL=[%s]", *urlPath), code)
 
 	}
-	idList := []string{}
-	for _, id := range dataList.([]interface{}) {
-		idList = append(idList, id.(string))
-	}
-	return idList, nil
+	return data.([]interface{}), nil
 }
 
 func (h *Handler) Get(dataType string, dataPath string) (interface{}, *Http.HttpError) {
 	// if we get to this function, it means dataPath is not empty string already
 	dataId, nextPath := Util.ParsePath(dataPath)
-	if Util.SearchStrList([]string{JsonKey.Schema, Schema.Inventory, RefRecord.Referral, SchemaPath.PathName}, dataType) {
+	if _, ok := InvTypes[dataType]; ok {
 		if nextPath != "" {
 			return nil, Http.NewHttpError(fmt.Sprintf("path=[%s] not supported on type=[%s]", dataPath, dataType), http.StatusBadRequest)
 		}
@@ -173,7 +180,7 @@ func (h *Handler) GetRecord(dataType string, dataId string) (*Record.Record, *Ht
 }
 
 func (h *Handler) ListData(dataType string) ([]map[string]interface{}, *Http.HttpError) {
-	if !Util.SearchStrList([]string{JsonKey.Schema, Schema.Inventory, RefRecord.Referral, SchemaPath.PathName}, dataType) {
+	if _, ok := InvTypes[dataType]; !ok {
 		return nil, Http.NewHttpError(fmt.Sprintf("[type]=[%s] is not supported", dataType), http.StatusBadRequest)
 	}
 	err := h.Db.CreateTable(dataType, nil)
@@ -363,8 +370,8 @@ func (h *Handler) PutData(data map[string]interface{}) (string, *Http.HttpError)
 	if err != nil {
 		return "", Http.WrapError(err, "payload failed to be load as Record", http.StatusBadRequest)
 	}
-	if !Util.SearchStrList([]string{SchemaPath.PathName}, record.Type) {
-		return "", Http.NewHttpError(fmt.Sprintf("update on type=[%s] not supported", record.Type), http.StatusBadRequest)
+	if _, ok := EditableTypes[record.Type]; !ok {
+		return "", Http.NewHttpError(fmt.Sprintf("update on type=[%s] not editable", record.Type), http.StatusBadRequest)
 	}
 	err = h.Db.CreateTable(record.Type, nil)
 	if err != nil {
@@ -387,7 +394,7 @@ func (h *Handler) DeleteData(dataType string, dataId string) *Http.HttpError {
 	if dataType == "" || dataId == "" {
 		return Http.NewHttpError("invalid url for delete, expected=[{dataType}/{dataId}]", http.StatusBadRequest)
 	}
-	if !Util.SearchStrList([]string{SchemaPath.PathName}, dataType) {
+	if _, ok := EditableTypes[dataType]; !ok {
 		return Http.NewHttpError(fmt.Sprintf("delete on type=[%s] not supported", dataType), http.StatusBadRequest)
 	}
 	err := h.Db.CreateTable(dataType, nil)

@@ -27,15 +27,43 @@ package DataServiceTest
 
 import (
 	"Data/DbConfig"
-	"Data/DbIface"
+	"encoding/json"
+	"fmt"
+
+	"github.com/salesforce/UniTAO/lib/Schema/Record"
 )
 
 type MockDatabase struct {
 	config DbConfig.DatabaseConfig
-	get    func(queryArgs map[string]interface{}) ([]map[string]interface{}, error)
+	Data   map[string]interface{}
+}
+
+func NewMockDb(config DbConfig.DatabaseConfig, dataStr string) (*MockDatabase, error) {
+	data := map[string]interface{}{}
+	err := json.Unmarshal([]byte(dataStr), &data)
+	if err != nil {
+		return nil, err
+	}
+	db := MockDatabase{
+		config: config,
+		Data:   data,
+	}
+	return &db, nil
 }
 
 func (db MockDatabase) Create(table string, data interface{}) error {
+	record, err := Record.LoadMap(data.(map[string]interface{}))
+	if err != nil {
+		return err
+	}
+	keys := map[string]interface{}{
+		Record.DataType: record.Type,
+		Record.DataId:   record.Id,
+	}
+	err = db.Replace("", keys, record.Map())
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -51,18 +79,58 @@ func (db MockDatabase) DeleteTable(name string) error {
 	return nil
 }
 func (db MockDatabase) Get(queryArgs map[string]interface{}) ([]map[string]interface{}, error) {
-	if db.get != nil {
-		return db.get(queryArgs)
+	dataType, ok := queryArgs[Record.DataType].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid queryArgs. missing=[%s]", Record.DataType)
 	}
-	return nil, nil
+	dataId, ok := queryArgs[Record.DataId].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid queryArgs. missing=[%s]", Record.DataId)
+	}
+	typeMap, ok := db.Data[dataType].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("type=[%s] not found", dataType)
+	}
+	data, ok := typeMap[dataId].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("type=[%s] id=[%s] not found", dataType, dataId)
+	}
+	return []map[string]interface{}{data}, nil
 }
 
-func (db MockDatabase) Update(table string, keys map[string]interface{}, cmd DbIface.UpdateCommand) (map[string]interface{}, error) {
+func (db MockDatabase) Update(table string, keys map[string]interface{}, data interface{}) (map[string]interface{}, error) {
 	return nil, nil
 }
 func (db MockDatabase) Replace(table string, keys map[string]interface{}, data interface{}) error {
+	dataType, ok := keys[Record.DataType].(string)
+	if !ok {
+		return fmt.Errorf("invalid queryArgs. missing=[%s]", Record.DataType)
+	}
+	dataId, ok := keys[Record.DataId].(string)
+	if !ok {
+		return fmt.Errorf("invalid queryArgs. missing=[%s]", Record.DataId)
+	}
+	typeMap, ok := db.Data[dataType].(map[string]interface{})
+	if !ok {
+		typeMap = map[string]interface{}{}
+		db.Data[dataType] = typeMap
+	}
+	typeMap[dataId] = data
 	return nil
 }
 func (db MockDatabase) Delete(table string, keys map[string]interface{}) error {
+	dataType, ok := keys[Record.DataType].(string)
+	if !ok {
+		return fmt.Errorf("invalid queryArgs. missing=[%s]", Record.DataType)
+	}
+	dataId, ok := keys[Record.DataId].(string)
+	if !ok {
+		return fmt.Errorf("invalid queryArgs. missing=[%s]", Record.DataId)
+	}
+	typeMap, ok := db.Data[dataType].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	delete(typeMap, dataId)
 	return nil
 }

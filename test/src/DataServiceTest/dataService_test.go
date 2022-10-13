@@ -41,7 +41,7 @@ import (
 )
 
 // Make sure both data service and inventory Service are running before running the test
-func TestDataHander(t *testing.T) {
+func TestDataHandler(t *testing.T) {
 	configStr := `
 	{
 		"database": {
@@ -73,74 +73,66 @@ func TestDataHander(t *testing.T) {
 	log.Print("config loaded")
 	schemaStr := `
 	{
-		"region": {
-			"__id": "region",
-			"__type": "schema",
-			"__ver": "0.0.1",
-			"data": {
-				"name": "region",
-				"description": "geographical regions Schema",
-				"properties": {
-					"id": {
-						"type": "string"
-					},
-					"description": {
-						"type": "string"
-					},
-					"data_centers": {
-						"type": "array",
-						"items": {
-							"type": "string",
-							"contentMediaType": "inventory/data_center"
+		"schema": {
+			"region": {
+				"__id": "region",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "region",
+					"description": "geographical regions Schema",
+					"properties": {
+						"id": {
+							"type": "string"
+						},
+						"description": {
+							"type": "string"
+						},
+						"data_centers": {
+							"type": "array",
+							"items": {
+								"type": "string",
+								"contentMediaType": "inventory/data_center"
+							}
+						}
+					}
+				}
+			},
+			"data_center": {
+				"__id": "data_center",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "data_center",
+					"description": "geographical regions Schema",
+					"properties": {
+						"id": {
+							"type": "string"
+						},
+						"description": {
+							"type": "string"
 						}
 					}
 				}
 			}
 		},
 		"data_center": {
-			"__id": "data_center",
-			"__type": "schema",
-			"__ver": "0.0.1",
-			"data": {
-				"name": "data_center",
-				"description": "geographical regions Schema",
-				"properties": {
-					"id": {
-						"type": "string"
-					},
-					"description": {
-						"type": "string"
-					}
+			"SEA1": {
+				"__id": "SEA1",
+				"__type": "data_center",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "Seattle",
+					"description": "Data Center in Seattle"
 				}
-			}
-		},
-		"SEA1": {
-			"__id": "SEA1",
-			"__type": "data_center",
-			"__ver": "0.0.1",
-			"data": {
-				"name": "Seattle",
-				"description": "Data Center in Seattle"
 			}
 		}
 	}
 	`
-	schemaData := map[string]interface{}{}
-	err = json.Unmarshal([]byte(schemaStr), &schemaData)
-	if err != nil {
-		t.Fatalf("Failed to load schema data for region. Error:%s", err)
-	}
 	connectDb := func(config DbConfig.DatabaseConfig) (DbIface.Database, error) {
-		mockDb := MockDatabase{
-			config: config,
-		}
-		mockDb.get = func(queryArgs map[string]interface{}) ([]map[string]interface{}, error) {
-			result := []map[string]interface{}{}
-			data, ok := schemaData[queryArgs[Record.DataId].(string)]
-			if ok {
-				result = append(result, data.(map[string]interface{}))
-			}
-			return result, nil
+		mockDb, err := NewMockDb(config, schemaStr)
+		if err != nil {
+			return nil, err
 		}
 		return mockDb, nil
 	}
@@ -237,5 +229,983 @@ func TestParseRecord(t *testing.T) {
 	}
 	if err.Status != http.StatusBadRequest {
 		t.Fatalf("invalid status code for missing type and id error. expecte [%d]!=[%d]", http.StatusBadRequest, err.Status)
+	}
+}
+
+func TestDataHandlerPatchAttr(t *testing.T) {
+	configStr := `
+	{
+		"database": {
+			"type": "dynamodb",
+			"dynamodb": {
+				"region": "us-west-2",
+				"endpoint": "http://localhost:8000"
+			}
+		},
+		"table": {
+			"data": "DataService01"
+		},
+		"http": {
+			"type": "http",
+			"dns": "localhost",
+			"port": "8002",
+			"id": "DataService_01"
+		},
+		"inventory": {
+			"url": "http://localhost:8004"
+		}
+	}
+	`
+	config := Config.Confuguration{}
+	err := json.Unmarshal([]byte(configStr), &config)
+	if err != nil {
+		t.Fatalf("faild to load config str. invalid format. Error:%s", err)
+	}
+	log.Print("config loaded")
+	dataStr := `{
+		"schema": {
+			"test": {
+				"__id": "test",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"properties": {
+						"attr1": {
+							"type": "string"
+						},
+						"attr2": {
+							"type": "integer"
+						},
+						"attr3": {
+							"type": "object",
+							"$ref": "#/definitions/subTest"
+						}
+					},
+					"definitions": {
+						"subTest": {
+							"name": "subTest",
+							"properties": {
+								"subAttr1": {
+									"type": "string"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"test": {
+			"test01": {
+				"__id": "test01",
+				"__type": "test",
+				"__ver": "0.0.1",
+				"data": {
+					"attr1": "test",
+					"attr2": 1,
+					"attr3": {
+						"subAttr1": "test"
+					}
+				}				
+			}
+		}
+	}`
+	connectDb := func(config DbConfig.DatabaseConfig) (DbIface.Database, error) {
+		mockDb, err := NewMockDb(config, dataStr)
+		if err != nil {
+			return nil, err
+		}
+		return mockDb, nil
+	}
+	handler, err := DataHandler.New(config, connectDb)
+	if err != nil {
+		t.Fatalf("failed to create handler")
+	}
+	handler.Patch("test", "test01/attr1", "ok")
+	data, e := handler.Get("test", "test01")
+	if e != nil {
+		t.Fatalf("failed to get patched data")
+	}
+	if data[Record.Data].(map[string]interface{})["attr1"].(string) != "ok" {
+		t.Fatalf("patch failed")
+	}
+	handler.Patch("test", "test01/attr2", 2)
+	data, e = handler.Get("test", "test01")
+	if e != nil {
+		t.Fatalf("failed to get patched data")
+	}
+	if data[Record.Data].(map[string]interface{})["attr2"].(float64) != 2 {
+		t.Fatalf("patch failed")
+	}
+	_, e = handler.Patch("test", "test01/attr2", "test")
+	if e == nil {
+		t.Fatalf("failed to catch the wrong format")
+	}
+	_, e = handler.Patch("test", "test01/attr3/subAttr1", "ok")
+	if e != nil {
+		t.Fatalf("failed to patch next level of attr. Err: %s", e)
+	}
+	data, e = handler.Get("test", "test01")
+	if e != nil {
+		t.Fatalf("failed to get patched data")
+	}
+	if data[Record.Data].(map[string]interface{})["attr3"].(map[string]interface{})["subAttr1"].(string) != "ok" {
+		t.Fatalf("patch failed")
+	}
+	pathData := map[string]interface{}{
+		"subAttr1": "okAgain",
+	}
+	_, e = handler.Patch("test", "test01/attr3", pathData)
+	if e != nil {
+		t.Fatalf("failed to patch next level of attr. Err: %s", e)
+	}
+	data, e = handler.Get("test", "test01")
+	if e != nil {
+		t.Fatalf("failed to get patched data")
+	}
+	if data[Record.Data].(map[string]interface{})["attr3"].(map[string]interface{})["subAttr1"].(string) != "okAgain" {
+		t.Fatalf("patch failed")
+	}
+}
+
+func TestDataHandlerPatchArrayObj(t *testing.T) {
+	configStr := `
+	{
+		"database": {
+			"type": "dynamodb",
+			"dynamodb": {
+				"region": "us-west-2",
+				"endpoint": "http://localhost:8000"
+			}
+		},
+		"table": {
+			"data": "DataService01"
+		},
+		"http": {
+			"type": "http",
+			"dns": "localhost",
+			"port": "8002",
+			"id": "DataService_01"
+		},
+		"inventory": {
+			"url": "http://localhost:8004"
+		}
+	}
+	`
+	config := Config.Confuguration{}
+	err := json.Unmarshal([]byte(configStr), &config)
+	if err != nil {
+		t.Fatalf("faild to load config str. invalid format. Error:%s", err)
+	}
+	log.Print("config loaded")
+	dataStr := `{
+		"schema": {
+			"test": {
+				"__id": "test",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"properties": {
+						"attr1": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"$ref": "#/definitions/subTest"
+							}
+						},
+						"attr2": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						},
+						"attr3": {
+							"type": "array",
+							"items": {
+								"type": "integer"
+							}
+						},
+						"attr4": {
+							"type": "array",
+							"items": {
+								"type": "string",
+								"contentMediaType": "inventory/testCmt"
+							}
+						}
+					},
+					"definitions": {
+						"subTest": {
+							"name": "subTest",
+							"key": "{subKey}",
+							"properties": {
+								"subKey": {
+									"type": "string"
+								},
+								"subAttr1": {
+									"type": "string"
+								}
+							}
+						}
+					}
+				}
+			},
+			"testCmt": {
+				"__id": "testCmt",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "testCmt",
+					"key": "{cmtKey}",
+					"properties": {
+						"cmtKey": {
+							"type": "string"
+						},
+						"cmtValue": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"test": {
+			"test01": {
+				"__id": "test01",
+				"__type": "test",
+				"__ver": "0.0.1",
+				"data": {
+					"attr1": [],
+					"attr2": [],
+					"attr3": [],
+					"attr4": []
+				}				
+			}
+		},
+		"testCmt": {
+			"testCmt01": {
+				"__id": "testCmt01",
+				"__type": "testCmt",
+				"__ver": "0.0.1",
+				"data": {
+					"cmtKey": "testCmt01",
+					"cmtValue": "testValue"
+				}
+			},
+			"testCmt02": {
+				"__id": "testCmt02",
+				"__type": "testCmt",
+				"__ver": "0.0.1",
+				"data": {
+					"cmtKey": "testCmt02",
+					"cmtValue": "testValue"
+				}
+			}
+		}
+	}`
+	connectDb := func(config DbConfig.DatabaseConfig) (DbIface.Database, error) {
+		mockDb, err := NewMockDb(config, dataStr)
+		if err != nil {
+			return nil, err
+		}
+		return mockDb, nil
+	}
+	handler, err := DataHandler.New(config, connectDb)
+	if err != nil {
+		t.Fatalf("failed to create handler, Error:%s", err)
+	}
+	subData := map[string]interface{}{
+		"subKey":   "attr1K1",
+		"subAttr1": "ok",
+	}
+	_, e := handler.Patch("test", "test01/attr1[attr1K1]", subData)
+	if e != nil {
+		t.Fatalf("failed to patch data. Error:%s", e)
+	}
+	data, e := handler.Get("test", "test01")
+	if e != nil {
+		t.Fatalf("failed to get patched data")
+	}
+	if len(data[Record.Data].(map[string]interface{})["attr1"].([]interface{})) != 1 {
+		t.Fatalf("patch failed")
+	}
+	if data[Record.Data].(map[string]interface{})["attr1"].([]interface{})[0].(map[string]interface{})["subAttr1"].(string) != "ok" {
+		t.Fatalf("failed to patch new data into array")
+	}
+	subData["subAttr1"] = "ok1"
+	_, e = handler.Patch("test", "test01/attr1[attr1K1]", subData)
+	if e != nil {
+		t.Fatalf("failed to patch data. Error:%s", e)
+	}
+	data, e = handler.Get("test", "test01")
+	if e != nil {
+		t.Fatalf("failed to get patched data")
+	}
+	if len(data[Record.Data].(map[string]interface{})["attr1"].([]interface{})) != 1 {
+		t.Fatalf("patch failed")
+	}
+	if data[Record.Data].(map[string]interface{})["attr1"].([]interface{})[0].(map[string]interface{})["subAttr1"].(string) != "ok1" {
+		t.Fatalf("failed to patch new data into array")
+	}
+	_, e = handler.Patch("test", "test01/attr1[attr1K1]/subAttr1", "ok")
+	if e != nil {
+		t.Fatalf("failed to patch data. Error:%s", e)
+	}
+	data, e = handler.Get("test", "test01")
+	if e != nil {
+		t.Fatalf("failed to get patched data")
+	}
+	if len(data[Record.Data].(map[string]interface{})["attr1"].([]interface{})) != 1 {
+		t.Fatalf("patch failed")
+	}
+	if data[Record.Data].(map[string]interface{})["attr1"].([]interface{})[0].(map[string]interface{})["subAttr1"].(string) != "ok" {
+		t.Fatalf("failed to patch new data into array")
+	}
+	subData["subKey"] = "attr1K2"
+	subData["subAttr1"] = "ok2"
+	_, e = handler.Patch("test", "test01/attr1[attr1K2]", subData)
+	if e != nil {
+		t.Fatalf("failed to patch data. Error:%s", e)
+	}
+	data, e = handler.Get("test", "test01")
+	if e != nil {
+		t.Fatalf("failed to get patched data")
+	}
+	if len(data[Record.Data].(map[string]interface{})["attr1"].([]interface{})) != 2 {
+		t.Fatalf("patch failed")
+	}
+	if data[Record.Data].(map[string]interface{})["attr1"].([]interface{})[1].(map[string]interface{})["subAttr1"].(string) != "ok2" {
+		t.Fatalf("failed to patch new data into array")
+	}
+	_, e = handler.Patch("test", "test01/attr1[attr1K1]", nil)
+	if e != nil {
+		t.Fatalf("failed to patch data. Error:%s", e)
+	}
+	data, e = handler.Get("test", "test01")
+	if e != nil {
+		t.Fatalf("failed to get patched data")
+	}
+	if len(data[Record.Data].(map[string]interface{})["attr1"].([]interface{})) != 1 {
+		t.Fatalf("patch failed")
+	}
+	if data[Record.Data].(map[string]interface{})["attr1"].([]interface{})[0].(map[string]interface{})["subAttr1"].(string) != "ok2" {
+		t.Fatalf("failed to patch new data into array")
+	}
+}
+
+func TestDataHandlerPatchArraySimpleStr(t *testing.T) {
+	configStr := `
+	{
+		"database": {
+			"type": "dynamodb",
+			"dynamodb": {
+				"region": "us-west-2",
+				"endpoint": "http://localhost:8000"
+			}
+		},
+		"table": {
+			"data": "DataService01"
+		},
+		"http": {
+			"type": "http",
+			"dns": "localhost",
+			"port": "8002",
+			"id": "DataService_01"
+		},
+		"inventory": {
+			"url": "http://localhost:8004"
+		}
+	}
+	`
+	config := Config.Confuguration{}
+	err := json.Unmarshal([]byte(configStr), &config)
+	if err != nil {
+		t.Fatalf("faild to load config str. invalid format. Error:%s", err)
+	}
+	log.Print("config loaded")
+	dataStr := `{
+		"schema": {
+			"test": {
+				"__id": "test",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"properties": {
+						"attr1": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"$ref": "#/definitions/subTest"
+							}
+						},
+						"attr2": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						},
+						"attr3": {
+							"type": "array",
+							"items": {
+								"type": "integer"
+							}
+						},
+						"attr4": {
+							"type": "array",
+							"items": {
+								"type": "string",
+								"contentMediaType": "inventory/testCmt"
+							}
+						}
+					},
+					"definitions": {
+						"subTest": {
+							"name": "subTest",
+							"key": "{subKey}",
+							"properties": {
+								"subKey": {
+									"type": "string"
+								},
+								"subAttr1": {
+									"type": "string"
+								}
+							}
+						}
+					}
+				}
+			},
+			"testCmt": {
+				"__id": "testCmt",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "testCmt",
+					"key": "{cmtKey}",
+					"properties": {
+						"cmtKey": {
+							"type": "string"
+						},
+						"cmtValue": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"test": {
+			"test01": {
+				"__id": "test01",
+				"__type": "test",
+				"__ver": "0.0.1",
+				"data": {
+					"attr1": [],
+					"attr2": [],
+					"attr3": [],
+					"attr4": []
+				}				
+			}
+		},
+		"testCmt": {
+			"testCmt01": {
+				"__id": "testCmt01",
+				"__type": "testCmt",
+				"__ver": "0.0.1",
+				"data": {
+					"cmtKey": "testCmt01",
+					"cmtValue": "testValue"
+				}
+			},
+			"testCmt02": {
+				"__id": "testCmt02",
+				"__type": "testCmt",
+				"__ver": "0.0.1",
+				"data": {
+					"cmtKey": "testCmt02",
+					"cmtValue": "testValue"
+				}
+			}
+		}
+	}`
+	connectDb := func(config DbConfig.DatabaseConfig) (DbIface.Database, error) {
+		mockDb, err := NewMockDb(config, dataStr)
+		if err != nil {
+			return nil, err
+		}
+		return mockDb, nil
+	}
+	handler, err := DataHandler.New(config, connectDb)
+	if err != nil {
+		t.Fatalf("failed to create handler, Error:%s", err)
+	}
+	_, e := handler.Patch("test", "test01/attr2[-1]", "test")
+	if e != nil {
+		t.Fatalf("failed to patch data. Error:%s", e)
+	}
+	data, e := handler.Get("test", "test01")
+	if e != nil {
+		t.Fatalf("failed to get patched data")
+	}
+	if len(data[Record.Data].(map[string]interface{})["attr2"].([]interface{})) != 1 {
+		t.Fatalf("patch failed")
+	}
+	if data[Record.Data].(map[string]interface{})["attr2"].([]interface{})[0].(string) != "test" {
+		t.Fatalf("failed to patch new data into array")
+	}
+	_, e = handler.Patch("test", "test01/attr2[0]", "ok")
+	if e != nil {
+		t.Fatalf("failed to patch data. Error:%s", e)
+	}
+	data, e = handler.Get("test", "test01")
+	if e != nil {
+		t.Fatalf("failed to get patched data")
+	}
+	if len(data[Record.Data].(map[string]interface{})["attr2"].([]interface{})) != 1 {
+		t.Fatalf("patch failed")
+	}
+	if data[Record.Data].(map[string]interface{})["attr2"].([]interface{})[0].(string) != "ok" {
+		t.Fatalf("failed to patch new data into array")
+	}
+	_, e = handler.Patch("test", "test01/attr2[-1]", "test")
+	if e != nil {
+		t.Fatalf("failed to patch data. Error:%s", e)
+	}
+	data, e = handler.Get("test", "test01")
+	if e != nil {
+		t.Fatalf("failed to get patched data")
+	}
+	if len(data[Record.Data].(map[string]interface{})["attr2"].([]interface{})) != 2 {
+		t.Fatalf("patch failed")
+	}
+	if data[Record.Data].(map[string]interface{})["attr2"].([]interface{})[0].(string) != "test" {
+		t.Fatalf("failed to patch new data into array")
+	}
+	_, e = handler.Patch("test", "test01/attr2[100]", "test01")
+	if e != nil {
+		t.Fatalf("failed to patch data. Error:%s", e)
+	}
+	data, e = handler.Get("test", "test01")
+	if e != nil {
+		t.Fatalf("failed to get patched data")
+	}
+	if len(data[Record.Data].(map[string]interface{})["attr2"].([]interface{})) != 3 {
+		t.Fatalf("patch failed")
+	}
+	if data[Record.Data].(map[string]interface{})["attr2"].([]interface{})[2].(string) != "test01" {
+		t.Fatalf("failed to patch new data into array")
+	}
+}
+
+func TestDataHandlerPatchArrayInt(t *testing.T) {
+	configStr := `
+	{
+		"database": {
+			"type": "dynamodb",
+			"dynamodb": {
+				"region": "us-west-2",
+				"endpoint": "http://localhost:8000"
+			}
+		},
+		"table": {
+			"data": "DataService01"
+		},
+		"http": {
+			"type": "http",
+			"dns": "localhost",
+			"port": "8002",
+			"id": "DataService_01"
+		},
+		"inventory": {
+			"url": "http://localhost:8004"
+		}
+	}
+	`
+	config := Config.Confuguration{}
+	err := json.Unmarshal([]byte(configStr), &config)
+	if err != nil {
+		t.Fatalf("faild to load config str. invalid format. Error:%s", err)
+	}
+	log.Print("config loaded")
+	dataStr := `{
+		"schema": {
+			"test": {
+				"__id": "test",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"properties": {
+						"attr1": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"$ref": "#/definitions/subTest"
+							}
+						},
+						"attr2": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						},
+						"attr3": {
+							"type": "array",
+							"items": {
+								"type": "integer"
+							}
+						},
+						"attr4": {
+							"type": "array",
+							"items": {
+								"type": "string",
+								"contentMediaType": "inventory/testCmt"
+							}
+						}
+					},
+					"definitions": {
+						"subTest": {
+							"name": "subTest",
+							"key": "{subKey}",
+							"properties": {
+								"subKey": {
+									"type": "string"
+								},
+								"subAttr1": {
+									"type": "string"
+								}
+							}
+						}
+					}
+				}
+			},
+			"testCmt": {
+				"__id": "testCmt",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "testCmt",
+					"key": "{cmtKey}",
+					"properties": {
+						"cmtKey": {
+							"type": "string"
+						},
+						"cmtValue": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"test": {
+			"test01": {
+				"__id": "test01",
+				"__type": "test",
+				"__ver": "0.0.1",
+				"data": {
+					"attr1": [],
+					"attr2": [],
+					"attr3": [],
+					"attr4": []
+				}				
+			}
+		},
+		"testCmt": {
+			"testCmt01": {
+				"__id": "testCmt01",
+				"__type": "testCmt",
+				"__ver": "0.0.1",
+				"data": {
+					"cmtKey": "testCmt01",
+					"cmtValue": "testValue"
+				}
+			},
+			"testCmt02": {
+				"__id": "testCmt02",
+				"__type": "testCmt",
+				"__ver": "0.0.1",
+				"data": {
+					"cmtKey": "testCmt02",
+					"cmtValue": "testValue"
+				}
+			}
+		}
+	}`
+	connectDb := func(config DbConfig.DatabaseConfig) (DbIface.Database, error) {
+		mockDb, err := NewMockDb(config, dataStr)
+		if err != nil {
+			return nil, err
+		}
+		return mockDb, nil
+	}
+	handler, err := DataHandler.New(config, connectDb)
+	if err != nil {
+		t.Fatalf("failed to create handler, Error:%s", err)
+	}
+	_, e := handler.Patch("test", "test01/attr3[-1]", 0)
+	if e != nil {
+		t.Fatalf("failed to patch data. Error:%s", e)
+	}
+	data, e := handler.Get("test", "test01")
+	if e != nil {
+		t.Fatalf("failed to get patched data")
+	}
+	if len(data[Record.Data].(map[string]interface{})["attr3"].([]interface{})) != 1 {
+		t.Fatalf("patch failed")
+	}
+	if data[Record.Data].(map[string]interface{})["attr3"].([]interface{})[0].(float64) != 0 {
+		t.Fatalf("failed to patch new data into array")
+	}
+	_, e = handler.Patch("test", "test01/attr3[-1]", -1)
+	if e != nil {
+		t.Fatalf("failed to patch data. Error:%s", e)
+	}
+	data, e = handler.Get("test", "test01")
+	if e != nil {
+		t.Fatalf("failed to get patched data")
+	}
+	if len(data[Record.Data].(map[string]interface{})["attr3"].([]interface{})) != 2 {
+		t.Fatalf("patch failed")
+	}
+	if data[Record.Data].(map[string]interface{})["attr3"].([]interface{})[0].(float64) != -1 {
+		t.Fatalf("failed to patch new data into array")
+	}
+	_, e = handler.Patch("test", "test01/attr3[100]", 1)
+	if e != nil {
+		t.Fatalf("failed to patch data. Error:%s", e)
+	}
+	data, e = handler.Get("test", "test01")
+	if e != nil {
+		t.Fatalf("failed to get patched data")
+	}
+	if len(data[Record.Data].(map[string]interface{})["attr3"].([]interface{})) != 3 {
+		t.Fatalf("patch failed")
+	}
+	if data[Record.Data].(map[string]interface{})["attr3"].([]interface{})[2].(float64) != 1 {
+		t.Fatalf("failed to patch new data into array")
+	}
+	_, e = handler.Patch("test", "test01/attr3[1]", nil)
+	if e != nil {
+		t.Fatalf("failed to patch data. Error:%s", e)
+	}
+	data, e = handler.Get("test", "test01")
+	if e != nil {
+		t.Fatalf("failed to get patched data")
+	}
+	if len(data[Record.Data].(map[string]interface{})["attr3"].([]interface{})) != 2 {
+		t.Fatalf("patch failed")
+	}
+	if data[Record.Data].(map[string]interface{})["attr3"].([]interface{})[0].(float64) != -1 {
+		t.Fatalf("failed to patch new data into array")
+	}
+	if data[Record.Data].(map[string]interface{})["attr3"].([]interface{})[1].(float64) != 1 {
+		t.Fatalf("failed to patch new data into array")
+	}
+	_, e = handler.Patch("test", "test01/attr4[testCmt01]", "testCmt01")
+	if e != nil {
+		t.Fatalf("failed to patch data. Error:%s", e)
+	}
+	data, e = handler.Get("test", "test01")
+	if e != nil {
+		t.Fatalf("failed to get patched data")
+	}
+	if len(data[Record.Data].(map[string]interface{})["attr3"].([]interface{})) != 2 {
+		t.Fatalf("patch failed")
+	}
+	if data[Record.Data].(map[string]interface{})["attr3"].([]interface{})[0].(float64) != -1 {
+		t.Fatalf("failed to patch new data into array")
+	}
+	if data[Record.Data].(map[string]interface{})["attr3"].([]interface{})[1].(float64) != 1 {
+		t.Fatalf("failed to patch new data into array")
+	}
+}
+
+func TestDataHandlerPatchArrayCmt(t *testing.T) {
+	configStr := `
+	{
+		"database": {
+			"type": "dynamodb",
+			"dynamodb": {
+				"region": "us-west-2",
+				"endpoint": "http://localhost:8000"
+			}
+		},
+		"table": {
+			"data": "DataService01"
+		},
+		"http": {
+			"type": "http",
+			"dns": "localhost",
+			"port": "8002",
+			"id": "DataService_01"
+		},
+		"inventory": {
+			"url": "http://localhost:8004"
+		}
+	}
+	`
+	config := Config.Confuguration{}
+	err := json.Unmarshal([]byte(configStr), &config)
+	if err != nil {
+		t.Fatalf("faild to load config str. invalid format. Error:%s", err)
+	}
+	log.Print("config loaded")
+	dataStr := `{
+		"schema": {
+			"test": {
+				"__id": "test",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"properties": {
+						"attr1": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"$ref": "#/definitions/subTest"
+							}
+						},
+						"attr2": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						},
+						"attr3": {
+							"type": "array",
+							"items": {
+								"type": "integer"
+							}
+						},
+						"attr4": {
+							"type": "array",
+							"items": {
+								"type": "string",
+								"contentMediaType": "inventory/testCmt"
+							}
+						}
+					},
+					"definitions": {
+						"subTest": {
+							"name": "subTest",
+							"key": "{subKey}",
+							"properties": {
+								"subKey": {
+									"type": "string"
+								},
+								"subAttr1": {
+									"type": "string"
+								}
+							}
+						}
+					}
+				}
+			},
+			"testCmt": {
+				"__id": "testCmt",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "testCmt",
+					"key": "{cmtKey}",
+					"properties": {
+						"cmtKey": {
+							"type": "string"
+						},
+						"cmtValue": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"test": {
+			"test01": {
+				"__id": "test01",
+				"__type": "test",
+				"__ver": "0.0.1",
+				"data": {
+					"attr1": [],
+					"attr2": [],
+					"attr3": [],
+					"attr4": []
+				}				
+			}
+		},
+		"testCmt": {
+			"testCmt01": {
+				"__id": "testCmt01",
+				"__type": "testCmt",
+				"__ver": "0.0.1",
+				"data": {
+					"cmtKey": "testCmt01",
+					"cmtValue": "testValue"
+				}
+			},
+			"testCmt02": {
+				"__id": "testCmt02",
+				"__type": "testCmt",
+				"__ver": "0.0.1",
+				"data": {
+					"cmtKey": "testCmt02",
+					"cmtValue": "testValue"
+				}
+			}
+		}
+	}`
+	connectDb := func(config DbConfig.DatabaseConfig) (DbIface.Database, error) {
+		mockDb, err := NewMockDb(config, dataStr)
+		if err != nil {
+			return nil, err
+		}
+		return mockDb, nil
+	}
+	handler, err := DataHandler.New(config, connectDb)
+	if err != nil {
+		t.Fatalf("failed to create handler, Error:%s", err)
+	}
+	_, e := handler.Patch("test", "test01/attr4[testCmt01]", "testCmt01")
+	if e != nil {
+		t.Fatalf("failed to patch data. Error:%s", e)
+	}
+	data, e := handler.Get("test", "test01")
+	if e != nil {
+		t.Fatalf("failed to get patched data")
+	}
+	if len(data[Record.Data].(map[string]interface{})["attr4"].([]interface{})) != 1 {
+		t.Fatalf("patch failed")
+	}
+	if data[Record.Data].(map[string]interface{})["attr4"].([]interface{})[0].(string) != "testCmt01" {
+		t.Fatalf("patch failed")
+	}
+	_, e = handler.Patch("test", "test01/attr4[testCmt01]", "testCmt02")
+	if e != nil {
+		t.Fatalf("failed to patch data. Error:%s", e)
+	}
+	data, e = handler.Get("test", "test01")
+	if e != nil {
+		t.Fatalf("failed to get patched data")
+	}
+	if len(data[Record.Data].(map[string]interface{})["attr4"].([]interface{})) != 1 {
+		t.Fatalf("patch failed")
+	}
+	if data[Record.Data].(map[string]interface{})["attr4"].([]interface{})[0].(string) != "testCmt02" {
+		t.Fatalf("patch failed")
+	}
+	_, e = handler.Patch("test", "test01/attr4[testCmt01]", "testCmt03")
+	if e == nil {
+		t.Fatalf("failed to catch CmtRef Error")
+	}
+	_, e = handler.Patch("test", "test01/attr4[testCmt01]", "testCmt01")
+	if e != nil {
+		t.Fatalf("failed to patch data. Error:%s", e)
+	}
+	data, e = handler.Get("test", "test01")
+	if e != nil {
+		t.Fatalf("failed to get patched data")
+	}
+	if len(data[Record.Data].(map[string]interface{})["attr4"].([]interface{})) != 2 {
+		t.Fatalf("patch failed")
+	}
+	if data[Record.Data].(map[string]interface{})["attr4"].([]interface{})[1].(string) != "testCmt01" {
+		t.Fatalf("patch failed")
+	}
+	_, e = handler.Patch("test", "test01/attr4[testCmt01]", "testCmt02")
+	if e == nil {
+		t.Fatalf("failed to catch duplicate error")
 	}
 }

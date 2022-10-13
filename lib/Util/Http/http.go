@@ -54,6 +54,18 @@ type Config struct {
 	HeaderCfg map[string]interface{} `json:"headers"`
 }
 
+func LoadRequest(r *http.Request, data interface{}) *HttpError {
+	reqBody, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return WrapError(err, "failed to read body from request", http.StatusBadRequest)
+	}
+	err = json.Unmarshal(reqBody, &data)
+	if err != nil {
+		return WrapError(err, "failed to load request body", http.StatusBadRequest)
+	}
+	return nil
+}
+
 func ResponseJson(w http.ResponseWriter, data interface{}, status int, httpCfg Config) {
 	jsonData, err := json.MarshalIndent(data, "", "    ")
 	if err != nil {
