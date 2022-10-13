@@ -40,7 +40,6 @@ import (
 
 const (
 	Name  = "sysdirfile"
-	Data  = "data"
 	Index = "index"
 )
 
@@ -198,7 +197,7 @@ func (db *Database) Create(table string, data interface{}) error {
 	}
 	return nil
 }
-func (db *Database) Update(table string, keys map[string]interface{}, cmd DbIface.UpdateCommand) (map[string]interface{}, error) {
+func (db *Database) Update(table string, keys map[string]interface{}, data interface{}) (map[string]interface{}, error) {
 	return nil, nil
 }
 func (db *Database) Replace(table string, keys map[string]interface{}, data interface{}) error {
@@ -222,6 +221,7 @@ func (db *Database) Replace(table string, keys map[string]interface{}, data inte
 	}
 	return nil
 }
+
 func (db *Database) Delete(table string, keys map[string]interface{}) error {
 	tbl, err := db.GetTable(table)
 	if err != nil {

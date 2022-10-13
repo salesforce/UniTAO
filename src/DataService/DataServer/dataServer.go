@@ -103,7 +103,7 @@ func (srv *Server) init() error {
 }
 
 func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
-	dataType, dataId := Util.ParsePath(r.URL.Path)
+	dataType, idPath := Util.ParsePath(r.URL.Path)
 	if dataType == Record.KeyRecord {
 		Http.ResponseJson(w, Http.HttpError{
 			Status: http.StatusBadRequest,
@@ -114,14 +114,16 @@ func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch r.Method {
-	case "GET":
-		srv.handleGet(w, dataType, dataId)
-	case "POST":
-		srv.handlePost(w, r, dataType, dataId)
-	case "DELETE":
-		srv.handleDelete(w, dataType, dataId)
-	case "PUT":
-		srv.handlerPut(w, r, dataType, dataId)
+	case Http.GET:
+		srv.handleGet(w, dataType, idPath)
+	case Http.POST:
+		srv.handlePost(w, r, dataType, idPath)
+	case Http.DELETE:
+		srv.handleDelete(w, dataType, idPath)
+	case Http.PUT:
+		srv.handlePut(w, r, dataType, idPath)
+	case Http.PATCH:
+		srv.handlePatch(w, r, dataType, idPath)
 	default:
 		Http.ResponseJson(w, Http.HttpError{
 			Status: http.StatusMethodNotAllowed,
@@ -195,7 +197,7 @@ func (srv *Server) handlePost(w http.ResponseWriter, r *http.Request, dataType s
 	Http.ResponseText(w, []byte(record.Id), http.StatusCreated, srv.config.Http)
 }
 
-func (srv *Server) handlerPut(w http.ResponseWriter, r *http.Request, dataType string, dataId string) {
+func (srv *Server) handlePut(w http.ResponseWriter, r *http.Request, dataType string, dataId string) {
 	payload := make(map[string]interface{})
 	code, err := Util.LoadJSONPayload(r, payload)
 	if err != nil {
@@ -225,4 +227,20 @@ func (srv *Server) handleDelete(w http.ResponseWriter, dataType string, dataId s
 		"result": fmt.Sprintf("item [type/id]=[%s/%s] deleted", dataType, dataId),
 	}
 	Http.ResponseJson(w, result, http.StatusAccepted, srv.config.Http)
+}
+
+func (srv *Server) handlePatch(w http.ResponseWriter, r *http.Request, dataType string, idPath string) {
+	payload := make(map[string]interface{})
+	code, err := Util.LoadJSONPayload(r, payload)
+	if err != nil {
+		Http.ResponseJson(w, Http.WrapError(err, "failed to load JSON payload from request", code),
+			code, srv.config.Http)
+		return
+	}
+	response, e := srv.data.Patch(dataType, idPath, payload)
+	if e != nil {
+		Http.ResponseJson(w, e, e.Status, srv.config.Http)
+		return
+	}
+	Http.ResponseJson(w, response, http.StatusAccepted, srv.config.Http)
 }

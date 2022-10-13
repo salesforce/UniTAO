@@ -123,13 +123,12 @@ func LoadJSONPayload(r *http.Request, payload map[string]interface{}) (int, erro
 	return 0, nil
 }
 
-func SearchStrList(searchAry []string, value string) bool {
-	for _, item := range searchAry {
-		if item == value {
-			return true
-		}
+func IdxList(searchAry []interface{}) map[interface{}]int {
+	hash := map[interface{}]int{}
+	for idx, item := range searchAry {
+		hash[item] = idx
 	}
-	return false
+	return hash
 }
 
 func DeDupeList(itemList []interface{}) ([]interface{}, error) {

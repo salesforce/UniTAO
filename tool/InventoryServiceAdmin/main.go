@@ -187,7 +187,7 @@ func (a *Admin) syncDsSchema() error {
 		return fmt.Errorf("failed to list all inventorys. Error: %s", err)
 	}
 	for _, dsId := range idList {
-		e := a.syncSchemaWithId(dsId)
+		e := a.syncSchemaWithId(dsId.(string))
 		if e != nil {
 			return fmt.Errorf("failed to get schema from DS_Id=[%s], Error:%s", dsId, e)
 		}
@@ -195,26 +195,26 @@ func (a *Admin) syncDsSchema() error {
 	return nil
 }
 
-func (a *Admin) getCurrentTypeList(dsId string) ([]string, error) {
+func (a *Admin) getReferralTypes(dsId string) (map[string]bool, error) {
 	typeList, err := a.handler.List(RefRecord.Referral)
 	if err != nil {
 		return nil, err
 	}
-	currentTypes := []string{}
+	refTypes := map[string]bool{}
 	for _, dataType := range typeList {
-		referral, err := a.handler.GetReferral(dataType)
+		referral, err := a.handler.GetReferral(dataType.(string))
 		if err != nil {
-			a.removeType(dsId, dataType)
+			a.removeType(dsId, dataType.(string))
 			continue
 		}
 		if referral.DsId == dsId {
-			currentTypes = append(currentTypes, dataType)
+			refTypes[dataType.(string)] = true
 		}
 	}
-	return currentTypes, nil
+	return refTypes, nil
 }
 
-func (a *Admin) getDsTypeList(dsId string) ([]string, error) {
+func (a *Admin) getDsTypeHash(dsId string) (map[string]bool, error) {
 	ds, err := a.handler.GetDsInfo(dsId)
 	if err != nil {
 		return nil, err
@@ -228,34 +228,34 @@ func (a *Admin) getDsTypeList(dsId string) ([]string, error) {
 		return nil, fmt.Errorf("failed to parse url from DS record [%s]=[%s], Err:%s", Record.DataId, a.args.ops.id, err)
 	}
 	result, code, e := Http.GetRestData(*schemaUrl)
-	if err != nil {
+	if e != nil {
 		return nil, fmt.Errorf("failed to Rest Data from [path]=[%s], Code:%d", *schemaUrl, code)
 	}
-	newTypeList := []string{}
+	typeHash := map[string]bool{}
 	for _, dataType := range result.([]interface{}) {
 		if dataType != JsonKey.Schema && dataType != Record.KeyRecord {
-			newTypeList = append(newTypeList, dataType.(string))
+			typeHash[dataType.(string)] = true
 		}
 	}
-	return newTypeList, nil
+	return typeHash, nil
 }
 
 func (a *Admin) syncSchemaWithId(dsId string) error {
-	currentTypes, err := a.getCurrentTypeList(dsId)
+	refTypes, err := a.getReferralTypes(dsId)
 	if err != nil {
 		return err
 	}
-	dsTypes, err := a.getDsTypeList(dsId)
+	dsTypes, err := a.getDsTypeHash(dsId)
 	if err != nil {
 		return err
 	}
-	for _, dataType := range currentTypes {
-		if !Util.SearchStrList(dsTypes, dataType) {
+	for dataType := range refTypes {
+		if _, ok := dsTypes[dataType]; !ok {
 			a.removeType(dsId, dataType)
 		}
 	}
-	for _, dataType := range dsTypes {
-		if !Util.SearchStrList(currentTypes, dataType) {
+	for dataType := range dsTypes {
+		if _, ok := refTypes[dataType]; !ok {
 			a.addType(dsId, dataType)
 		}
 	}

@@ -31,6 +31,7 @@ import (
 )
 
 const (
+	Data      = "data"
 	DataId    = "__id"
 	DataType  = "__type"
 	KeyRecord = "record"

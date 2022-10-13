@@ -30,16 +30,17 @@ import (
 	"net/http"
 	"path"
 	"reflect"
+	"sync"
 
 	"Data/DbConfig"
 	"Data/DbIface"
 	"DataService/Config"
-	"DataService/DataLock"
 
 	"github.com/salesforce/UniTAO/lib/Schema"
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
+	"github.com/salesforce/UniTAO/lib/Util"
 	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
 
@@ -47,11 +48,9 @@ type Handler struct {
 	db        DbIface.Database
 	schemaMap map[string]*Schema.SchemaOps
 	config    Config.Confuguration
-	lock      *DataLock.LockHash
+	lock      sync.Mutex
 }
 
-// DataLock time max to 5 second.
-// move this number to config if necessary
 func New(config Config.Confuguration, connectDb func(db DbConfig.DatabaseConfig) (DbIface.Database, error)) (*Handler, error) {
 	db, err := connectDb(config.Database)
 	if err != nil {
@@ -61,7 +60,7 @@ func New(config Config.Confuguration, connectDb func(db DbConfig.DatabaseConfig)
 		schemaMap: make(map[string]*Schema.SchemaOps),
 		db:        db,
 		config:    config,
-		lock:      DataLock.NewHash(5),
+		lock:      sync.Mutex{},
 	}
 	return &handler, nil
 }
@@ -117,25 +116,6 @@ func (h *Handler) GetData(dataType string, dataId string) (map[string]interface{
 		return nil, Http.NewHttpError(fmt.Sprintf("object of type '%s' with id '%s' not found", dataType, dataId), http.StatusNotFound)
 	}
 	return recordList[0], nil
-}
-
-// TODO: for now we allow update on schema, eventually, we need to limit schema record to create/delete only.no update allowed
-func (h *Handler) Lock(dataType string, dataId string, nextPath string) (string, *Http.HttpError) {
-	if dataType != JsonKey.Schema {
-		_, err := h.GetData(JsonKey.Schema, dataType)
-		if err != nil {
-			return "", Http.WrapError(err, fmt.Sprintf("object of type “%s” does not exist", dataType), err.Status)
-		}
-	}
-	dataPath := path.Join(dataType, dataId, nextPath)
-	// TODO: need to convert user info into user Id
-	// TODO: figure out how to determine the approperiate lock length
-	r := h.lock.NewRequest("", dataPath, 0)
-	handle, ex := h.lock.Lock(r)
-	if ex != nil {
-		return "", Http.NewHttpError(ex.Error(), http.StatusInternalServerError)
-	}
-	return handle, nil
 }
 
 func (h *Handler) localSchema(dataType string) (*Schema.SchemaOps, *Http.HttpError) {
@@ -338,11 +318,8 @@ func (h *Handler) Add(record *Record.Record) *Http.HttpError {
 	if err != nil {
 		return err
 	}
-	handle, err := h.Lock(record.Type, record.Id, "")
-	if err != nil {
-		return err
-	}
-	defer h.lock.UnLock(handle)
+	h.lock.Lock()
+	defer h.lock.Unlock()
 	_, err = h.GetData(record.Type, record.Id)
 	if err == nil {
 		return Http.NewHttpError(fmt.Sprintf("data [type/id]=[%s/%s] already exists", record.Type, record.Id), http.StatusConflict)
@@ -358,15 +335,16 @@ func (h *Handler) Add(record *Record.Record) *Http.HttpError {
 }
 
 func (h *Handler) Set(record *Record.Record) *Http.HttpError {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+	return h.updateRecord(record)
+}
+
+func (h *Handler) updateRecord(record *Record.Record) *Http.HttpError {
 	err := h.Validate(record)
 	if err != nil {
 		return err
 	}
-	handle, err := h.Lock(record.Type, record.Id, "")
-	if err != nil {
-		return err
-	}
-	h.lock.UnLock(handle)
 	e := h.db.Create(h.config.DataTable.Data, record.Map())
 	if e != nil {
 		return Http.NewHttpError(e.Error(), http.StatusInternalServerError)
@@ -375,11 +353,12 @@ func (h *Handler) Set(record *Record.Record) *Http.HttpError {
 }
 
 func (h *Handler) Delete(dataType string, dataId string) *Http.HttpError {
-	handle, err := h.Lock(dataType, dataId, "")
+	h.lock.Lock()
+	defer h.lock.Unlock()
+	_, err := h.localSchema(dataType)
 	if err != nil {
 		return err
 	}
-	defer h.lock.UnLock(handle)
 	keys := make(map[string]interface{})
 	keys[Record.DataType] = dataType
 	keys[Record.DataId] = dataId
@@ -388,4 +367,42 @@ func (h *Handler) Delete(dataType string, dataId string) *Http.HttpError {
 		return Http.WrapError(e, fmt.Sprintf("failed to delete record [type/id]=[%s/%s]", dataType, dataId), http.StatusInternalServerError)
 	}
 	return nil
+}
+
+func (h *Handler) Patch(dataType string, idPath string, data interface{}) (map[string]interface{}, *Http.HttpError) {
+	dataId, nextPath := Util.ParsePath(idPath)
+	if dataId == "" {
+		return nil, Http.NewHttpError(fmt.Sprintf("invalid path=[%s/%s], expect format=[{dataType}/{dataId}/{dataPath}]", dataType, dataId), http.StatusBadRequest)
+	}
+	if nextPath == "" {
+		return nil, Http.NewHttpError("invalid path, no data path to drill in, expect format=[{dataType}/{dataId}/{dataPath}]", http.StatusBadRequest)
+	}
+	schema, err := h.localSchema(dataType)
+	if err != nil {
+		return nil, err
+	}
+	h.lock.Lock()
+	defer h.lock.Unlock()
+	patchData, err := h.GetData(dataType, dataId)
+	if err != nil {
+		return nil, err
+	}
+	patchRecord, e := Record.LoadMap(patchData)
+	if err != nil {
+		return nil, Http.WrapError(e, fmt.Sprintf("failed to load data [%s/%s] as record", dataType, dataId), http.StatusInternalServerError)
+	}
+	attrSchema, attrData, attrPath, err := Schema.GetDataOnPath(schema.Schema, patchRecord.Data, nextPath, fmt.Sprintf("%s/%s", dataType, dataId))
+	if err != nil {
+		return nil, err
+	}
+	prevPath := nextPath[:len(nextPath)-len(attrPath)]
+	err = Schema.SetAttrData(attrSchema, attrData, attrPath, prevPath, data)
+	if err != nil {
+		return nil, err
+	}
+	err = h.updateRecord(patchRecord)
+	if err != nil {
+		return nil, err
+	}
+	return patchRecord.Map(), nil
 }

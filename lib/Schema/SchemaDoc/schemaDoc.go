@@ -67,8 +67,7 @@ func create(data map[string]interface{}, id string, parent *SchemaDoc) (*SchemaD
 	if !ok {
 		keyTemplate = ""
 	}
-
-  doc := SchemaDoc{
+	doc := SchemaDoc{
 		Id:          id,
 		Parent:      parent,
 		Data:        data,
@@ -163,7 +162,7 @@ func (d *SchemaDoc) preprocess() error {
 func (d *SchemaDoc) processRequired() error {
 	propPath := path.Join(d.Path(), JsonKey.Properties)
 	propMap := d.Data[JsonKey.Properties].(map[string]interface{})
-	requiredList := make([]string, 0, len(propMap))
+	requiredList := make([]interface{}, 0, len(propMap))
 	for pname, prop := range propMap {
 		propDef, ok := prop.(map[string]interface{})
 		if !ok {
@@ -210,12 +209,13 @@ func (d *SchemaDoc) processMap() error {
 }
 
 func (d *SchemaDoc) validateKeyAttrs() error {
-	requiredAttrs, ok := d.Data[JsonKey.Required].([]string)
+	requiredAttrs, ok := d.Data[JsonKey.Required].([]interface{})
 	if !ok {
-		requiredAttrs = []string{}
+		requiredAttrs = []interface{}{}
 	}
+	reqHash := Util.IdxList(requiredAttrs)
 	for _, attr := range d.KeyAttrs {
-		if !Util.SearchStrList(requiredAttrs, attr) {
+		if _, ok := reqHash[attr]; !ok {
 			return fmt.Errorf("key attribute: [%s] is not defined as required attribute", attr)
 		}
 		attrType := d.Data[JsonKey.Properties].(map[string]interface{})[attr].(map[string]interface{})[JsonKey.Type].(string)
@@ -283,10 +283,10 @@ func (d *SchemaDoc) processRefs() error {
 }
 
 func (d *SchemaDoc) getCmtRef(pname string, prop map[string]interface{}) error {
-	cmt, ok := prop[JsonKey.ContentMediaType].(string)
-	if !ok || cmt == "" {
+	if !IsCmtRef(prop) {
 		return nil
 	}
+	cmt := prop[JsonKey.ContentMediaType].(string)
 	cmtType, dataType := Util.ParsePath(cmt)
 	switch cmtType {
 	case JsonKey.Inventory:
@@ -405,8 +405,23 @@ func IsMap(attrDef map[string]interface{}) bool {
 	return true
 }
 
+func IsCmtRef(attrDef map[string]interface{}) bool {
+	if attrDef[JsonKey.Type] != JsonKey.String {
+		return false
+	}
+	cmt, ok := attrDef[JsonKey.ContentMediaType].(string)
+	if !ok {
+		return false
+	}
+	if cmt == "" {
+		return false
+	}
+	return true
+}
+
 func ParseTemplateVars(template string) []string {
 	attrList := []string{}
+	attrHash := map[string]bool{}
 	for len(template) > 0 {
 		leftIdx := strings.Index(template, "{")
 		if leftIdx < 0 {
@@ -416,7 +431,7 @@ func ParseTemplateVars(template string) []string {
 		rightIdx := strings.Index(template, "}")
 		attrName := template[:rightIdx]
 		template = template[rightIdx+1:]
-		if !Util.SearchStrList(attrList, attrName) {
+		if _, ok := attrHash[attrName]; !ok {
 			attrList = append(attrList, attrName)
 		}
 	}
