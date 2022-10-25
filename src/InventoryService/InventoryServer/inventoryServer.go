@@ -151,7 +151,7 @@ func (srv *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	payload := make(map[string]interface{})
-	e := Http.LoadRequest(r, payload)
+	e := Http.LoadRequest(r, &payload)
 	if e != nil {
 		Http.ResponseJson(w, e, e.Status, srv.config.Http)
 		return

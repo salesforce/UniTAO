@@ -178,7 +178,7 @@ func ParseRecord(noRecordList []string, payload map[string]interface{}, dataType
 
 func (srv *Server) handlePost(w http.ResponseWriter, r *http.Request, dataType string, dataId string) {
 	payload := make(map[string]interface{})
-	err := Http.LoadRequest(r, payload)
+	err := Http.LoadRequest(r, &payload)
 	if err != nil {
 		Http.ResponseJson(w, err, err.Status, srv.config.Http)
 		return
@@ -198,7 +198,7 @@ func (srv *Server) handlePost(w http.ResponseWriter, r *http.Request, dataType s
 
 func (srv *Server) handlePut(w http.ResponseWriter, r *http.Request, dataType string, dataId string) {
 	payload := make(map[string]interface{})
-	e := Http.LoadRequest(r, payload)
+	e := Http.LoadRequest(r, &payload)
 	if e != nil {
 		Http.ResponseJson(w, e, e.Status, srv.config.Http)
 		return
@@ -229,7 +229,7 @@ func (srv *Server) handleDelete(w http.ResponseWriter, dataType string, dataId s
 
 func (srv *Server) handlePatch(w http.ResponseWriter, r *http.Request, dataType string, idPath string) {
 	payload := make(map[string]interface{})
-	e := Http.LoadRequest(r, payload)
+	e := Http.LoadRequest(r, &payload)
 	if e != nil {
 		Http.ResponseJson(w, e, e.Status, srv.config.Http)
 		return
