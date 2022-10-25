@@ -29,7 +29,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"net/http"
 	"os"
 	"reflect"
 	"strings"
@@ -109,20 +108,6 @@ func LoadJSONList(filePath string) ([]interface{}, error) {
 	return data.([]interface{}), nil
 }
 
-func LoadJSONPayload(r *http.Request, payload map[string]interface{}) (int, error) {
-	reqBody, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		newErr := fmt.Errorf("failed to read %s body. %s", r.Method, err)
-		return http.StatusInternalServerError, newErr
-	}
-	err = json.Unmarshal([]byte(reqBody), &payload)
-	if err != nil {
-		newErr := fmt.Errorf("failed to load payload as json, %s", err)
-		return http.StatusBadRequest, newErr
-	}
-	return 0, nil
-}
-
 func IdxList(searchAry []interface{}) map[interface{}]int {
 	hash := map[interface{}]int{}
 	for idx, item := range searchAry {
@@ -131,25 +116,37 @@ func IdxList(searchAry []interface{}) map[interface{}]int {
 	return hash
 }
 
-func DeDupeList(itemList []interface{}) ([]interface{}, error) {
+func CountListIdx(itemList []interface{}) (map[interface{}]int, error) {
+	cMap := map[interface{}]int{}
 	if len(itemList) == 0 {
-		return itemList, nil
+		return cMap, nil
 	}
 	itemType := reflect.TypeOf(itemList[0]).Kind()
 	if itemType == reflect.Slice || itemType == reflect.Map {
-		return nil, fmt.Errorf("cannot dedupe list of type=[%s]", itemType)
+		return nil, fmt.Errorf("cannot count list of type=[%s]", itemType)
 	}
-	searchMap := map[interface{}]int{}
-	result := make([]interface{}, 0, len(itemList))
 	for idx, item := range itemList {
 		thisType := reflect.TypeOf(item).Kind()
 		if thisType != itemType {
 			return nil, fmt.Errorf("inconsist data type [%s]!=[%s] @%d", itemType, thisType, idx)
 		}
-		if _, found := searchMap[item]; !found {
-			searchMap[item] = 1
-			result = append(result, item)
+		if _, found := cMap[item]; !found {
+			cMap[item] = 1
+		} else {
+			cMap[item] += 1
 		}
+	}
+	return cMap, nil
+}
+
+func DeDupeList(itemList []interface{}) ([]interface{}, error) {
+	searchMap, err := CountListIdx(itemList)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]interface{}, 0, len(searchMap))
+	for item := range searchMap {
+		result = append(result, item)
 	}
 	return result, nil
 }
@@ -200,10 +197,8 @@ func ObjCopy(src interface{}, target interface{}) error {
 	return nil
 }
 
-func PrefixStrLst(strList []string, prefix string) []string {
-	newList := make([]string, 0, len(strList))
-	for _, line := range strList {
-		newList = append(newList, fmt.Sprintf("%s%s", prefix, line))
+func PrefixStrLst(strList []string, prefix string) {
+	for idx := range strList {
+		strList[idx] = fmt.Sprintf("%s%s", prefix, strList[idx])
 	}
-	return newList
 }

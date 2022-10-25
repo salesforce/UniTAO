@@ -59,7 +59,7 @@ func LoadRequest(r *http.Request, data interface{}) *HttpError {
 	if err != nil {
 		return WrapError(err, "failed to read body from request", http.StatusBadRequest)
 	}
-	err = json.Unmarshal(reqBody, &data)
+	err = json.Unmarshal(reqBody, data)
 	if err != nil {
 		return WrapError(err, "failed to load request body", http.StatusBadRequest)
 	}

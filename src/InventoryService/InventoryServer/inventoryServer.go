@@ -151,10 +151,9 @@ func (srv *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	payload := make(map[string]interface{})
-	code, e := Util.LoadJSONPayload(r, payload)
+	e := Http.LoadRequest(r, &payload)
 	if e != nil {
-		err := Http.WrapError(e, "failed to load payload", code)
-		Http.ResponseJson(w, err, err.Status, srv.config.Http)
+		Http.ResponseJson(w, e, e.Status, srv.config.Http)
 		return
 	}
 	dataId, err := srv.data.PutData(payload)

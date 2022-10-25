@@ -61,8 +61,8 @@ func (e HttpError) Error() string {
 }
 
 func AppendError(srcErr *HttpError, err *HttpError) {
-	tabErrMessage := Util.PrefixStrLst(err.Message, TAB)
-	srcErr.Message = append(srcErr.Message, tabErrMessage...)
+	Util.PrefixStrLst(err.Message, TAB)
+	srcErr.Message = append(srcErr.Message, err.Message...)
 	srcErr.Context = append(srcErr.Context, err)
 }
 
