@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 )
@@ -201,4 +202,12 @@ func PrefixStrLst(strList []string, prefix string) {
 	for idx := range strList {
 		strList[idx] = fmt.Sprintf("%s%s", prefix, strList[idx])
 	}
+}
+
+func RunningDir() (string, error) {
+	dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
+	if err != nil {
+		return "", err
+	}
+	return dir, nil
 }

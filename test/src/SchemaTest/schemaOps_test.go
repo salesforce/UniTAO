@@ -29,11 +29,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"path/filepath"
 	"testing"
 
 	"github.com/salesforce/UniTAO/lib/Schema"
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
+	"github.com/salesforce/UniTAO/lib/Util"
 )
 
 func TestSchemaValidate(t *testing.T) {
@@ -274,69 +276,37 @@ func TestSchemaCustomTypeMap(t *testing.T) {
 	}
 }
 
-func TestSchema(t *testing.T) {
-	schemaOfSchema := `
-	{
-		"name": "schema",
-		"description": "schema of schema",
-		"additionalProperties": false,
-		"properties": {
-			"name": {
-				"type": "string"
-			},
-			"description": {
-				"type": "string",
-				"required": false
-			},
-			"key": {
-				"type": "string",
-				"required": false
-			},
-			"properties": {
-				"type": "map",
-				"items": {
-					"type": "object",
-					"$ref": "#/definitions/prop"
-				}
-			},
-			"definitions": {
-				"type": "map",
-				"items": {
-					"type": "object",
-					"$ref": "#"
-				},
-				"required": false
+func getSchemaOfSchema() (*Schema.SchemaOps, error) {
+	currentDir, err := Util.RunningDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get running dir")
+	}
+	schemaFile, err := filepath.Abs(filepath.Join(currentDir, "../../../lib/Schema/data/schema.json"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ABS path of schema.json")
+	}
+	schemaData, err := Util.LoadJsonFile(schemaFile)
+	if err != nil {
+		return nil, err
+	}
+	schemaList := schemaData.(map[string]interface{})["data"].([]interface{})
+	for idx, recObj := range schemaList {
+		record, err := Record.LoadMap(recObj.(map[string]interface{}))
+		if err != nil {
+			return nil, fmt.Errorf("failed to load schema record @[%d]", idx)
+		}
+		if record.Id == JsonKey.Schema {
+			schema, err := Schema.LoadSchemaOpsData(JsonKey.Schema, "0.00.0001", record.Data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to load schema of schema")
 			}
-		},
-		"definitions": {
-			"prop": {
-				"additionalProperties": false,
-				"properties": {
-					"type": {
-						"type": "string"
-					},
-					"items": {
-						"type": "object",
-						"$ref": "#/definitions/prop",
-						"required": false
-					},
-					"$ref": {
-						"type": "string",
-						"required": false
-					},
-					"contentMediaType": {
-						"type": "string",
-						"required": false
-					},
-					"required": {
-						"type": "boolean",
-						"required": false
-					}
-				}
-			}
+			return schema, nil
 		}
 	}
-	`
+	return nil, fmt.Errorf("failed to find schema of schema")
+}
+
+func TestSchema(t *testing.T) {
 	correctSchema := `
 	{
 		"name": "testSchema01",
@@ -387,7 +357,7 @@ func TestSchema(t *testing.T) {
 		}
 	}
 	`
-	schema, err := LoadSchema(schemaOfSchema)
+	schema, err := getSchemaOfSchema()
 	if err != nil {
 		t.Fatalf("failed load schema of schema. Error:%s", err)
 	}
