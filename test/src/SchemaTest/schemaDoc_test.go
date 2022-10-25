@@ -110,3 +110,68 @@ func TestObjectKey(t *testing.T) {
 		t.Errorf("build the wrong key. [%s]!=[%s]", recordKey, record.Id)
 	}
 }
+
+func TestHashArrayKeyReq(t *testing.T) {
+	schemaStrMisKey := `{
+		"name": "test",
+		"properties": {
+			"hashArray": {
+				"type": "array",
+				"items": {
+					"type": "object",
+					"$ref": "#/definitions/hashItem"
+				}
+			}
+		},
+		"definitions": {
+			"hashItem": {
+				"name": "hashItem",
+				"properties": {
+					"test": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	}`
+	data := map[string]interface{}{}
+	err := json.Unmarshal([]byte(schemaStrMisKey), &data)
+	if err != nil {
+		t.Errorf("failed to load schemaStr. Error:%s", err)
+	}
+	_, err = SchemaDoc.New(data, "test", nil)
+	if err == nil {
+		t.Errorf("failed to catch error of missing key in hash item")
+	}
+	schemaStrWithKey := `{
+		"name": "test",
+		"properties": {
+			"hashArray": {
+				"type": "array",
+				"items": {
+					"type": "object",
+					"$ref": "#/definitions/hashItem"
+				}
+			}
+		},
+		"definitions": {
+			"hashItem": {
+				"name": "hashItem",
+				"key": "{test}",
+				"properties": {
+					"test": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	}`
+	err = json.Unmarshal([]byte(schemaStrWithKey), &data)
+	if err != nil {
+		t.Errorf("failed to load schemaStr. Error:%s", err)
+	}
+	_, err = SchemaDoc.New(data, "test", nil)
+	if err != nil {
+		t.Errorf("failed to validate a good data")
+	}
+}

@@ -33,13 +33,13 @@ import (
 
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Util"
+	"github.com/salesforce/UniTAO/lib/Util/Template"
 )
 
 type SchemaDoc struct {
 	Id          string
 	Parent      *SchemaDoc
-	KeyTemplate string
-	KeyAttrs    []string
+	KeyTemplate *Template.StrTemp
 	Data        map[string]interface{}
 	Definitions map[string]*SchemaDoc
 	CmtRefs     map[string]*CMTDocRef
@@ -67,12 +67,15 @@ func create(data map[string]interface{}, id string, parent *SchemaDoc) (*SchemaD
 	if !ok {
 		keyTemplate = ""
 	}
+	template, err := Template.ParseStr(keyTemplate, "{", "}")
+	if err != nil {
+		return nil, fmt.Errorf("invalid template=[%s], Error:%s", keyTemplate, err)
+	}
 	doc := SchemaDoc{
 		Id:          id,
 		Parent:      parent,
 		Data:        data,
-		KeyTemplate: keyTemplate,
-		KeyAttrs:    ParseTemplateVars(keyTemplate),
+		KeyTemplate: template,
 		CmtRefs:     map[string]*CMTDocRef{},
 		SubDocs:     map[string]*SchemaDoc{},
 	}
@@ -120,6 +123,10 @@ func New(data map[string]interface{}, id string, parent *SchemaDoc) (*SchemaDoc,
 	err = doc.preprocess()
 	if err != nil {
 		return nil, fmt.Errorf("failed @preprocess, Err:\n%s", err)
+	}
+	err = doc.validateKeyDefs()
+	if err != nil {
+		return nil, err
 	}
 	return doc, nil
 }
@@ -213,14 +220,61 @@ func (d *SchemaDoc) validateKeyAttrs() error {
 	if !ok {
 		requiredAttrs = []interface{}{}
 	}
-	reqHash := Util.IdxList(requiredAttrs)
-	for _, attr := range d.KeyAttrs {
-		if _, ok := reqHash[attr]; !ok {
-			return fmt.Errorf("key attribute: [%s] is not defined as required attribute", attr)
-		}
-		attrType := d.Data[JsonKey.Properties].(map[string]interface{})[attr].(map[string]interface{})[JsonKey.Type].(string)
+	reqMap := map[string]interface{}{}
+	for _, attr := range requiredAttrs {
+		attrStr := attr.(string)
+		reqMap[attrStr] = d.Data[JsonKey.Properties].(map[string]interface{})[attrStr]
+	}
+	keyMap, err := d.KeyTemplate.BuildVarMap(reqMap)
+	if err != nil {
+		return fmt.Errorf("required key attr definition validaton failed. Error: %s", err)
+	}
+	for attr, attrDef := range keyMap {
+		attrType := attrDef.(map[string]interface{})[JsonKey.Type].(string)
 		if attrType != JsonKey.String {
 			return fmt.Errorf("only string attribute can be key attribute. [attr]=[%s] [type]=[%s]", attr, attrType)
+		}
+	}
+	return nil
+}
+
+// all hash type, array/map of object, the schema for sub-doc should define key
+func (d *SchemaDoc) validateKeyDefs() error {
+	propDef := d.Data[JsonKey.Properties].(map[string]interface{})
+	for attr := range propDef {
+		attrDef := propDef[attr].(map[string]interface{})
+		switch attrDef[JsonKey.Type].(string) {
+		case JsonKey.Array:
+			itemType := attrDef[JsonKey.Items].(map[string]interface{})[JsonKey.Type].(string)
+			if itemType == JsonKey.Object {
+				subDoc := d.SubDocs[attr]
+				if len(subDoc.KeyTemplate.Vars) == 0 {
+					return fmt.Errorf("no key definition @path=[%s/%s]", d.Path(), attr)
+				}
+				err := subDoc.validateKeyDefs()
+				if err != nil {
+					return err
+				}
+			}
+		case JsonKey.Object:
+			if IsMap(attrDef) {
+				itemType := attrDef[JsonKey.AdditionalProperties].(map[string]interface{})[JsonKey.Type].(string)
+				if itemType == JsonKey.Object {
+					subDoc := d.SubDocs[attr]
+					err := subDoc.validateKeyDefs()
+					if err != nil {
+						return err
+					}
+				}
+				return nil
+			}
+			subDoc := d.SubDocs[attr]
+			if !d.IsAncestor(subDoc.Id) {
+				err := subDoc.validateKeyDefs()
+				if err != nil {
+					return err
+				}
+			}
 		}
 	}
 	return nil
@@ -394,7 +448,17 @@ func (d *SchemaDoc) GetDefinitionRaw(dataType string) (map[string]interface{}, e
 }
 
 func (d *SchemaDoc) BuildKey(data map[string]interface{}) (string, error) {
-	return BuildTemplateValue(d.KeyTemplate, d.KeyAttrs, data)
+	return d.KeyTemplate.BuildValue(data)
+}
+
+func (d *SchemaDoc) IsAncestor(docId string) bool {
+	if d.Id == docId {
+		return true
+	}
+	if d.Parent != nil {
+		return d.Parent.IsAncestor(docId)
+	}
+	return false
 }
 
 func IsMap(attrDef map[string]interface{}) bool {
@@ -417,60 +481,4 @@ func IsCmtRef(attrDef map[string]interface{}) bool {
 		return false
 	}
 	return true
-}
-
-func ParseTemplateVars(template string) []string {
-	attrList := []string{}
-	attrHash := map[string]bool{}
-	for len(template) > 0 {
-		leftIdx := strings.Index(template, "{")
-		if leftIdx < 0 {
-			break
-		}
-		template = template[leftIdx+1:]
-		rightIdx := strings.Index(template, "}")
-		attrName := template[:rightIdx]
-		template = template[rightIdx+1:]
-		if _, ok := attrHash[attrName]; !ok {
-			attrList = append(attrList, attrName)
-		}
-	}
-	return attrList
-}
-
-func BuildTemplateValue(template string, attrList []string, data interface{}) (string, error) {
-	dataList := []map[string]interface{}{}
-	if reflect.TypeOf(data).Kind() == reflect.Slice {
-		for idx, d := range data.([]interface{}) {
-			dMap, ok := d.(map[string]interface{})
-			if !ok {
-				return "", fmt.Errorf("invalid param=[data], idx=[%d] cannot convert to map", idx)
-			}
-			dataList = append(dataList, dMap)
-		}
-	} else {
-		dMap, ok := data.(map[string]interface{})
-		if !ok {
-			return "", fmt.Errorf("invalid param=[data], is not list or map")
-		}
-		dataList = append(dataList, dMap)
-	}
-
-	key := template
-	for _, attrName := range attrList {
-		hasAttr := false
-		for _, dMap := range dataList {
-			attrValue, ok := dMap[attrName]
-			if ok {
-				tempStr := fmt.Sprintf("{%s}", attrName)
-				key = strings.ReplaceAll(key, tempStr, attrValue.(string))
-				hasAttr = true
-				break
-			}
-		}
-		if !hasAttr {
-			return "", fmt.Errorf("attr=[%s] does not exists in data", attrName)
-		}
-	}
-	return key, nil
 }

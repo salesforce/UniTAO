@@ -88,7 +88,7 @@ func PrepareConn(schemaStr string, recordStr string) *SchemaPathData.Connection 
 		}
 		record, err := Record.LoadMap(data)
 		if err != nil {
-			return nil, Http.WrapError(err, fmt.Sprintf("failed to load data as Record."), http.StatusInternalServerError)
+			return nil, Http.WrapError(err, "failed to load data as Record.", http.StatusInternalServerError)
 		}
 		return record, nil
 	}

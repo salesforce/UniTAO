@@ -29,6 +29,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strconv"
 
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
@@ -99,80 +100,199 @@ func (schema *SchemaOps) ValidateRecord(record *Record.Record) error {
 	if schema.Record.Id != record.Type {
 		return fmt.Errorf("schema id and payload data type does not match, [%s]!=[%s]", schema.Record.Id, record.Type)
 	}
-	return schema.ValidateData(record.Data)
-}
-
-func (schema *SchemaOps) ValidateData(data map[string]interface{}) error {
-	err := schema.Meta.Validate(data)
+	err := schema.Meta.Validate(record.Data)
 	if err != nil {
 		return fmt.Errorf("schema validation failed. Error:\n%s", err)
+	}
+	if len(schema.Schema.KeyTemplate.Vars) > 0 {
+		dataId, err := schema.Schema.BuildKey(record.Data)
+		if err != nil {
+			return fmt.Errorf("failed to build Key from data. template=[%s], Error:%s", schema.Schema.KeyTemplate.Template, err)
+		}
+		if dataId != record.Id {
+			return fmt.Errorf("invalid record Id=[%s] does not match key tempate=[%s] value=[%s]", record.Id, schema.Schema.KeyTemplate.Template, dataId)
+		}
+	}
+	err = ValidateSchemaKeys(schema.Schema, record.Data, "")
+	if err != nil {
+		return err
 	}
 	return nil
 }
 
-func GetDataOnPath(schema *SchemaDoc.SchemaDoc, data map[string]interface{}, dataPath string, prevPath string) (*SchemaDoc.SchemaDoc, map[string]interface{}, string, *Http.HttpError) {
+func ValidateSchemaKeys(schema *SchemaDoc.SchemaDoc, data map[string]interface{}, dataPath string) error {
+	properties := schema.Data[JsonKey.Properties].(map[string]interface{})
+	for attr := range properties {
+		attrDef := properties[attr].(map[string]interface{})
+		attrType := attrDef[JsonKey.Type].(string)
+		switch attrType {
+		case JsonKey.Array:
+			valueList, ok := data[attr].([]interface{})
+			if !ok || len(valueList) == 0 {
+				continue
+			}
+			itemType := attrDef[JsonKey.Items].(map[string]interface{})[JsonKey.Type].(string)
+			switch itemType {
+			case JsonKey.String:
+				if cmtRef, ok := attrDef[JsonKey.Items].(map[string]interface{})[JsonKey.ContentMediaType].(string); ok {
+					cmtMap, err := Util.CountListIdx(valueList)
+					if err != nil {
+						return err
+					}
+					for key, count := range cmtMap {
+						if count > 1 {
+							return fmt.Errorf("duplicate key=[%s] on [%s]=[%s] path=[%s/%s]", key, JsonKey.ContentMediaType, cmtRef, dataPath, attr)
+						}
+					}
+				}
+			case JsonKey.Object:
+				itemDoc := schema.SubDocs[attr]
+				itemKeyMap := map[string]int{}
+				for idx, item := range valueList {
+					itemPath := fmt.Sprintf("%s/%s[%d]", dataPath, attr, idx)
+					itemData := item.(map[string]interface{})
+					err := ValidateSchemaKeys(itemDoc, itemData, itemPath)
+					if err != nil {
+						return err
+					}
+					itemKey, err := itemDoc.BuildKey(itemData)
+					if err != nil {
+						return fmt.Errorf("failed to build key @path [%s]", itemPath)
+					}
+					if _, ok := itemKeyMap[itemKey]; !ok {
+						itemKeyMap[itemKey] = idx
+					} else {
+						return fmt.Errorf("duplicate item key=[%s] @path=[%s] & [%d]", itemKey, itemPath, itemKeyMap[itemKey])
+					}
+				}
+			}
+		case JsonKey.Object:
+			value, ok := data[attr].(map[string]interface{})
+			if !ok || len(value) == 0 {
+				continue
+			}
+			nextDoc := schema.SubDocs[attr]
+			if SchemaDoc.IsMap(attrDef) {
+				itemType := attrDef[JsonKey.AdditionalProperties].(map[string]interface{})[JsonKey.Type].(string)
+				switch itemType {
+				case JsonKey.String:
+					if _, ok := attrDef[JsonKey.AdditionalProperties].(map[string]interface{})[JsonKey.ContentMediaType]; ok {
+						for key, cmt := range value {
+							itemPath := fmt.Sprintf("%s/%s[%s]", dataPath, attr, key)
+							if key != cmt.(string) {
+								return fmt.Errorf("for hash of %s, key[%s] not match value [%s] @[%s]", JsonKey.ContentMediaType, key, cmt.(string), itemPath)
+							}
+						}
+					}
+				case JsonKey.Object:
+					for key, item := range value {
+						itemPath := fmt.Sprintf("%s/%s[%s]", dataPath, attr, key)
+						itemObj := item.(map[string]interface{})
+						err := ValidateSchemaKeys(nextDoc, itemObj, itemPath)
+						if err != nil {
+							return err
+						}
+						if len(nextDoc.KeyTemplate.Vars) > 0 {
+							// only validate map key if item doc has key defined
+							itemKey, err := nextDoc.BuildKey(itemObj)
+							if err != nil {
+								return fmt.Errorf("failed to generate item key @[%s], Error:%s", itemPath, err)
+							}
+							if key != itemKey {
+								return fmt.Errorf("hash key[%s] not match object key[%s] @[%s]", key, itemKey, itemPath)
+							}
+						}
+					}
+				}
+				continue
+			}
+			err := ValidateSchemaKeys(nextDoc, value, fmt.Sprintf("%s/%s", dataPath, attr))
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func SetDataOnPath(schema *SchemaDoc.SchemaDoc, data map[string]interface{}, dataPath string, prevPath string, newData interface{}) *Http.HttpError {
 	attrPath, nextPath := Util.ParsePath(dataPath)
 	if nextPath == "" {
-		return schema, data, attrPath, nil
+		return setAttrData(schema, data, attrPath, prevPath, newData)
 	}
 	attrName, key, err := Util.ParseArrayPath(attrPath)
 	if err != nil {
-		return nil, nil, "", Http.NewHttpError(fmt.Sprintf("failed to parse attrPath=[%s] @path=[%s]", attrPath, prevPath), http.StatusBadRequest)
+		return Http.NewHttpError(fmt.Sprintf("failed to parse attrPath=[%s] @path=[%s]", attrPath, prevPath), http.StatusBadRequest)
 	}
 	attrDef, ok := schema.Data[JsonKey.Properties].(map[string]interface{})[attrName].(map[string]interface{})
 	if !ok {
-		return nil, nil, "", Http.NewHttpError(fmt.Sprintf("invalid path does not exists. @[%s/%s]", prevPath, attrName), http.StatusBadRequest)
+		return Http.NewHttpError(fmt.Sprintf("invalid path does not exists. @[%s/%s]", prevPath, attrName), http.StatusBadRequest)
 	}
 	attrData, ok := data[attrName]
 	if !ok {
-		return nil, nil, "", Http.NewHttpError(fmt.Sprintf("path=[%s/%s] does not exists", prevPath, attrPath), http.StatusBadRequest)
+		return Http.NewHttpError(fmt.Sprintf("path=[%s/%s] does not exists", prevPath, attrPath), http.StatusBadRequest)
 	}
 	switch attrDef[JsonKey.Type].(string) {
 	case JsonKey.Array:
 		if key == "" {
-			return nil, nil, "", Http.NewHttpError(fmt.Sprintf("need to specify key to drill in array. @path=[%s/%s]", prevPath, attrPath), http.StatusBadRequest)
+			return Http.NewHttpError(fmt.Sprintf("need to specify key to drill in array. @path=[%s/%s]", prevPath, attrPath), http.StatusBadRequest)
 		}
 		attrAry := attrData.([]interface{})
 		itemType := attrDef[JsonKey.Items].(map[string]interface{})[JsonKey.Type].(string)
 		if itemType != JsonKey.Object {
 			//compare key with generated key from sub object
-			return nil, nil, "", Http.NewHttpError(fmt.Sprintf("array of [%s] cannot drill further @path=[%s]", itemType, prevPath), http.StatusBadRequest)
+			return Http.NewHttpError(fmt.Sprintf("array of [%s] cannot drill further @path=[%s]", itemType, prevPath), http.StatusBadRequest)
 		}
 		subDoc := schema.SubDocs[attrName]
 		for idx := range attrAry {
 			item := attrAry[idx].(map[string]interface{})
 			itemKey, err := subDoc.BuildKey(item)
 			if err != nil {
-				return nil, nil, "", Http.NewHttpError(fmt.Sprintf("not able to compare key with item=[%d] @path=[%s/%s]", idx, prevPath, attrName), http.StatusInternalServerError)
+				return Http.NewHttpError(fmt.Sprintf("not able to compare key with item=[%d] @path=[%s/%s]", idx, prevPath, attrName), http.StatusInternalServerError)
 			}
 			if itemKey == key {
-				return GetDataOnPath(subDoc, item, nextPath, fmt.Sprintf("%s/%s", prevPath, attrPath))
+				return SetDataOnPath(subDoc, item, nextPath, fmt.Sprintf("%s/%s", prevPath, attrPath), newData)
 			}
 		}
-		return nil, nil, "", Http.NewHttpError(fmt.Sprintf("item not found in array @path=[%s/%s]", prevPath, attrPath), http.StatusNotFound)
+		return Http.NewHttpError(fmt.Sprintf("item not found in array @path=[%s/%s]", prevPath, attrPath), http.StatusNotFound)
 	case JsonKey.Object:
 		mapData := attrData.(map[string]interface{})
 		subDoc := schema.SubDocs[attrName]
 		if !SchemaDoc.IsMap(attrDef) {
 			if key != "" {
-				return nil, nil, "", Http.NewHttpError(fmt.Sprintf("data is not map @path=[%s/%s] to drill in with key=[%s]", prevPath, attrName, key), http.StatusBadRequest)
+				return Http.NewHttpError(fmt.Sprintf("data is not map @path=[%s/%s] to drill in with key=[%s]", prevPath, attrName, key), http.StatusBadRequest)
 			}
-			return GetDataOnPath(subDoc, mapData, nextPath, fmt.Sprintf("%s/%s", prevPath, attrPath))
+			return SetDataOnPath(subDoc, mapData, nextPath, fmt.Sprintf("%s/%s", prevPath, attrPath), newData)
 		}
 		if key == "" {
-			return nil, nil, "", Http.NewHttpError(fmt.Sprintf("need to specify key to drill in map. @path=[%s/%s]", prevPath, attrPath), http.StatusBadRequest)
+			return Http.NewHttpError(fmt.Sprintf("need to specify key to drill in map. @path=[%s/%s]", prevPath, attrPath), http.StatusBadRequest)
 		}
 		keyData, ok := mapData[key].(map[string]interface{})
 		if !ok {
-			return nil, nil, "", Http.NewHttpError(fmt.Sprintf("item not found in map @path=[%s/%s]", prevPath, attrPath), http.StatusNotFound)
+			return Http.NewHttpError(fmt.Sprintf("item not found in map @path=[%s/%s]", prevPath, attrPath), http.StatusNotFound)
 		}
-		return GetDataOnPath(subDoc, keyData, nextPath, fmt.Sprintf("%s/%s", prevPath, attrPath))
+		err := SetDataOnPath(subDoc, keyData, nextPath, fmt.Sprintf("%s/%s", prevPath, attrPath), newData)
+		if err != nil {
+			return err
+		}
+		if len(subDoc.KeyTemplate.Vars) > 0 {
+			// only update key when key is defined @item Do
+			newKey, e := subDoc.BuildKey(keyData)
+			if e != nil {
+				return Http.WrapError(e, fmt.Sprintf("new data cannot generate key. @path=[%s/%s]", prevPath, attrPath), http.StatusBadRequest)
+			}
+			if newKey != key {
+				delete(mapData, key)
+				mapData[newKey] = keyData
+			}
+		}
 	default:
-		return nil, nil, "", Http.NewHttpError(fmt.Sprintf("invalid path, type=[%s] cannot walk in. @path=[%s/%s]", attrDef[JsonKey.Type].(string), prevPath, attrName), http.StatusBadRequest)
+		return Http.NewHttpError(fmt.Sprintf("invalid path, type=[%s] cannot walk in. @path=[%s/%s]", attrDef[JsonKey.Type].(string), prevPath, attrName), http.StatusBadRequest)
 	}
+	return nil
 }
 
-func SetAttrData(schema *SchemaDoc.SchemaDoc, data map[string]interface{}, attrPath string, prevPath string, newData interface{}) *Http.HttpError {
+func setAttrData(schema *SchemaDoc.SchemaDoc, data map[string]interface{}, attrPath string, prevPath string, newData interface{}) *Http.HttpError {
 	attrName, key, err := Util.ParseArrayPath(attrPath)
 	if err != nil {
 		return Http.NewHttpError(fmt.Sprintf("invalid attrPath=[%s] @[%s]", attrPath, prevPath), http.StatusBadRequest)
@@ -190,27 +310,68 @@ func SetAttrData(schema *SchemaDoc.SchemaDoc, data map[string]interface{}, attrP
 		itemType := attrDef[JsonKey.Items].(map[string]interface{})[JsonKey.Type].(string)
 		if itemType != JsonKey.Object {
 			if SchemaDoc.IsCmtRef(attrDef[JsonKey.Items].(map[string]interface{})) {
-				return SetArrayCmt(data, attrName, key, newData)
+				return setArrayCmt(data, attrName, key, newData)
 			}
 			setIdx, err := strconv.Atoi(key)
 			if err != nil {
-				return Http.WrapError(err, fmt.Sprintf("invalid key=[%s] to delete. cannot parse to int", key), http.StatusBadRequest)
+				return Http.WrapError(err, fmt.Sprintf("invalid key=[%s] to set for simple array. cannot parse to int", key), http.StatusBadRequest)
 			}
-			return SetArraySimple(data, attrName, setIdx, newData)
+			return setArraySimple(data, attrName, setIdx, newData)
 		}
-		return SetArrayObject(schema, data, attrName, key, newData)
+		return setArrayObject(schema, data, attrName, key, newData)
 	case JsonKey.Object:
 		if !SchemaDoc.IsMap(attrDef) {
 			return Http.NewHttpError(fmt.Sprintf("invalid path, attr=[%s], type=[%s] key=[%s] is not empty. path=[%s]", attrName, attrDef[JsonKey.Type].(string), key, prevPath), http.StatusBadRequest)
 		}
-		data[attrName].(map[string]interface{})[key] = newData
+		itemType := attrDef[JsonKey.Items].(map[string]interface{})[JsonKey.Type].(string)
+		attrData := data[attrName].(map[string]interface{})
+		switch itemType {
+		case JsonKey.Object:
+			itemDoc := schema.SubDocs[attrName]
+			newKey, err := itemDoc.BuildKey(newData.(map[string]interface{}))
+			if err != nil {
+				return Http.WrapError(err, fmt.Sprintf("failed to get key from newData, @path=[%s/%s]", prevPath, attrPath), http.StatusBadRequest)
+			}
+			if newKey != key {
+				delete(attrData, key)
+			}
+			attrData[newKey] = newData
+		case JsonKey.String:
+			if newData == nil {
+				delete(attrData, key)
+				return nil
+			}
+			strVal, ok := newData.(string)
+			if !ok {
+				return Http.NewHttpError(fmt.Sprintf("new Cmt Value is not a string. type=[%s] is not [string]", reflect.TypeOf(newData).Kind()), http.StatusBadRequest)
+			}
+			if _, ok := attrDef[JsonKey.Items].(map[string]interface{})[JsonKey.ContentMediaType]; ok {
+				if _, ok := attrData[key]; ok {
+					if strVal == key {
+						// key already exists
+						return nil
+					}
+					// newkey different from old key
+					delete(attrData, key)
+				}
+				if _, ok := attrData[strVal]; ok {
+					// new key already exists
+					return nil
+				}
+				attrData[strVal] = strVal
+				return nil
+			}
+			attrData[key] = strVal
+		default:
+			attrData[key] = newData
+		}
 		return nil
 	default:
 		return Http.NewHttpError(fmt.Sprintf("invalid path, attr=[%s], type=[%s] key=[%s] is not empty. path=[%s]", attrName, attrDef[JsonKey.Type].(string), key, prevPath), http.StatusBadRequest)
 	}
 }
 
-func SetArrayCmt(data map[string]interface{}, attrName string, key string, newData interface{}) *Http.HttpError {
+func setArrayCmt(data map[string]interface{}, attrName string, key string, newData interface{}) *Http.HttpError {
 	newRef := newData.(string)
 	dataList := data[attrName].([]interface{})
 	refHash := Util.IdxList(dataList)
@@ -235,7 +396,7 @@ func SetArrayCmt(data map[string]interface{}, attrName string, key string, newDa
 	return nil
 }
 
-func SetArraySimple(data map[string]interface{}, attrName string, idx int, newData interface{}) *Http.HttpError {
+func setArraySimple(data map[string]interface{}, attrName string, idx int, newData interface{}) *Http.HttpError {
 	dataList := data[attrName].([]interface{})
 	if newData == nil {
 		// to delete on index
@@ -256,18 +417,9 @@ func SetArraySimple(data map[string]interface{}, attrName string, idx int, newDa
 	return nil
 }
 
-func SetArrayObject(schema *SchemaDoc.SchemaDoc, data map[string]interface{}, attrName string, key string, newData interface{}) *Http.HttpError {
+func setArrayObject(schema *SchemaDoc.SchemaDoc, data map[string]interface{}, attrName string, key string, newData interface{}) *Http.HttpError {
 	subSchema := schema.SubDocs[attrName]
 	dataList := data[attrName].([]interface{})
-	if newData != nil {
-		newKey, err := subSchema.BuildKey(newData.(map[string]interface{}))
-		if err != nil {
-			return Http.WrapError(err, fmt.Sprintf("failed to get key from request data. type=[%s]", schema.Id), http.StatusBadRequest)
-		}
-		if newKey != key {
-			return Http.NewHttpError(fmt.Sprintf("path not match object key=[%s]", newKey), http.StatusBadRequest)
-		}
-	}
 	for idx := range dataList {
 		item := dataList[idx].(map[string]interface{})
 		itemKey, err := subSchema.BuildKey(item)

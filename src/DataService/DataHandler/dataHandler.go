@@ -391,12 +391,7 @@ func (h *Handler) Patch(dataType string, idPath string, data interface{}) (map[s
 	if err != nil {
 		return nil, Http.WrapError(e, fmt.Sprintf("failed to load data [%s/%s] as record", dataType, dataId), http.StatusInternalServerError)
 	}
-	attrSchema, attrData, attrPath, err := Schema.GetDataOnPath(schema.Schema, patchRecord.Data, nextPath, fmt.Sprintf("%s/%s", dataType, dataId))
-	if err != nil {
-		return nil, err
-	}
-	prevPath := nextPath[:len(nextPath)-len(attrPath)]
-	err = Schema.SetAttrData(attrSchema, attrData, attrPath, prevPath, data)
+	err = Schema.SetDataOnPath(schema.Schema, patchRecord.Data, nextPath, fmt.Sprintf("%s/%s", dataType, dataId), data)
 	if err != nil {
 		return nil, err
 	}

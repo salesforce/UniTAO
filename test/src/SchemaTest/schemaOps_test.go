@@ -34,16 +34,58 @@ import (
 	"github.com/salesforce/UniTAO/lib/Schema"
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
-	"github.com/salesforce/UniTAO/lib/Util"
 )
 
 func TestSchemaValidate(t *testing.T) {
 	log.Print("test Run")
-	filePath := "data/infrastructure.json"
-	testData, err := Util.LoadJSONMap(filePath)
-	if err != nil {
-		t.Fatalf("failed loading data from [path]=[%s], Err:%s", filePath, err)
-	}
+	infraStr := `{
+		"schema": {
+			"__id": "infrastructure",
+			"__type": "schema",
+			"__ver": "1_01_01",
+			"data": {
+				"name": "infrastructure",
+				"description": "Infrastructure (root or all data)",
+				"properties": {
+					"id": {
+						"type": "string",
+						"required": true
+					},
+					"regions": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"contentMediaType": "inventory/region"
+						}
+					}
+				}
+			}
+		},
+		"data": {   
+			"__id":         "global",
+			"__type":       "infrastructure",
+			"__ver":        "1_01_01",
+			"data": {
+				"id": "global", 
+				"description": "Global Root of all infrastructure",
+				"regions":["North_America", "South_America", "Europe", "Asia", "Middle_East", "Africa"]
+			}
+		},
+		"negativeData": [
+			{
+				"__id":         "global",
+				"__type":       "infrastructure",
+				"__ver":        "1_01_01",
+				"data": {
+					"Id": "global", 
+					"description": "Global Root of all infrastructure",
+					"Region":["North_America", "South_America", "Europe", "Asia", "Middle_East", "Africa"]
+				}
+			}
+		]
+	}`
+	testData := map[string]interface{}{}
+	json.Unmarshal([]byte(infraStr), &testData)
 	schemaRecordData, ok := testData[JsonKey.Schema].(map[string]interface{})
 	if !ok {
 		t.Fatalf("missing field [%s] from test data", JsonKey.Schema)
@@ -58,7 +100,7 @@ func TestSchemaValidate(t *testing.T) {
 	}
 	record, err := Record.LoadMap(testData["data"].(map[string]interface{}))
 	if err != nil {
-		t.Fatalf("failed to load data from file=%s", filePath)
+		t.Fatalf("failed to load data from infra")
 	}
 	err = schema.ValidateRecord(record)
 	if err != nil {
@@ -133,6 +175,7 @@ func TestSchemaHashObj(t *testing.T) {
 			"dataItem": {
 				"name": "dataItem",
 				"description": "object data as item for hash map",
+				"key": "{field0}",
 				"properties": {
 					"field0": {
 						"type": "string"
@@ -190,6 +233,7 @@ func TestSchemaCustomTypeMap(t *testing.T) {
 			"dataItem": {
 				"name": "dataItem",
 				"description": "object data as item for hash map",
+				"key": "{field0}",
 				"properties": {
 					"field0": {
 						"type": "string"
@@ -357,13 +401,361 @@ func TestSchema(t *testing.T) {
 	}
 }
 
+func TestValidateRecordId(t *testing.T) {
+	schemaStr := `{
+		"name": "test",
+		"key": "{testAttr}",
+		"properties": {
+			"testAttr": {
+				"type": "string"
+			}
+		}
+	}`
+	schema, err := LoadSchema(schemaStr)
+	if err != nil {
+		t.Fatalf("failed load schemaStr. Error:%s", err)
+	}
+	badRecordStr := `{
+		"__id": "test01",
+		"__type": "test",
+		"__ver": "0.0.1",
+		"data": {
+			"testAttr": "123"
+		}
+	}`
+	record, err := Record.LoadStr(badRecordStr)
+	if err != nil {
+		t.Fatalf("failed to load bad record str as record")
+	}
+	err = schema.ValidateRecord(record)
+	if err == nil {
+		t.Fatalf("failed to catch invalid record id")
+	}
+}
+
+func TestValidateArrayCheckDup(t *testing.T) {
+	schemaStr := `{
+		"name": "test",
+		"properties": {
+			"arrayOfCmt": {
+				"type": "array",
+				"items": {
+					"type": "string",
+					"contentMediaType": "inventory/testRef"
+				}
+				
+			},
+			"arrayOfStr": {
+				"type": "array",
+				"items": {
+					"type": "string"
+				}
+			},
+			"arrayOfObj": {
+				"type": "array",
+				"items": {
+					"type": "object",
+					"$ref": "#/definitions/itemObj"
+				}
+			}
+		},
+		"definitions": {
+			"itemObj": {
+				"name": "itemObj",
+				"key": "{keyAttr}",
+				"properties": {
+					"keyAttr": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	}`
+	schema, err := LoadSchema(schemaStr)
+	if err != nil {
+		t.Fatalf("failed to load schemaStr, Error: %s", err)
+	}
+	recordStr := `{
+		"__id": "test01",
+		"__type": "test",
+		"__ver": "0.0.1",
+		"data": {
+			"arrayOfStr": [
+				"123",
+				"234",
+				"345",
+				"456",
+				"123"
+			],
+			"arrayOfCmt": [
+				"123",
+				"234",
+				"345",
+				"456"
+			],
+			"arrayOfObj": [
+				{
+					"keyAttr": "1"
+				},
+				{
+					"keyAttr": "2"
+				},
+				{
+					"keyAttr": "3"
+				}
+			]
+		}
+	}`
+	record, err := Record.LoadStr(recordStr)
+	if err != nil {
+		t.Fatalf("failed to load record. Error:%s", err)
+	}
+	err = schema.ValidateRecord(record)
+	if err != nil {
+		t.Fatalf("failed to validate record. Error:%s", err)
+	}
+	recordDupStr := `{
+		"__id": "test01",
+		"__type": "test",
+		"__ver": "0.0.1",
+		"data": {
+			"arrayOfStr": [
+				"123",
+				"234",
+				"345",
+				"456",
+				"123"
+			],
+			"arrayOfCmt": [
+				"123",
+				"234",
+				"345",
+				"456",
+				"123"
+			],
+			"arrayOfObj": [
+				{
+					"keyAttr": "1"
+				},
+				{
+					"keyAttr": "2"
+				},
+				{
+					"keyAttr": "3"
+				}
+			]
+		}
+	}`
+	record, err = Record.LoadStr(recordDupStr)
+	if err != nil {
+		t.Fatalf("failed to load record. Error:%s", err)
+	}
+	err = schema.ValidateRecord(record)
+	if err == nil {
+		t.Fatalf("failed to catch duplicate in string array. Error:%s", err)
+	}
+	recordDupStr = `{
+		"__id": "test01",
+		"__type": "test",
+		"__ver": "0.0.1",
+		"data": {
+			"arrayOfStr": [
+				"123",
+				"234",
+				"345",
+				"456",
+				"123"
+			],
+			"arrayOfCmt": [
+				"123",
+				"234",
+				"345",
+				"456"
+			],
+			"arrayOfObj": [
+				{
+					"keyAttr": "1"
+				},
+				{
+					"keyAttr": "2"
+				},
+				{
+					"keyAttr": "3"
+				},
+				{
+					"keyAttr": "3"
+				}
+			]
+		}
+	}`
+	record, err = Record.LoadStr(recordDupStr)
+	if err != nil {
+		t.Fatalf("failed to load record. Error:%s", err)
+	}
+	err = schema.ValidateRecord(record)
+	if err == nil {
+		t.Fatalf("failed to catch duplicate in string array. Error:%s", err)
+	}
+}
+
+func TestValidateHashCheckKey(t *testing.T) {
+	schemaStr := `{
+		"name": "test",
+		"properties": {
+			"hashStr": {
+				"type": "map",
+				"items": {
+					"type": "string"
+				}
+			},
+			"hashCmt": {
+				"type": "map",
+				"items": {
+					"type": "string",
+					"contentMediaType": "inventory/testCmtRef"
+				}
+			},
+			"hashObject": {
+				"type": "map",
+				"items": {
+					"type": "object",
+					"$ref": "#/definitions/itemObj"
+				}
+			}
+		},
+		"definitions": {
+			"itemObj": {
+				"name": "itemObj",
+				"key": "{keyAttr}",
+				"properties": {
+					"keyAttr": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	}`
+	schema, err := LoadSchema(schemaStr)
+	if err != nil {
+		t.Fatalf("failed to load schemaStr, Error: %s", err)
+	}
+	goodRecordstr := `{
+		"__id": "test01",
+		"__type": "test",
+		"__ver": "0.0.1",
+		"data": {
+			"hashStr": {
+				"1": "2",
+				"2": "1",
+				"3": "2"
+			},
+			"hashCmt": {
+				"1": "1",
+				"2": "2",
+				"3": "3"
+			},
+			"hashObject": {
+				"1": {
+					"keyAttr": "1"
+				},
+				"2": {
+					"keyAttr": "2"
+				},
+				"3": {
+					"keyAttr": "3"
+				}
+			}
+		}
+	}`
+	record, err := Record.LoadStr(goodRecordstr)
+	if err != nil {
+		t.Fatalf("failed to load bad record str as record")
+	}
+	err = schema.ValidateRecord(record)
+	if err != nil {
+		t.Fatalf("failed to validate good record")
+	}
+	badRecordstr := `{
+		"__id": "test01",
+		"__type": "test",
+		"__ver": "0.0.1",
+		"data": {
+			"hashStr": {
+				"1": "2",
+				"2": "1",
+				"3": "2"
+			},
+			"hashCmt": {
+				"1": "2",
+				"2": "2",
+				"3": "3"
+			},
+			"hashObject": {
+				"1": {
+					"keyAttr": "1"
+				},
+				"2": {
+					"keyAttr": "2"
+				},
+				"3": {
+					"keyAttr": "3"
+				}
+			}
+		}
+	}`
+	record, err = Record.LoadStr(badRecordstr)
+	if err != nil {
+		t.Fatalf("failed to load bad record str as record")
+	}
+	err = schema.ValidateRecord(record)
+	if err == nil {
+		t.Fatalf("failed to invalid key value hash of cmt")
+	}
+	badRecordstr = `{
+		"__id": "test01",
+		"__type": "test",
+		"__ver": "0.0.1",
+		"data": {
+			"hashStr": {
+				"1": "2",
+				"2": "1",
+				"3": "2"
+			},
+			"hashCmt": {
+				"1": "1",
+				"2": "2",
+				"3": "3"
+			},
+			"hashObject": {
+				"1": {
+					"keyAttr": "1"
+				},
+				"2": {
+					"keyAttr": "3"
+				},
+				"3": {
+					"keyAttr": "3"
+				}
+			}
+		}
+	}`
+	record, err = Record.LoadStr(badRecordstr)
+	if err != nil {
+		t.Fatalf("failed to load bad record str as record")
+	}
+	err = schema.ValidateRecord(record)
+	if err == nil {
+		t.Fatalf("failed to invalid key value hash of cmt")
+	}
+}
+
 func validateData(schema *Schema.SchemaOps, dataStr string) error {
 	var data map[string]interface{}
 	err := json.Unmarshal([]byte(dataStr), &data)
 	if err != nil {
 		return fmt.Errorf("failed to parse dataStr. Error:%s", err)
 	}
-	err = schema.ValidateData(data)
+	err = schema.Meta.Validate(data)
 	if err != nil {
 		return fmt.Errorf("failed to validate data. Error:%s", err)
 	}
