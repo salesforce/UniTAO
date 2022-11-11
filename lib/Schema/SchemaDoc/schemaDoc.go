@@ -131,6 +131,10 @@ func New(data map[string]interface{}, id string, parent *SchemaDoc) (*SchemaDoc,
 	return doc, nil
 }
 
+func ArchivedSchemaId(dataType string, typeVersion string) string {
+	return fmt.Sprintf("%s%s%s", dataType, JsonKey.ArchivedSchemaIdDiv, typeVersion)
+}
+
 func (d *SchemaDoc) Path() string {
 	if d.Parent == nil {
 		return d.Id
@@ -347,7 +351,7 @@ func (d *SchemaDoc) getCmtRef(pname string, prop map[string]interface{}) error {
 		ref := CMTDocRef{
 			Doc:         d,
 			Name:        pname,
-			CmtType:     cmtType,
+			CmtType:     JsonKey.Inventory,
 			ContentType: dataType,
 		}
 		d.CmtRefs[ref.Name] = &ref

@@ -39,7 +39,6 @@ import (
 	"github.com/salesforce/UniTAO/lib/Schema"
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
-	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
 	"github.com/salesforce/UniTAO/lib/SchemaPath"
 	SchemaPathData "github.com/salesforce/UniTAO/lib/SchemaPath/Data"
 	"github.com/salesforce/UniTAO/lib/Util"
@@ -196,7 +195,7 @@ func (h *Handler) ListData(dataType string) ([]map[string]interface{}, *Http.Htt
 	return result, nil
 }
 
-func (h *Handler) GetSchema(dataType string) (*SchemaDoc.SchemaDoc, *Http.HttpError) {
+func (h *Handler) GetSchema(dataType string) (*Record.Record, *Http.HttpError) {
 	data, err := h.GetData(JsonKey.Schema, dataType)
 	if err != nil {
 		return nil, Http.WrapError(err, fmt.Sprintf("object of type “%s” does not exist", dataType), err.Status)
@@ -205,14 +204,13 @@ func (h *Handler) GetSchema(dataType string) (*SchemaDoc.SchemaDoc, *Http.HttpEr
 	if e != nil {
 		return nil, Http.WrapError(e, fmt.Sprintf("failed to load schema record data. [type]=[%s]", dataType), http.StatusInternalServerError)
 	}
-	doc, e := SchemaDoc.New(record.Data, dataType, nil)
-	if e != nil {
-		return nil, Http.WrapError(e, fmt.Sprintf("failed to schema doc from schema record. [id]=[%s]", dataType), http.StatusInternalServerError)
-	}
-	return doc, nil
+	return record, nil
 }
 
 func (h *Handler) GetDataServiceRecord(dataType string, dataId string) (*Record.Record, *Http.HttpError) {
+	if dataType == JsonKey.Schema {
+		return h.GetSchema(dataId)
+	}
 	data, err := h.GetDataServiceData(dataType, dataId)
 	if err != nil {
 		return nil, err
@@ -226,7 +224,6 @@ func (h *Handler) GetDataServiceRecord(dataType string, dataId string) (*Record.
 
 func (h *Handler) GetDataByPath(dataType string, idPath string, nextPath string) (interface{}, *Http.HttpError) {
 	conn := SchemaPathData.Connection{
-		FuncSchema: h.GetSchema,
 		FuncRecord: h.GetRecord,
 	}
 	dataPath := idPath
@@ -383,7 +380,10 @@ func (h *Handler) PutData(data map[string]interface{}) (string, *Http.HttpError)
 			return "", e
 		}
 	}
-	err = h.Db.Replace(record.Type, nil, record.Map())
+	args := make(map[string]interface{})
+	args[DbIface.Table] = record.Type
+	args[Record.DataId] = record.Id
+	err = h.Db.Replace(record.Type, args, record.Map())
 	if err != nil {
 		return "", Http.NewHttpError(err.Error(), http.StatusInternalServerError)
 	}

@@ -44,7 +44,7 @@ func TestSchemaValidate(t *testing.T) {
 		"schema": {
 			"__id": "infrastructure",
 			"__type": "schema",
-			"__ver": "1_01_01",
+			"__ver": "1.01.01",
 			"data": {
 				"name": "infrastructure",
 				"description": "Infrastructure (root or all data)",
@@ -66,7 +66,7 @@ func TestSchemaValidate(t *testing.T) {
 		"data": {   
 			"__id":         "global",
 			"__type":       "infrastructure",
-			"__ver":        "1_01_01",
+			"__ver":        "1.01.01",
 			"data": {
 				"id": "global", 
 				"description": "Global Root of all infrastructure",
@@ -77,7 +77,7 @@ func TestSchemaValidate(t *testing.T) {
 			{
 				"__id":         "global",
 				"__type":       "infrastructure",
-				"__ver":        "1_01_01",
+				"__ver":        "1.01.01",
 				"data": {
 					"Id": "global", 
 					"description": "Global Root of all infrastructure",
@@ -277,11 +277,11 @@ func TestSchemaCustomTypeMap(t *testing.T) {
 }
 
 func getSchemaOfSchema() (*Schema.SchemaOps, error) {
-	currentDir, err := Util.RunningDir()
+	rootDir, err := Util.RootDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get running dir")
 	}
-	schemaFile, err := filepath.Abs(filepath.Join(currentDir, "../../../lib/Schema/data/schema.json"))
+	schemaFile, err := filepath.Abs(filepath.Join(rootDir, "lib/Schema/data/schema.json"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ABS path of schema.json")
 	}

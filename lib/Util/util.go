@@ -32,6 +32,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 )
 
@@ -44,17 +45,23 @@ type HttpConfig struct {
 }
 
 func ParsePath(path string) (string, string) {
+	return ParseCustomPath(path, "/")
+}
+
+func ParseCustomPath(path string, div string) (string, string) {
 	queryPath := path
-	if len(queryPath) > 0 && queryPath[0:1] == "/" {
-		queryPath = queryPath[1:]
+	for strings.HasPrefix(queryPath, div) {
+		queryPath = strings.TrimPrefix(queryPath, div)
 	}
-	//log.Printf("path[0:1]:%s, queryPath:%s", path[0:1], queryPath)
-	devIdx := strings.Index(queryPath, "/")
+	for strings.HasSuffix(queryPath, div) {
+		queryPath = strings.TrimSuffix(queryPath, div)
+	}
+	devIdx := strings.Index(queryPath, div)
 	if devIdx < 0 {
 		return queryPath, ""
 	}
-	currentPath := queryPath[0:devIdx]
-	nextPath := queryPath[devIdx+1:]
+	currentPath := queryPath[:devIdx]
+	nextPath := queryPath[devIdx+len(div):]
 	return currentPath, nextPath
 }
 
@@ -186,12 +193,12 @@ func JsonCopy(data interface{}) (interface{}, error) {
 	return result, nil
 }
 
-func ObjCopy(src interface{}, target interface{}) error {
+func ObjCopy(src interface{}, targetAddr interface{}) error {
 	dataBytes, err := json.Marshal(src)
 	if err != nil {
 		return fmt.Errorf("Util.JsonCopy failed to Marshal data, Error: %s", err)
 	}
-	err = json.Unmarshal(dataBytes, target)
+	err = json.Unmarshal(dataBytes, targetAddr)
 	if err != nil {
 		return fmt.Errorf("Util.JsonCopy failed to UnMarshal data, Error: %s", err)
 	}
@@ -204,8 +211,9 @@ func PrefixStrLst(strList []string, prefix string) {
 	}
 }
 
-func RunningDir() (string, error) {
-	dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
+func RootDir() (string, error) {
+	_, filename, _, _ := runtime.Caller(0)
+	dir, err := filepath.Abs(fmt.Sprintf("%s/../../", filepath.Dir(filename)))
 	if err != nil {
 		return "", err
 	}

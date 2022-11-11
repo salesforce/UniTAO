@@ -146,7 +146,7 @@ func TestDataHandler(t *testing.T) {
 		"data": {
 			"__id": "North_America",
 			"__type": "region",
-			"__ver": "1_01_01",
+			"__ver": "0.0.1",
 			"data": {
 				"id": "North_America",
 				"description": "North America Infrastructure",
@@ -156,7 +156,7 @@ func TestDataHandler(t *testing.T) {
 		"negativeData": {
 			"__id": "North_America",
 			"__type": "region",
-			"__ver": "1_01_01",
+			"__ver": "0.0.1",
 			"data": {
 				"id": "North_America",
 				"description": "North America Infrastructure",

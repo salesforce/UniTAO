@@ -216,12 +216,26 @@ func (db *Database) Create(table string, data interface{}) error {
 func (db *Database) Replace(table string, keys map[string]interface{}, data interface{}) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
+	currentList, err := db.Get(keys)
+	if err != nil {
+		return err
+	}
+	if len(currentList) > 0 {
+		err = db.Delete(table, keys)
+		if err != nil {
+			return err
+		}
+	}
 	return db.Create(table, data)
 }
 
 func (db *Database) Delete(table string, keys map[string]interface{}) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
+	return db.deleteRecord(table, keys)
+}
+
+func (db *Database) deleteRecord(table string, keys map[string]interface{}) error {
 	av, err := dynamodbattribute.MarshalMap(keys)
 	if err != nil {
 		log.Printf("Got error marshalling map: %s", err)

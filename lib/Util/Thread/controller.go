@@ -23,32 +23,54 @@ This copyright notice and license applies to all files in this directory or sub-
 ************************************************************************************************************
 */
 
-package JsonKey
+package Thread
 
-const (
-	AdditionalProperties = "additionalProperties"
-	Array                = "array"
-	ContentMediaType     = "contentMediaType"
-	Definitions          = "definitions"
-	DefinitionPrefix     = "#/definitions/"
-	DocRoot              = "#"
-	Items                = "items"
-	Inventory            = "inventory"
-	Key                  = "key"
-	Name                 = "name"
-	Map                  = "map"
-	Object               = "object"
-	Properties           = "properties"
-	Ref                  = "$ref"
-	Required             = "required"
-	Schema               = "schema"
-	String               = "string"
-	Type                 = "type"
-	ArchivedSchemaIdDiv  = "__"
+import (
+	"fmt"
+	"sync"
+
+	"github.com/google/uuid"
 )
 
-var InvalidTypeChars = []string{
-	"/",
-	"#",
-	"$",
+type ThreadCtrl struct {
+	wg      *sync.WaitGroup
+	workers map[string]*Worker
+	lock    sync.Mutex
+}
+
+func NewThreadController() *ThreadCtrl {
+	c := ThreadCtrl{
+		wg:      &sync.WaitGroup{},
+		workers: map[string]*Worker{},
+		lock:    sync.Mutex{},
+	}
+	return &c
+}
+
+func (c *ThreadCtrl) AddWorker(workerId string, funcToCall func(chan interface{})) (*Worker, error) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	if workerId == "" {
+		workerId = uuid.NewString()
+	}
+	if _, ok := c.workers[workerId]; ok {
+		return nil, fmt.Errorf("worker %s already exists", workerId)
+	}
+	worker := NewWorker(workerId, c.wg, funcToCall)
+	c.workers[workerId] = worker
+	return worker, nil
+}
+
+func (c *ThreadCtrl) GetWorker(workerId string) *Worker {
+	worker, ok := c.workers[workerId]
+	if !ok {
+		return nil
+	}
+	return worker
+}
+
+func (c *ThreadCtrl) Broadcast(event interface{}) {
+	for _, worker := range c.workers {
+		worker.Notify(event)
+	}
 }

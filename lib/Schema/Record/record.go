@@ -28,6 +28,9 @@ package Record
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
+
+	"github.com/salesforce/UniTAO/lib/Util"
 )
 
 const (
@@ -54,6 +57,66 @@ func NewRecord(dataType string, typeVersion string, dataId string, data map[stri
 		Data:    data,
 	}
 	return &record
+}
+
+func ParseVersion(version string) ([]int, error) {
+	verList := []int{}
+	idx := 0
+	if version == "" {
+		return nil, fmt.Errorf("empty version")
+	}
+	for version != "" {
+		idx += 1
+		ver, nextVer := Util.ParseCustomPath(version, ".")
+		verInt, err := strconv.Atoi(ver)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert part[%d]=[%s] to int", idx, ver)
+		}
+		if verInt < 0 {
+			return nil, fmt.Errorf("invalid version, negative part[%d]=[%s]", idx, ver)
+		}
+		verList = append(verList, verInt)
+		version = nextVer
+	}
+	if len(verList) < 3 {
+		return nil, fmt.Errorf("invalid version format. at least 3 number. (xxx.xxx.xxx)")
+	}
+	return verList, nil
+}
+
+func CompareVersion(ver1List []int, ver2List []int) int {
+	var shortList []int
+	var longList []int
+	v1Short := true
+	if len(ver1List) <= len(ver2List) {
+		shortList = ver1List
+		longList = ver2List
+	} else {
+		v1Short = false
+		shortList = ver2List
+		longList = ver1List
+	}
+	gap := len(longList) - len(shortList)
+	for idx := range longList {
+		shortVal := 0
+		if idx >= gap {
+			shortVal = shortList[idx-gap]
+		}
+		if longList[idx] == shortVal {
+			continue
+		}
+		if longList[idx] > shortVal {
+			if v1Short {
+				return -1
+			}
+			return 1
+		}
+		if v1Short {
+			return 1
+		}
+		return -1
+	}
+	return 0
 }
 
 func LoadMap(data map[string]interface{}) (*Record, error) {

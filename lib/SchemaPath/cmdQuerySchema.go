@@ -27,6 +27,7 @@ package SchemaPath
 
 import (
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
+	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/Data"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/Node"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/PathCmd"
@@ -38,11 +39,7 @@ type CmdQuerySchema struct {
 }
 
 func NewSchemaQuery(conn *Data.Connection, dataType string, dataId string, path string) (*CmdQuerySchema, *Http.HttpError) {
-	node, err := Node.New(conn, dataType, dataId, path, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	err = node.BuildPath()
+	node, err := BuildNodePath(conn, dataType, dataId, path)
 	if err != nil {
 		return nil, err
 	}
@@ -56,23 +53,30 @@ func (c *CmdQuerySchema) Name() string {
 }
 
 func (c *CmdQuerySchema) WalkValue() (interface{}, *Http.HttpError) {
-	node := c.p
-	for node.Next != nil {
-		node = node.Next
+	dataList := c.GetNodeSchema(c.p)
+	if len(dataList) == 1 {
+		return dataList[0], nil
 	}
-	if node.AttrName == "" {
-		return node.Schema.RAW, nil
-	}
-	rawAttrDef := node.Schema.RAW[JsonKey.Properties].(map[string]interface{})[node.AttrName].(map[string]interface{})
-	// when Idx is not empty, it's either array or a map hash object
-	rawType := rawAttrDef[JsonKey.Type].(string)
-	if node.Idx != "" {
-		if rawType == JsonKey.Array || rawType == JsonKey.Map {
-			return rawAttrDef[JsonKey.Items], nil
+	return dataList, nil
+}
+
+func (c *CmdQuerySchema) GetNodeSchema(node *Node.PathNode) []interface{} {
+	if len(node.Next) > 0 {
+		schemaList := []interface{}{}
+		for _, next := range node.Next {
+			valueList := c.GetNodeSchema(next)
+			schemaList = append(schemaList, valueList...)
 		}
-		if rawType == JsonKey.Object && node.Idx != "" {
-			return rawAttrDef[JsonKey.AdditionalProperties], nil
-		}
+		return schemaList
 	}
-	return rawAttrDef, nil
+	if node.IsRecord() || node.AttrDef[JsonKey.Type].(string) == JsonKey.Object && !SchemaDoc.IsMap(node.AttrDef) {
+		return []interface{}{node.Schema.RAW}
+	}
+	if node.Idx != "" && node.Idx != Node.All {
+		attrDefRaw := node.Schema.RAW[JsonKey.Properties].(map[string]interface{})[node.Prev.AttrName]
+		itemDefRaw := attrDefRaw.(map[string]interface{})[JsonKey.Items]
+		return []interface{}{itemDefRaw}
+	}
+	attrDefRaw := node.Schema.RAW[JsonKey.Properties].(map[string]interface{})[node.AttrName]
+	return []interface{}{attrDefRaw}
 }

@@ -83,13 +83,17 @@ func (db MockDatabase) Get(queryArgs map[string]interface{}) ([]map[string]inter
 	if !ok {
 		return nil, fmt.Errorf("invalid queryArgs. missing=[%s]", Record.DataType)
 	}
-	dataId, ok := queryArgs[Record.DataId].(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid queryArgs. missing=[%s]", Record.DataId)
-	}
 	typeMap, ok := db.Data[dataType].(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("type=[%s] not found", dataType)
+		return []map[string]interface{}{}, nil
+	}
+	dataId, ok := queryArgs[Record.DataId].(string)
+	if !ok {
+		result := make([]map[string]interface{}, 0, len(typeMap))
+		for _, data := range typeMap {
+			result = append(result, data.(map[string]interface{}))
+		}
+		return result, nil
 	}
 	data, ok := typeMap[dataId].(map[string]interface{})
 	if !ok {
@@ -118,6 +122,7 @@ func (db MockDatabase) Replace(table string, keys map[string]interface{}, data i
 	typeMap[dataId] = data
 	return nil
 }
+
 func (db MockDatabase) Delete(table string, keys map[string]interface{}) error {
 	dataType, ok := keys[Record.DataType].(string)
 	if !ok {

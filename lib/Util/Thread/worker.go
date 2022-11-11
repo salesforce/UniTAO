@@ -23,32 +23,60 @@ This copyright notice and license applies to all files in this directory or sub-
 ************************************************************************************************************
 */
 
-package JsonKey
+package Thread
 
-const (
-	AdditionalProperties = "additionalProperties"
-	Array                = "array"
-	ContentMediaType     = "contentMediaType"
-	Definitions          = "definitions"
-	DefinitionPrefix     = "#/definitions/"
-	DocRoot              = "#"
-	Items                = "items"
-	Inventory            = "inventory"
-	Key                  = "key"
-	Name                 = "name"
-	Map                  = "map"
-	Object               = "object"
-	Properties           = "properties"
-	Ref                  = "$ref"
-	Required             = "required"
-	Schema               = "schema"
-	String               = "string"
-	Type                 = "type"
-	ArchivedSchemaIdDiv  = "__"
+import (
+	"sync"
+	"syscall"
 )
 
-var InvalidTypeChars = []string{
-	"/",
-	"#",
-	"$",
+type Worker struct {
+	Id      string
+	wg      *sync.WaitGroup
+	stopped bool
+	event   chan interface{}
+	run     func(chan interface{})
+}
+
+func NewWorker(workerId string, wg *sync.WaitGroup, run func(chan interface{})) *Worker {
+	worker := Worker{
+		Id:      workerId,
+		wg:      wg,
+		stopped: true,
+		event:   make(chan interface{}),
+		run:     run,
+	}
+	return &worker
+}
+
+func (w *Worker) setup() {
+	w.stopped = false
+	w.wg.Add(1)
+}
+
+func (w *Worker) postRun() {
+	w.wg.Done()
+	w.stopped = true
+}
+
+func (w *Worker) workerRoutine() {
+	w.setup()
+	defer w.postRun()
+	w.run(w.event)
+}
+
+func (w *Worker) Run() {
+	go w.workerRoutine()
+}
+
+func (w *Worker) Stopped() bool {
+	return w.stopped
+}
+
+func (w *Worker) Notify(event interface{}) {
+	w.event <- event
+}
+
+func (w *Worker) Stop() {
+	w.event <- syscall.SIGINT
 }

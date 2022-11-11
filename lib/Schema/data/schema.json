@@ -83,10 +83,91 @@
                                 "type": "string",
                                 "required": false
                             },
+                            "indexTemplate": {
+                                "type": "string",
+                                "required": false
+                            },
                             "required": {
                                 "type": "boolean",
                                 "required": false
                             }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "__id": "journal",
+            "__type": "schema",
+            "__ver": "0.0.1",
+            "data": {
+                "name": "journal",
+                "key": "dataType:{dataType}_dataId:{dataId}_page:{idx}",
+                "properties": {
+                    "dataType": {
+                        "type": "string"
+                    },
+                    "dataId": {
+                        "type": "string"
+                    },
+                    "idx": {
+                        "type": "integer"
+                    },
+                    "active": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/definitions/entry"
+                        }
+                    },
+                    "archived": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/definitions/entry"
+                        }
+                    }
+                },
+                "definitions": {
+                    "entry": {
+                        "name": "entry",
+                        "key": "{page}_{idx}",
+                        "properties": {
+                            "page": {
+                                "type": "integer"
+                            },
+                            "idx": {
+                                "type": "integer"
+                            },
+                            "time": {
+                                "type": "string"
+                            },
+                            "before": {
+                                "type": "object",
+                                "required": false
+                            },
+                            "after": {
+                                "type": "object",
+                                "required": false
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "__id": "cmtIdx",
+            "__type": "schema",
+            "__ver": "0.0.1",
+            "data": {
+                "name": "cmtIdx",
+                "key": "{dataType}",
+                "properties": {
+                    "dataType": {
+                        "type": "string"
+                    },
+                    "subscribers": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
                         }
                     }
                 }

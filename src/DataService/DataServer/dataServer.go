@@ -34,10 +34,12 @@ import (
 
 	"DataService/Config"
 	"DataService/DataHandler"
+	"DataService/DataJournal"
 
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Util"
 	"github.com/salesforce/UniTAO/lib/Util/Http"
+	"github.com/salesforce/UniTAO/lib/Util/Thread"
 )
 
 const (
@@ -46,18 +48,31 @@ const (
 	PORT_DEFAULT = "8010"
 )
 
+var InternalTypes = map[string]interface{}{
+	DataJournal.KeyJournal: true,
+	DataJournal.KeyCmtIdx:  true,
+}
+
+var ReadOnlyTypes = map[string]interface{}{
+	DataJournal.KeyJournal: true,
+}
+
 type Server struct {
-	Port   string
-	args   map[string]string
-	config Config.Confuguration
-	data   *DataHandler.Handler
+	Port           string
+	args           map[string]string
+	config         Config.Confuguration
+	data           *DataHandler.Handler
+	journal        *DataJournal.JournalLib
+	journalHandler *DataJournal.JournalHandler
+	BackendCtl     *Thread.ThreadCtrl
 }
 
 func New() (Server, error) {
 	srv := Server{
-		Port:   PORT_DEFAULT,
-		args:   make(map[string]string),
-		config: Config.Confuguration{},
+		Port:       PORT_DEFAULT,
+		args:       make(map[string]string),
+		config:     Config.Confuguration{},
+		BackendCtl: Thread.NewThreadController(),
 	}
 	err := srv.init()
 	if err != nil {
@@ -72,9 +87,25 @@ func (srv *Server) Run() {
 		log.Fatalf("failed to initialize data layer, Err:%s", err)
 	}
 	srv.data = handler
+	srv.journal = DataJournal.NewJournalLib(handler.DB, srv.config.DataTable.Data)
+	srv.data.AddJournal = srv.journal.AddJournal
+	srv.RunJournalHandler()
+	srv.RunHttp()
+}
+
+func (srv *Server) RunHttp() {
 	http.HandleFunc("/", srv.handler)
 	log.Printf("Data Server Listen @%s://%s:%s", srv.config.Http.HttpType, srv.config.Http.DnsName, srv.Port)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", srv.Port), nil))
+}
+
+func (srv *Server) RunJournalHandler() {
+	srv.journalHandler = DataJournal.NewJournalHandler(srv.journal, 0)
+	worker, err := srv.BackendCtl.AddWorker("journalHandler", srv.journalHandler.Run)
+	if err != nil {
+		log.Fatalf("failed to create Journal Handler as backend process.")
+	}
+	worker.Run()
 }
 
 func (srv *Server) init() error {
@@ -113,6 +144,15 @@ func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 		}, http.StatusBadRequest, srv.config.Http)
 		return
 	}
+	if _, ok := ReadOnlyTypes[dataType]; ok && r.Method != Http.GET {
+		Http.ResponseJson(w, Http.HttpError{
+			Status: http.StatusBadRequest,
+			Message: []string{
+				fmt.Sprintf("update on data type=[%s] is not supported", dataType),
+			},
+		}, http.StatusBadRequest, srv.config.Http)
+		return
+	}
 	switch r.Method {
 	case Http.GET:
 		srv.handleGet(w, dataType, idPath)
@@ -144,7 +184,14 @@ func (srv *Server) handleGet(w http.ResponseWriter, dataType string, dataId stri
 		Http.ResponseJson(w, idList, http.StatusOK, srv.config.Http)
 		return
 	}
-	result, err := srv.data.Get(dataType, dataId)
+	var result interface{}
+	var err *Http.HttpError
+	switch dataType {
+	case DataJournal.KeyJournal:
+		result, err = srv.journal.GetJournal(dataId)
+	default:
+		result, err = srv.data.Get(dataType, dataId)
+	}
 	if err != nil {
 		Http.ResponseJson(w, err, err.Status, srv.config.Http)
 		return

@@ -31,6 +31,7 @@ import (
 	"net/http"
 	"reflect"
 	"strconv"
+	"strings"
 
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
@@ -100,7 +101,22 @@ func (schema *SchemaOps) ValidateRecord(record *Record.Record) error {
 	if schema.Record.Id != record.Type {
 		return fmt.Errorf("schema id and payload data type does not match, [%s]!=[%s]", schema.Record.Id, record.Type)
 	}
-	err := schema.Meta.Validate(record.Data)
+	_, err := Record.ParseVersion(record.Version)
+	if err != nil {
+		return err
+	}
+	if record.Type == JsonKey.Schema {
+		for _, char := range JsonKey.InvalidTypeChars {
+			if strings.Contains(record.Type, char) {
+				return fmt.Errorf("data type name [%s] contain illigal key [%s]", record.Type, char)
+			}
+		}
+	} else {
+		if strings.Contains(record.Type, JsonKey.ArchivedSchemaIdDiv) {
+			return fmt.Errorf("cannot add data with archived dataType=[%s]", record.Type)
+		}
+	}
+	err = schema.Meta.Validate(record.Data)
 	if err != nil {
 		return fmt.Errorf("schema validation failed. Error:\n%s", err)
 	}

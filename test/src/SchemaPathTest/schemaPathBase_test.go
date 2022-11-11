@@ -31,11 +31,10 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
-	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
 	"github.com/salesforce/UniTAO/lib/SchemaPath"
 	SchemaPathData "github.com/salesforce/UniTAO/lib/SchemaPath/Data"
-	"github.com/salesforce/UniTAO/lib/SchemaPath/Node"
 	"github.com/salesforce/UniTAO/lib/Util"
 	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
@@ -59,23 +58,7 @@ func TestParseArrayPath(t *testing.T) {
 	}
 }
 
-func PrepareConn(schemaStr string, recordStr string) *SchemaPathData.Connection {
-	getSchema := func(dataType string) (*SchemaDoc.SchemaDoc, *Http.HttpError) {
-		schemaMap := map[string]interface{}{}
-		err := json.Unmarshal([]byte(schemaStr), &schemaMap)
-		if err != nil {
-			return nil, Http.WrapError(err, "failed to ummarshal schema map str", http.StatusInternalServerError)
-		}
-		schemaData, ok := schemaMap[dataType].(map[string]interface{})
-		if !ok {
-			return nil, Http.NewHttpError(fmt.Sprintf("schema [type]=[%s] does not exists", dataType), http.StatusNotFound)
-		}
-		doc, err := SchemaDoc.New(schemaData, dataType, nil)
-		if err != nil {
-			return nil, Http.NewHttpError(fmt.Sprintf("failed to schema data type=[%s]", dataType), http.StatusInternalServerError)
-		}
-		return doc, nil
-	}
+func PrepareConn(recordStr string) *SchemaPathData.Connection {
 	getRecord := func(dataType string, dataId string) (*Record.Record, *Http.HttpError) {
 		recordMap := map[string]interface{}{}
 		err := json.Unmarshal([]byte(recordStr), &recordMap)
@@ -93,28 +76,30 @@ func PrepareConn(schemaStr string, recordStr string) *SchemaPathData.Connection 
 		return record, nil
 	}
 	conn := SchemaPathData.Connection{
-		FuncSchema: getSchema,
 		FuncRecord: getRecord,
 	}
 	return &conn
 }
 
 func TestConn(t *testing.T) {
-	schemaStr := `
-		{
-			"testSch01": {
-				"name": "testSch01",
-				"description": "Test Schema 01",
-				"properties": {
-					"testAttr01": {
-						"type": "string"
-					}
-				}
-			}
-		}
-	`
 	recordStr := `
 		{
+			"schema": {
+				"testSch01": {
+					"__id": "testSch01",
+					"__type": "schema",
+					"__ver": "0.0.1",
+					"data": {
+						"name": "testSch01",
+						"description": "Test Schema 01",
+						"properties": {
+							"testAttr01": {
+								"type": "string"
+							}
+						}
+					}
+				}
+			},
 			"testSch01": {
 				"testId01": {
 					"__id": "testId01",
@@ -127,8 +112,8 @@ func TestConn(t *testing.T) {
 			}
 		}
 	`
-	conn := PrepareConn(schemaStr, recordStr)
-	schema, err := conn.GetSchema("testSch01")
+	conn := PrepareConn(recordStr)
+	schema, err := conn.GetRecord(JsonKey.Schema, "testSch01")
 	if err != nil {
 		t.Errorf("failed while get schema=[testSch01], Error:%s", err)
 	}
@@ -145,51 +130,61 @@ func TestConn(t *testing.T) {
 }
 
 func TestPathNode(t *testing.T) {
-	schemaStr := `{
-		"schema1": {
-			"name": "schema1",
-			"description": "test schema 01",
-			"properties": {
-				"name": {
-					"type": "string"
-				},
-				"value": {
-					"type": "object",
-					"$ref": "#/definitions/testValue"
-				},
-				"mapStr": {
-					"type": "map",
-					"items": {
-						"type": "string"
+	recordStr := `{
+		"schema": {
+			"schema1": {
+				"__id": "schema1",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "schema1",
+					"description": "test schema 01",
+					"properties": {
+						"name": {
+							"type": "string"
+						},
+						"value": {
+							"type": "object",
+							"$ref": "#/definitions/testValue"
+						},
+						"mapStr": {
+							"type": "map",
+							"items": {
+								"type": "string"
+							}
+						}
+					},
+					"definitions": {
+						"testValue": {
+							"name": "testValue",
+							"properties": {
+								"value1": {
+									"type": "string"
+								},
+								"value2": {
+									"type": "string",
+									"contentMediaType": "inventory/schema2"
+								}
+							}
+						}
 					}
 				}
 			},
-			"definitions": {
-				"testValue": {
-					"name": "testValue",
+			"schema2": {
+				"__id": "schema2",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "schema2",
+					"description": "cross recod type schema 02",
 					"properties": {
-						"value1": {
+						"test": {
 							"type": "string"
-						},
-						"value2": {
-							"type": "string",
-							"contentMediaType": "inventory/schema2"
 						}
 					}
 				}
 			}
 		},
-		"schema2": {
-			"name": "schema2",
-			"description": "cross recod type schema 02",
-			"properties": {
-				"test": {
-					"type": "string"
-				}
-			}
-		}
-	}`
-	recordStr := `{
 		"schema1": {
 			"data1": {
 				"__id": "data1",
@@ -218,11 +213,16 @@ func TestPathNode(t *testing.T) {
 			}
 		}
 	}`
-	conn := PrepareConn(schemaStr, recordStr)
+	conn := PrepareConn(recordStr)
 	queryPath := "/value/value2"
-	_, err := Node.New(conn, "schema1", "data1", queryPath, nil, nil)
+	_, err := SchemaPath.BuildNodePath(conn, "schema1", "data1", queryPath)
 	if err != nil {
 		t.Fatalf("PathNode-positive: failed to build node path chain. Error: %s", err)
+	}
+	queryPath = "/value/value2/extra"
+	_, err = SchemaPath.BuildNodePath(conn, "schema1", "data1", queryPath)
+	if err == nil {
+		t.Fatalf("failed to caught error for walk on undefined path")
 	}
 }
 

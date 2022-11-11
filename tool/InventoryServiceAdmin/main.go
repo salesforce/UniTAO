@@ -26,6 +26,7 @@ This copyright notice and license applies to all files in this directory or sub-
 package main
 
 import (
+	"DataService/DataServer"
 	"flag"
 	"fmt"
 	"log"
@@ -233,7 +234,7 @@ func (a *Admin) getDsTypeHash(dsId string) (map[string]bool, error) {
 	}
 	typeHash := map[string]bool{}
 	for _, dataType := range result.([]interface{}) {
-		if dataType != JsonKey.Schema && dataType != Record.KeyRecord {
+		if _, ok := DataServer.InternalTypes[dataType.(string)]; !ok && dataType != JsonKey.Schema && dataType != Record.KeyRecord {
 			typeHash[dataType.(string)] = true
 		}
 	}
