@@ -136,7 +136,7 @@ func TestDataHandler(t *testing.T) {
 		}
 		return mockDb, nil
 	}
-	handler, err := DataHandler.New(config, connectDb)
+	handler, err := DataHandler.New(config, nil, connectDb)
 	if err != nil {
 		t.Fatalf("failed to create handler")
 	}
@@ -316,7 +316,7 @@ func TestDataHandlerPatchAttr(t *testing.T) {
 		}
 		return mockDb, nil
 	}
-	handler, err := DataHandler.New(config, connectDb)
+	handler, err := DataHandler.New(config, nil, connectDb)
 	if err != nil {
 		t.Fatalf("failed to create handler")
 	}
@@ -507,7 +507,7 @@ func TestDataHandlerPatchArrayObj(t *testing.T) {
 		}
 		return mockDb, nil
 	}
-	handler, err := DataHandler.New(config, connectDb)
+	handler, err := DataHandler.New(config, nil, connectDb)
 	if err != nil {
 		t.Fatalf("failed to create handler, Error:%s", err)
 	}
@@ -730,7 +730,7 @@ func TestDataHandlerPatchArraySimpleStr(t *testing.T) {
 		}
 		return mockDb, nil
 	}
-	handler, err := DataHandler.New(config, connectDb)
+	handler, err := DataHandler.New(config, nil, connectDb)
 	if err != nil {
 		t.Fatalf("failed to create handler, Error:%s", err)
 	}
@@ -932,7 +932,7 @@ func TestDataHandlerPatchArrayInt(t *testing.T) {
 		}
 		return mockDb, nil
 	}
-	handler, err := DataHandler.New(config, connectDb)
+	handler, err := DataHandler.New(config, nil, connectDb)
 	if err != nil {
 		t.Fatalf("failed to create handler, Error:%s", err)
 	}
@@ -1154,7 +1154,7 @@ func TestDataHandlerPatchArrayCmt(t *testing.T) {
 		}
 		return mockDb, nil
 	}
-	handler, err := DataHandler.New(config, connectDb)
+	handler, err := DataHandler.New(config, nil, connectDb)
 	if err != nil {
 		t.Fatalf("failed to create handler, Error:%s", err)
 	}

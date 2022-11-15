@@ -146,15 +146,21 @@ func TestAddJournal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create MockDb. Error:%s", err)
 	}
-	journal := DataJournal.NewJournalLib(mockDb, config.DataTable.Data)
-	page, err := journal.AddJournal("test", "testid_123", nil, map[string]interface{}{"attr": "test"})
+	journal, e := DataJournal.NewJournalLib(mockDb, config.DataTable.Data)
+	if e != nil {
+		t.Fatalf("failed to create Journal Library. Error: %s", err)
+	}
+	e = journal.AddJournal("test", "testid_123", nil, map[string]interface{}{"attr": "test"})
+	if e != nil {
+		t.Fatalf(e.Error())
+	}
 	if len(mockDb.Data[DataJournal.KeyJournal].(map[string]interface{})) != 1 {
 		t.Fatalf("invalid add Journal Entry.")
 	}
-	if page != 1 {
+	if len(journal.Cache["test"]["testid_123"].Sort) != 1 {
 		t.Fatalf("failed to create first journal page")
 	}
-	record, err := Record.LoadMap(mockDb.Data[DataJournal.KeyJournal].(map[string]interface{})["dataType:test_dataId:testid_123_page:1"].(map[string]interface{}))
+	record, err := Record.LoadMap(mockDb.Data[DataJournal.KeyJournal].(map[string]interface{})["dataType:test_dataId:testid_123_page:0"].(map[string]interface{}))
 	if err != nil {
 		t.Fatalf("new entry record failed to load as record")
 	}
@@ -165,7 +171,7 @@ func TestAddJournal(t *testing.T) {
 	if len(mockDb.Data[DataJournal.KeyJournal].(map[string]interface{})) != 1 {
 		t.Fatalf("invalid add Journal Entry.")
 	}
-	record, err = Record.LoadMap(mockDb.Data[DataJournal.KeyJournal].(map[string]interface{})["dataType:test_dataId:testid_123_page:1"].(map[string]interface{}))
+	record, err = Record.LoadMap(mockDb.Data[DataJournal.KeyJournal].(map[string]interface{})["dataType:test_dataId:testid_123_page:0"].(map[string]interface{}))
 	if err != nil {
 		t.Fatalf("new entry record failed to load as record")
 	}
@@ -177,7 +183,7 @@ func TestAddJournal(t *testing.T) {
 		if len(mockDb.Data[DataJournal.KeyJournal].(map[string]interface{})) != 1 {
 			t.Fatalf("invalid add Journal Entry.")
 		}
-		record, err = Record.LoadMap(mockDb.Data[DataJournal.KeyJournal].(map[string]interface{})["dataType:test_dataId:testid_123_page:1"].(map[string]interface{}))
+		record, err = Record.LoadMap(mockDb.Data[DataJournal.KeyJournal].(map[string]interface{})["dataType:test_dataId:testid_123_page:0"].(map[string]interface{}))
 		if err != nil {
 			t.Fatalf("new entry record failed to load as record")
 		}
@@ -189,14 +195,14 @@ func TestAddJournal(t *testing.T) {
 	if len(mockDb.Data[DataJournal.KeyJournal].(map[string]interface{})) != 2 {
 		t.Fatalf("invalid add Journal Entry.")
 	}
-	record, err = Record.LoadMap(mockDb.Data[DataJournal.KeyJournal].(map[string]interface{})["dataType:test_dataId:testid_123_page:1"].(map[string]interface{}))
+	record, err = Record.LoadMap(mockDb.Data[DataJournal.KeyJournal].(map[string]interface{})["dataType:test_dataId:testid_123_page:0"].(map[string]interface{}))
 	if err != nil {
 		t.Fatalf("new entry record failed to load as record")
 	}
 	if len(record.Data["active"].([]interface{})) != 10 {
 		t.Fatal("failed add the first entry")
 	}
-	record, err = Record.LoadMap(mockDb.Data[DataJournal.KeyJournal].(map[string]interface{})["dataType:test_dataId:testid_123_page:2"].(map[string]interface{}))
+	record, err = Record.LoadMap(mockDb.Data[DataJournal.KeyJournal].(map[string]interface{})["dataType:test_dataId:testid_123_page:1"].(map[string]interface{}))
 	if err != nil {
 		t.Fatalf("new entry record failed to load as record")
 	}
@@ -214,9 +220,12 @@ func TestArchiveJournal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create MockDb. Error:%s", err)
 	}
-	journal := DataJournal.NewJournalLib(mockDb, config.DataTable.Data)
+	journal, e := DataJournal.NewJournalLib(mockDb, config.DataTable.Data)
+	if e != nil {
+		t.Fatalf("failed to create Journal Library. Error: %s", err)
+	}
 	for i := 0; i < 16; i++ {
-		page, e := journal.AddJournal("test", "testid_123", nil, map[string]interface{}{"attr": fmt.Sprintf("test_%d", i)})
+		e = journal.AddJournal("test", "testid_123", nil, map[string]interface{}{"attr": fmt.Sprintf("test_%d", i)})
 		if e != nil {
 			t.Fatalf("failed to add hournal. Error: %s", e)
 		}
@@ -224,17 +233,13 @@ func TestArchiveJournal(t *testing.T) {
 			if len(mockDb.Data[DataJournal.KeyJournal].(map[string]interface{})) != 1 {
 				t.Fatalf("invalid add Journal Entry.")
 			}
-			if page != 1 {
-				t.Fatalf("invalid add Journal Entry to page %d.", page)
-			}
 		} else {
 			if len(mockDb.Data[DataJournal.KeyJournal].(map[string]interface{})) != 2 {
 				t.Fatalf("invalid add Journal Entry.")
 			}
-			if page != 2 {
-				t.Fatalf("invalid add Journal Entry. to page %d", page)
-			}
 		}
+		pageCache := journal.Cache["test"]["testid_123"]
+		page := pageCache.Sort[len(pageCache.Sort)-1]
 		pageId := DataJournal.PageId("test", "testid_123", page)
 		record, err := Record.LoadMap(mockDb.Data[DataJournal.KeyJournal].(map[string]interface{})[pageId].(map[string]interface{}))
 		if err != nil {
@@ -251,32 +256,27 @@ func TestArchiveJournal(t *testing.T) {
 		}
 
 	}
-	entry, e := journal.NextJournalEntry("test", "testid_123")
-	if e != nil {
-		t.Fatal(e)
-	}
-	pageIdx := int(entry[DataJournal.KeyPage].(float64))
-	if pageIdx != 1 {
+	entry := journal.NextJournalEntry("test", "testid_123")
+	if entry.Page != 0 {
 		t.Fatal("failed to get the entry from first page")
 	}
-	entryIdx := int(entry[DataJournal.KeyIdx].(float64))
-	if entryIdx != 1 {
+	if entry.Idx != 1 {
 		t.Fatal("failed to get first entry")
 	}
-	if entry[DataJournal.KeyBefore] != nil {
+	if entry.Before != nil {
 		t.Fatalf("entry.%s should be nil", DataJournal.KeyBefore)
 	}
-	if entry[DataJournal.KeyAfter] == nil {
+	if entry.After == nil {
 		t.Fatalf("entry.%s should not be nil", DataJournal.KeyAfter)
 	}
-	if entry[DataJournal.KeyAfter].(map[string]interface{})["attr"].(string) != "test_0" {
-		t.Fatalf("got the wrong entry, attr[%s]!=[test_0]", entry[DataJournal.KeyAfter].(map[string]interface{})["attr"].(string))
+	if entry.After["attr"].(string) != "test_0" {
+		t.Fatalf("got the wrong entry, attr[%s]!=[test_0]", entry.After["attr"].(string))
 	}
 	e = journal.ArchiveJournalEntry("test", "testid_123", entry)
 	if e != nil {
 		t.Fatal(e)
 	}
-	record, err := Record.LoadMap(mockDb.Data[DataJournal.KeyJournal].(map[string]interface{})["dataType:test_dataId:testid_123_page:1"].(map[string]interface{}))
+	record, err := Record.LoadMap(mockDb.Data[DataJournal.KeyJournal].(map[string]interface{})["dataType:test_dataId:testid_123_page:0"].(map[string]interface{}))
 	if err != nil {
 		t.Fatalf("new entry record failed to load as record")
 	}
@@ -287,25 +287,20 @@ func TestArchiveJournal(t *testing.T) {
 		t.Fatal("failed archive entry")
 	}
 	for i := 0; i < 15; i++ {
-		entry, e := journal.NextJournalEntry("test", "testid_123")
-		if e != nil {
-			t.Fatal(e)
-		}
-		pageIdx := int(entry[DataJournal.KeyPage].(float64))
-		entryIdx := int(entry[DataJournal.KeyIdx].(float64))
+		entry := journal.NextJournalEntry("test", "testid_123")
 		if i < 9 {
-			if pageIdx != 1 {
+			if entry.Page != 0 {
 				t.Fatal("failed to get the entry from first page")
 			}
-			if entryIdx != i+2 {
-				t.Fatalf("failed to get entry [%d]!=[%d]", entryIdx, i+2)
+			if entry.Idx != i+2 {
+				t.Fatalf("failed to get entry [%d]!=[%d]", entry.Idx, i+2)
 			}
 		} else {
-			if pageIdx != 2 {
+			if entry.Page != 1 {
 				t.Fatal("failed to get the entry from first page")
 			}
-			if entryIdx != i-8 {
-				t.Fatalf("failed to get entry [%d]!=[%d]", entryIdx, i+2)
+			if entry.Idx != i-8 {
+				t.Fatalf("failed to get entry [%d]!=[%d]", entry.Idx, i+2)
 			}
 		}
 		journal.ArchiveJournalEntry("test", "testid_123", entry)

@@ -29,8 +29,11 @@ import (
 	"Data"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
+	"path"
 
 	"DataService/Config"
 	"DataService/DataHandler"
@@ -58,6 +61,7 @@ var ReadOnlyTypes = map[string]interface{}{
 }
 
 type Server struct {
+	Id             string
 	Port           string
 	args           map[string]string
 	config         Config.Confuguration
@@ -65,6 +69,8 @@ type Server struct {
 	journal        *DataJournal.JournalLib
 	journalHandler *DataJournal.JournalHandler
 	BackendCtl     *Thread.ThreadCtrl
+	logPath        string
+	log            *log.Logger
 }
 
 func New() (Server, error) {
@@ -73,6 +79,7 @@ func New() (Server, error) {
 		args:       make(map[string]string),
 		config:     Config.Confuguration{},
 		BackendCtl: Thread.NewThreadController(),
+		logPath:    "./log",
 	}
 	err := srv.init()
 	if err != nil {
@@ -82,12 +89,26 @@ func New() (Server, error) {
 }
 
 func (srv *Server) Run() {
-	handler, err := DataHandler.New(srv.config, Data.ConnectDb)
+	logPath := path.Join(srv.logPath, fmt.Sprintf("%s.log", srv.Id))
+	log.Printf("log file: %s", logPath)
+	logFile, err := os.OpenFile(logPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
-		log.Fatalf("failed to initialize data layer, Err:%s", err)
+		log.Fatalf("error opening file: %v", err)
+	}
+	defer logFile.Close()
+	mw := io.MultiWriter(os.Stdout, logFile)
+	logger := log.New(mw, fmt.Sprintf("%s: ", srv.Id), log.Ldate|log.Ltime|log.Lshortfile)
+	srv.log = logger
+	handler, err := DataHandler.New(srv.config, srv.log, Data.ConnectDb)
+	if err != nil {
+		srv.log.Fatalf("failed to initialize data layer, Err:%s", err)
 	}
 	srv.data = handler
-	srv.journal = DataJournal.NewJournalLib(handler.DB, srv.config.DataTable.Data)
+	journal, err := DataJournal.NewJournalLib(handler.DB, srv.config.DataTable.Data)
+	if err != nil {
+		srv.log.Fatalf("failed to create Journal Library. Error: %s", err)
+	}
+	srv.journal = journal
 	srv.data.AddJournal = srv.journal.AddJournal
 	srv.RunJournalHandler()
 	srv.RunHttp()
@@ -95,15 +116,15 @@ func (srv *Server) Run() {
 
 func (srv *Server) RunHttp() {
 	http.HandleFunc("/", srv.handler)
-	log.Printf("Data Server Listen @%s://%s:%s", srv.config.Http.HttpType, srv.config.Http.DnsName, srv.Port)
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", srv.Port), nil))
+	srv.log.Printf("Data Server Listen @%s://%s:%s", srv.config.Http.HttpType, srv.config.Http.DnsName, srv.Port)
+	srv.log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", srv.Port), nil))
 }
 
 func (srv *Server) RunJournalHandler() {
-	srv.journalHandler = DataJournal.NewJournalHandler(srv.journal, 0)
+	srv.journalHandler = DataJournal.NewJournalHandler(srv.journal, 0, srv.log)
 	worker, err := srv.BackendCtl.AddWorker("journalHandler", srv.journalHandler.Run)
 	if err != nil {
-		log.Fatalf("failed to create Journal Handler as backend process.")
+		srv.log.Fatalf("failed to create Journal Handler as backend process.")
 	}
 	worker.Run()
 }
@@ -111,13 +132,29 @@ func (srv *Server) RunJournalHandler() {
 func (srv *Server) init() error {
 	var port string
 	var configPath string
+	var serverId string
+	var logPath string
+	flag.StringVar(&serverId, "id", "", "Data Server Id")
 	flag.StringVar(&port, "port", "", "Data Server Listen Port")
 	flag.StringVar(&configPath, "config", "", "Data Server Configuration JSON path")
+	flag.StringVar(&logPath, "log", "", "path that hold log")
 	flag.Parse()
 	srv.args[PORT] = port
+	if serverId == "" {
+		flag.Usage()
+		return fmt.Errorf("missing parameter id")
+	}
+	srv.Id = serverId
 	if configPath == "" {
 		flag.Usage()
 		return fmt.Errorf("missing parameter config")
+	}
+	if logPath != "" {
+		err := os.MkdirAll(logPath, os.ModePerm)
+		if err != nil {
+			return fmt.Errorf("failed to create log path: %s", logPath)
+		}
+		srv.logPath = logPath
 	}
 	srv.args[CONFIG] = configPath
 	err := Config.Read(srv.args[CONFIG], &srv.config)

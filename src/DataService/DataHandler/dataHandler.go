@@ -27,6 +27,7 @@ package DataHandler
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"path"
 	"reflect"
@@ -45,7 +46,7 @@ import (
 	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
 
-type JournalAdd func(dataType string, dataId string, before map[string]interface{}, after map[string]interface{}) (int, *Http.HttpError)
+type JournalAdd func(dataType string, dataId string, before map[string]interface{}, after map[string]interface{}) *Http.HttpError
 
 type Handler struct {
 	DB         DbIface.Database
@@ -53,9 +54,13 @@ type Handler struct {
 	config     Config.Confuguration
 	lock       sync.Mutex
 	AddJournal JournalAdd
+	log        *log.Logger
 }
 
-func New(config Config.Confuguration, connectDb func(db DbConfig.DatabaseConfig) (DbIface.Database, error)) (*Handler, error) {
+func New(config Config.Confuguration, logger *log.Logger, connectDb func(db DbConfig.DatabaseConfig) (DbIface.Database, error)) (*Handler, error) {
+	if logger == nil {
+		logger = log.Default()
+	}
 	db, err := connectDb(config.Database)
 	if err != nil {
 		return nil, err
@@ -65,6 +70,7 @@ func New(config Config.Confuguration, connectDb func(db DbConfig.DatabaseConfig)
 		DB:        db,
 		config:    config,
 		lock:      sync.Mutex{},
+		log:       logger,
 	}
 	return &handler, nil
 }

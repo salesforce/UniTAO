@@ -23,22 +23,44 @@ This copyright notice and license applies to all files in this directory or sub-
 ************************************************************************************************************
 */
 
-package main
+// functions to record all data changes
+package Process
 
-// Run Data Service
 import (
-	"fmt"
+	"DataService/DataJournal/ProcessIface"
 	"log"
 
-	"DataService/DataServer"
+	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 )
 
-func main() {
-	server, err := DataServer.New()
-	if err != nil {
-		newErr := fmt.Errorf("failed to create instance of DataServer. Err:%s", err.Error())
-		log.Print(newErr.Error())
-		panic(newErr)
+type SchemaChanges struct {
+	log *log.Logger
+}
+
+func NewSchemaProcess(logger *log.Logger) ProcessIface.JournalProcess {
+	if logger == nil {
+		logger = log.Default()
 	}
-	server.Run()
+	process := SchemaChanges{
+		log: logger,
+	}
+	return &process
+}
+
+func (s *SchemaChanges) Name() string {
+	return "Schema Change Process"
+}
+
+func (s *SchemaChanges) HandleTypes() map[string]bool {
+	return map[string]bool{
+		JsonKey.Schema: true,
+	}
+}
+
+func (s *SchemaChanges) Log(message string) {
+	s.log.Printf("%s: %s", s.Name(), message)
+}
+
+func (s *SchemaChanges) ProcessEntry(dataType string, dataId string, entry *ProcessIface.JournalEntry) error {
+	return nil
 }

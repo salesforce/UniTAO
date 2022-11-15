@@ -26,68 +26,31 @@ This copyright notice and license applies to all files in this directory or sub-
 // functions to record all data changes
 package DataJournal
 
-import "github.com/salesforce/UniTAO/lib/Schema/JsonKey"
+import (
+	"DataService/DataJournal/ProcessIface"
+	"log"
+)
 
 type JournalWorker struct {
-	lib      *JournalLib
-	dataType string
-	dataId   string
+	lib       *JournalLib
+	dataType  string
+	dataId    string
+	log       *log.Logger
+	processes []ProcessIface.JournalProcess
 }
 
 func (w *JournalWorker) Run(event chan interface{}) {
-	entry, err := w.lib.NextJournalEntry(w.dataType, w.dataId)
-	if err != nil {
-		// TODO: log error and exit without throw anything.
-		return
-	}
+	entry := w.lib.NextJournalEntry(w.dataType, w.dataId)
 	if entry == nil {
 		w.lib.CleanArchivedPages(w.dataType, w.dataId)
 		return
 	}
-	w.ProcessJournalEntry(entry)
-}
-
-func (w *JournalWorker) ProcessJournalEntry(entry map[string]interface{}) {
-	if w.dataType == JsonKey.Schema {
-		// data change on schema. trace CmtSubscription
-		// undo old subscription and redo new ones
-		w.ProcessSchemaChange(entry)
-		return
-	}
-	w.ProcessDataChange(entry)
-}
-
-func (w *JournalWorker) ProcessSchemaChange(entry map[string]interface{}) {
-	before, beforeOk := entry[KeyBefore]
-	after, afterOk := entry[KeyAfter]
-	if beforeOk && afterOk {
-		// log error of schema change not allowed
-		return
-	}
-	if afterOk {
-		err := w.SubScribeCmtChanges(after.(map[string]interface{}))
-		if err != nil {
+	for _, p := range w.processes {
+		ex := p.ProcessEntry(w.dataType, w.dataId, entry)
+		if ex != nil {
+			w.log.Printf("%s: failed to process entry. Error:%s", p.Name(), ex)
 			return
 		}
 	}
-	if beforeOk {
-		err := w.UnSubscribeCMTChanges(before.(map[string]interface{}))
-		if err != nil {
-			return
-		}
-	}
-	// log empty entry of schema change
 	w.lib.ArchiveJournalEntry(w.dataType, w.dataId, entry)
-}
-
-func (w *JournalWorker) UnSubscribeCMTChanges(schema map[string]interface{}) error {
-	return nil
-}
-
-func (w *JournalWorker) SubScribeCmtChanges(schema map[string]interface{}) error {
-	return nil
-}
-
-func (w *JournalWorker) ProcessDataChange(entry map[string]interface{}) error {
-	return nil
 }

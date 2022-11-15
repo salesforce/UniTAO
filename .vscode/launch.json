@@ -18,7 +18,7 @@
             "request": "launch",
             "mode": "debug",
             "program": "${workspaceFolder}/app/DataService/main.go",
-            "args": ["-config", "${workspaceFolder}/docker-compose/2data1inv/DataService01/extConfig.json"],
+            "args": ["-id", "DataService01" ,"-config", "${workspaceFolder}/docker-compose/2data1inv/DataService01/extConfig.json"],
         },
         {
             "name": "Debug Inv Admin",

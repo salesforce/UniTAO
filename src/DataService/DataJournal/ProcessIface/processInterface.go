@@ -23,22 +23,29 @@ This copyright notice and license applies to all files in this directory or sub-
 ************************************************************************************************************
 */
 
-package main
+// functions to record all data changes
+package ProcessIface
 
-// Run Data Service
-import (
-	"fmt"
-	"log"
+type JournalProcess interface {
+	Name() string
+	HandleTypes() map[string]bool
+	ProcessEntry(dataType string, dataId string, entry *JournalEntry) error
+	Log(message string)
+}
 
-	"DataService/DataServer"
-)
+type JournalEntry struct {
+	Page   int                    `json:"page"`
+	Idx    int                    `json:"idx"`
+	Time   string                 `json:"time"`
+	Before map[string]interface{} `json:"before"`
+	After  map[string]interface{} `json:"after"`
+}
 
-func main() {
-	server, err := DataServer.New()
-	if err != nil {
-		newErr := fmt.Errorf("failed to create instance of DataServer. Err:%s", err.Error())
-		log.Print(newErr.Error())
-		panic(newErr)
-	}
-	server.Run()
+type JournalPage struct {
+	DataType  string          `json:"dataType"`
+	DataId    string          `json:"dataId"`
+	Idx       int             `json:"idx"`
+	LastEntry int             `json:"lastEntry"`
+	Active    []*JournalEntry `json:"active"`
+	Archived  []*JournalEntry `json:"archived"`
 }
