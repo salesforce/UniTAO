@@ -39,6 +39,7 @@ func TestRefHappyPath(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "CmtRef",
+					"version": "0.0.1",
 					"description": "test for CMT ref query path",
 					"properties": {
 						"directRef": {
@@ -99,6 +100,7 @@ func TestRefHappyPath(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "refObj",
+					"version": "0.0.1",
 					"description": "reference object",
 					"key": "{key1}_{key2}",
 					"properties": {
@@ -224,6 +226,7 @@ func TestInvalidPath(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "CmtRef",
+					"version": "0.0.1",
 					"description": "test for CMT ref query path",
 					"properties": {
 						"directRef": {
@@ -290,6 +293,7 @@ func TestInvalidPath(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "refObj",
+					"version": "0.0.1",
 					"description": "reference object",
 					"key": "{key1}_{key2}",
 					"properties": {
@@ -410,6 +414,7 @@ func TestRefAllPath(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "CmtRef",
+					"version": "0.0.1",
 					"description": "test for CMT ref query path",
 					"properties": {
 						"directRef": {
@@ -439,6 +444,7 @@ func TestRefAllPath(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "refObj",
+					"version": "0.0.1",
 					"description": "reference object",
 					"key": "{key1}_{key2}",
 					"properties": {

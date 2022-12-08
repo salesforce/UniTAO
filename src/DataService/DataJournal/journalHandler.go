@@ -27,6 +27,7 @@ This copyright notice and license applies to all files in this directory or sub-
 package DataJournal
 
 import (
+	"DataService/DataHandler"
 	"DataService/DataJournal/Process"
 	"DataService/DataJournal/ProcessIface"
 	"fmt"
@@ -39,53 +40,61 @@ import (
 )
 
 const (
-	defaultInterval = 10 * time.Second
+	defaultInterval = 60 * time.Second
 )
 
 type JournalHandler struct {
-	lib        *JournalLib
-	OpsCtrl    *Thread.ThreadCtrl
-	interval   time.Duration
-	log        *log.Logger
-	processMap map[string][]ProcessIface.JournalProcess
+	Data        *DataHandler.Handler
+	lib         *JournalLib
+	OpsCtrl     *Thread.ThreadCtrl
+	interval    time.Duration
+	log         *log.Logger
+	processList []ProcessIface.JournalProcess
 }
 
-func getProcesses(logger *log.Logger) []ProcessIface.JournalProcess {
+func LoadProcesses(data *DataHandler.Handler, log *log.Logger) ([]ProcessIface.JournalProcess, error) {
 	processList := []ProcessIface.JournalProcess{}
-	schema := Process.NewSchemaProcess(logger)
-	processList = append(processList, schema)
-	return processList
-}
-
-func loadJournalProcesses(logger *log.Logger) map[string][]ProcessIface.JournalProcess {
-	processMap := map[string][]ProcessIface.JournalProcess{}
-	processList := getProcesses(logger)
-	for _, p := range processList {
-		typeMap := p.HandleTypes()
-		for pType := range typeMap {
-			if _, ok := processMap[pType]; !ok {
-				processMap[pType] = []ProcessIface.JournalProcess{}
-			}
-			processMap[pType] = append(processMap[pType], p)
-		}
+	schema, err := Process.NewSchemaProcess(data, log)
+	if err != nil {
+		return nil, err
 	}
-	return processMap
+	processList = append(processList, schema)
+	cmtIdx, err := Process.NewCmtIndexProcess(data, log)
+	if err != nil {
+		return nil, err
+	}
+	processList = append(processList, cmtIdx)
+	return processList, nil
 }
 
-func NewJournalHandler(lib *JournalLib, interval time.Duration, logger *log.Logger) *JournalHandler {
+func (o *JournalHandler) getProcessList() error {
+	processList, err := LoadProcesses(o.Data, o.log)
+	if err != nil {
+		return err
+	}
+	o.processList = processList
+	return nil
+}
+
+func NewJournalHandler(data *DataHandler.Handler, lib *JournalLib, interval time.Duration, logger *log.Logger) (*JournalHandler, error) {
 	if interval == 0 {
 		interval = defaultInterval
 	}
 	if logger == nil {
 		logger = log.Default()
 	}
-	return &JournalHandler{
-		lib:        lib,
-		OpsCtrl:    Thread.NewThreadController(),
-		interval:   interval,
-		log:        logger,
-		processMap: loadJournalProcesses(logger),
+	journal := JournalHandler{
+		Data:     data,
+		lib:      lib,
+		OpsCtrl:  Thread.NewThreadController(logger),
+		interval: interval,
+		log:      logger,
 	}
+	err := journal.getProcessList()
+	if err != nil {
+		return nil, err
+	}
+	return &journal, nil
 }
 
 func (o *JournalHandler) Run(notify chan interface{}) {
@@ -97,9 +106,8 @@ func (o *JournalHandler) Run(notify chan interface{}) {
 			if ok && signal == syscall.SIGINT {
 				return
 			}
-		default:
+		case <-time.After(o.interval):
 			o.ProcessAllJournals()
-			time.Sleep(o.interval)
 		}
 	}
 }
@@ -122,27 +130,20 @@ func (o *JournalHandler) ProcessJournalByType(dataType string) {
 func (o *JournalHandler) ProcessJournalById(dataType string, dataId string) {
 	workerId := fmt.Sprintf("%s_%s", dataType, dataId)
 	worker := o.OpsCtrl.GetWorker(workerId)
-	processList, ok := o.processMap[dataType]
-	if !ok {
-		processList = []ProcessIface.JournalProcess{}
-	}
-	if worker == nil {
-		jWorker := JournalWorker{
-			lib:       o.lib,
-			dataType:  dataType,
-			dataId:    dataId,
-			log:       o.log,
-			processes: processList,
-		}
-		worker, err := o.OpsCtrl.AddWorker(workerId, jWorker.Run)
-		if err != nil {
-			// TODO: log error and exit without throw anything.
-			return
-		}
-		worker.Run()
+	if worker != nil {
 		return
 	}
-	if worker.Stopped() {
-		worker.Run()
+	jWorker := JournalWorker{
+		lib:       o.lib,
+		dataType:  dataType,
+		dataId:    dataId,
+		log:       o.log,
+		processes: o.processList,
 	}
+	worker, err := o.OpsCtrl.AddWorker(workerId, jWorker.Run)
+	if err != nil {
+		// TODO: log error and exit without throw anything.
+		return
+	}
+	worker.Run()
 }

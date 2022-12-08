@@ -6,6 +6,7 @@
             "__ver": "0.0.1",
             "data": {
                 "name": "record",
+                "version": "0.0.1",
                 "description": "schema of data record",
                 "properties": {
                     "__id": {
@@ -29,11 +30,16 @@
             "__ver": "0.0.1",
             "data": {
                 "name": "schema",
+                "version": "0.0.1",
                 "description": "schema of schema",
                 "additionalProperties": false,
                 "properties": {
                     "name": {
                         "type": "string"
+                    },
+                    "version": {
+                        "type": "string",
+                        "required": false
                     },
                     "description": {
                         "type": "string",
@@ -45,6 +51,13 @@
                     },
                     "additionalProperties": {
                         "type": "boolean",
+                        "required": false
+                    },
+                    "required": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
                         "required": false
                     },
                     "properties": {
@@ -71,6 +84,11 @@
                                 "type": "string"
                             },
                             "items": {
+                                "type": "object",
+                                "$ref": "#/definitions/prop",
+                                "required": false
+                            },
+                            "additionalProperties": {
                                 "type": "object",
                                 "$ref": "#/definitions/prop",
                                 "required": false
@@ -102,6 +120,7 @@
             "__ver": "0.0.1",
             "data": {
                 "name": "journal",
+                "version": "0.0.1",
                 "key": "dataType:{dataType}_dataId:{dataId}_page:{idx}",
                 "properties": {
                     "dataType": {
@@ -159,15 +178,50 @@
             "__ver": "0.0.1",
             "data": {
                 "name": "cmtIdx",
+                "version": "0.0.1",
                 "key": "{dataType}",
                 "properties": {
                     "dataType": {
                         "type": "string"
                     },
-                    "subscribers": {
-                        "type": "array",
+                    "cmtSubscriber": {
+                        "type": "map",
                         "items": {
-                            "type": "string"
+                            "type": "object",
+                            "$ref": "#/definitions/cmtSubscriber"
+                        }
+                    }
+                },
+                "definitions": {
+                    "cmtSubscriber": {
+                        "name": "cmtSubscriber",
+                        "key": "{dataType}",
+                        "properties": {
+                            "dataType": {
+                                "type": "string"
+                            },
+                            "versionIndex": {
+                                "type": "map",
+                                "items": {
+                                    "type": "object",
+                                    "$ref": "#/definitions/versionIndex"
+                                }                                
+                            }
+                        }
+                    },
+                    "versionIndex": {
+                        "name": "versionIndex",
+                        "key": "{version}",
+                        "properties": {
+                            "version": {
+                                "type": "string"
+                            },
+                            "indexTemplate": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
                         }
                     }
                 }

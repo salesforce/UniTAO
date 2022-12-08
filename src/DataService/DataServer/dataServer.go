@@ -35,6 +35,7 @@ import (
 	"os"
 	"path"
 
+	"DataService/Common"
 	"DataService/Config"
 	"DataService/DataHandler"
 	"DataService/DataJournal"
@@ -51,15 +52,6 @@ const (
 	PORT_DEFAULT = "8010"
 )
 
-var InternalTypes = map[string]interface{}{
-	DataJournal.KeyJournal: true,
-	DataJournal.KeyCmtIdx:  true,
-}
-
-var ReadOnlyTypes = map[string]interface{}{
-	DataJournal.KeyJournal: true,
-}
-
 type Server struct {
 	Id             string
 	Port           string
@@ -75,11 +67,10 @@ type Server struct {
 
 func New() (Server, error) {
 	srv := Server{
-		Port:       PORT_DEFAULT,
-		args:       make(map[string]string),
-		config:     Config.Confuguration{},
-		BackendCtl: Thread.NewThreadController(),
-		logPath:    "./log",
+		Port:    PORT_DEFAULT,
+		args:    make(map[string]string),
+		config:  Config.Confuguration{},
+		logPath: "",
 	}
 	err := srv.init()
 	if err != nil {
@@ -89,16 +80,20 @@ func New() (Server, error) {
 }
 
 func (srv *Server) Run() {
-	logPath := path.Join(srv.logPath, fmt.Sprintf("%s.log", srv.Id))
-	log.Printf("log file: %s", logPath)
-	logFile, err := os.OpenFile(logPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		log.Fatalf("error opening file: %v", err)
+	srv.log = log.Default()
+	if srv.logPath != "" {
+		logPath := path.Join(srv.logPath, fmt.Sprintf("%s.log", srv.Id))
+		log.Printf("log file: %s", logPath)
+		logFile, err := os.OpenFile(logPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+		if err != nil {
+			log.Fatalf("error opening file: %v", err)
+		}
+		defer logFile.Close()
+		mw := io.MultiWriter(os.Stdout, logFile)
+		logger := log.New(mw, fmt.Sprintf("%s: ", srv.Id), log.Ldate|log.Ltime|log.Lshortfile)
+		srv.log = logger
 	}
-	defer logFile.Close()
-	mw := io.MultiWriter(os.Stdout, logFile)
-	logger := log.New(mw, fmt.Sprintf("%s: ", srv.Id), log.Ldate|log.Ltime|log.Lshortfile)
-	srv.log = logger
+	srv.BackendCtl = Thread.NewThreadController(srv.log)
 	handler, err := DataHandler.New(srv.config, srv.log, Data.ConnectDb)
 	if err != nil {
 		srv.log.Fatalf("failed to initialize data layer, Err:%s", err)
@@ -121,7 +116,11 @@ func (srv *Server) RunHttp() {
 }
 
 func (srv *Server) RunJournalHandler() {
-	srv.journalHandler = DataJournal.NewJournalHandler(srv.journal, 0, srv.log)
+	journal, err := DataJournal.NewJournalHandler(srv.data, srv.journal, 0, srv.log)
+	if err != nil {
+		srv.log.Fatalf("failed to load Journal Handler. Error:%s", err)
+	}
+	srv.journalHandler = journal
 	worker, err := srv.BackendCtl.AddWorker("journalHandler", srv.journalHandler.Run)
 	if err != nil {
 		srv.log.Fatalf("failed to create Journal Handler as backend process.")
@@ -181,7 +180,7 @@ func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 		}, http.StatusBadRequest, srv.config.Http)
 		return
 	}
-	if _, ok := ReadOnlyTypes[dataType]; ok && r.Method != Http.GET {
+	if _, ok := Common.ReadOnlyTypes[dataType]; ok && r.Method != http.MethodGet {
 		Http.ResponseJson(w, Http.HttpError{
 			Status: http.StatusBadRequest,
 			Message: []string{
@@ -191,15 +190,15 @@ func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch r.Method {
-	case Http.GET:
+	case http.MethodGet:
 		srv.handleGet(w, dataType, idPath)
-	case Http.POST:
+	case http.MethodPost:
 		srv.handlePost(w, r, dataType, idPath)
-	case Http.DELETE:
+	case http.MethodDelete:
 		srv.handleDelete(w, dataType, idPath)
-	case Http.PUT:
+	case http.MethodPut:
 		srv.handlePut(w, r, dataType, idPath)
-	case Http.PATCH:
+	case http.MethodPatch:
 		srv.handlePatch(w, r, dataType, idPath)
 	default:
 		Http.ResponseJson(w, Http.HttpError{
@@ -224,7 +223,7 @@ func (srv *Server) handleGet(w http.ResponseWriter, dataType string, dataId stri
 	var result interface{}
 	var err *Http.HttpError
 	switch dataType {
-	case DataJournal.KeyJournal:
+	case Common.KeyJournal:
 		result, err = srv.journal.GetJournal(dataId)
 	default:
 		result, err = srv.data.Get(dataType, dataId)

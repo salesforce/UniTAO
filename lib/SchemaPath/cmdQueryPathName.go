@@ -85,7 +85,13 @@ func NewPathQuery(conn *Data.Connection, dataType string, idPath string, pathCmd
 	qPath, e := CreateQuery(conn, dataType, idPath)
 	if e != nil {
 		newE := Http.WrapError(e, fmt.Sprintf("failed on create query with path [%s/%s]", dataType, idPath), e.Status)
-		newE.Context = append(newE.Context, pathRecord)
+		pathRecStr, err := json.MarshalIndent(pathRecord, "", "     ")
+		if err != nil {
+			newE.Context = append(newE.Context, e.Error())
+		} else {
+			newE.Context = append(newE.Context, string(pathRecStr))
+		}
+
 		return nil, newE
 	}
 	return qPath, nil

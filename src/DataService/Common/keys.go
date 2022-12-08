@@ -23,34 +23,9 @@ This copyright notice and license applies to all files in this directory or sub-
 ************************************************************************************************************
 */
 
-package JsonKey
+// functions to record all data changes
+package Common
 
 const (
-	AdditionalProperties = "additionalProperties"
-	ArchivedSchemaIdDiv  = "__"
-	Array                = "array"
-	ContentMediaType     = "contentMediaType"
-	Definitions          = "definitions"
-	DefinitionPrefix     = "#/definitions/"
-	DocRoot              = "#"
-	IndexTemplate        = "indexTemplate"
-	Inventory            = "inventory"
-	Items                = "items"
-	Key                  = "key"
-	Name                 = "name"
-	Map                  = "map"
-	Object               = "object"
-	Properties           = "properties"
-	Ref                  = "$ref"
-	Required             = "required"
-	Schema               = "schema"
-	String               = "string"
-	Type                 = "type"
-	Version              = "version"
+	KeyJournal = "journal"
 )
-
-var InvalidTypeChars = []string{
-	"/",
-	"#",
-	"$",
-}

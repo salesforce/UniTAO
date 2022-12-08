@@ -28,6 +28,7 @@ package DataJournal
 
 import (
 	"Data/DbIface"
+	"DataService/Common"
 	"DataService/DataJournal/ProcessIface"
 	"fmt"
 	"net/http"
@@ -40,11 +41,10 @@ import (
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Util"
 	"github.com/salesforce/UniTAO/lib/Util/Http"
+	"github.com/salesforce/UniTAO/lib/Util/Json"
 )
 
 const (
-	KeyJournal      = "journal"
-	KeyCmtIdx       = "cmtIdx"
 	CurrentVer      = "0.0.1"
 	MaxEntryPerPage = 10
 	KeyActive       = "active"
@@ -281,11 +281,11 @@ func (j *JournalLib) ArchiveJournalEntry(dataType string, dataId string, entry *
 func (j *JournalLib) removeJournal(page *ProcessIface.JournalPage) *Http.HttpError {
 	recId := PageId(page.DataType, page.DataId, page.Idx)
 	keys := make(map[string]interface{})
-	keys[Record.DataType] = KeyJournal
+	keys[Record.DataType] = Common.KeyJournal
 	keys[Record.DataId] = recId
 	ex := j.db.Delete(j.table, keys)
 	if ex != nil {
-		return Http.WrapError(ex, fmt.Sprintf("failed to delete record [type/id]=[%s/%s]", KeyJournal, recId), http.StatusInternalServerError)
+		return Http.WrapError(ex, fmt.Sprintf("failed to delete record [type/id]=[%s/%s]", Common.KeyJournal, recId), http.StatusInternalServerError)
 	}
 	return nil
 }
@@ -293,7 +293,7 @@ func (j *JournalLib) removeJournal(page *ProcessIface.JournalPage) *Http.HttpErr
 func (j *JournalLib) retrieveJournals() *Http.HttpError {
 	args := make(map[string]interface{})
 	args[DbIface.Table] = j.table
-	args[Record.DataType] = KeyJournal
+	args[Record.DataType] = Common.KeyJournal
 	journalList, err := j.db.Get(args)
 	if err != nil {
 		return Http.NewHttpError(err.Error(), http.StatusInternalServerError)
@@ -304,7 +304,7 @@ func (j *JournalLib) retrieveJournals() *Http.HttpError {
 			return Http.WrapError(err, fmt.Sprintf("failed to load data as record. Error: %s", err), http.StatusInternalServerError)
 		}
 		journal := ProcessIface.JournalPage{}
-		err = Util.ObjCopy(record.Data, &journal)
+		err = Json.CopyTo(record.Data, &journal)
 		if err != nil {
 			return Http.WrapError(err, fmt.Sprintf("failed to load data as journal page. Error:%s", err), http.StatusInternalServerError)
 		}
@@ -330,12 +330,12 @@ func (j *JournalLib) addPageToCache(journal *ProcessIface.JournalPage) {
 
 func (j *JournalLib) updateJournal(page *ProcessIface.JournalPage) *Http.HttpError {
 	pageData := map[string]interface{}{}
-	err := Util.ObjCopy(page, &pageData)
+	err := Json.CopyTo(page, &pageData)
 	if err != nil {
 		return Http.WrapError(err, fmt.Sprintf("failed to create Record Data. Error:%s", err), http.StatusBadRequest)
 	}
 	pageId := PageId(page.DataType, page.DataId, page.Idx)
-	pageRecord := Record.NewRecord(KeyJournal, CurrentVer, pageId, pageData)
+	pageRecord := Record.NewRecord(Common.KeyJournal, CurrentVer, pageId, pageData)
 	err = j.db.Create(j.table, pageRecord.Map())
 	if err != nil {
 		return Http.WrapError(err, fmt.Sprintf("failed to create record [{type}/{id}]=[%s]/%s", pageRecord.Type, pageRecord.Id), http.StatusInternalServerError)

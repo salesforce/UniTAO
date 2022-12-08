@@ -26,7 +26,7 @@ This copyright notice and license applies to all files in this directory or sub-
 package main
 
 import (
-	"DataService/DataServer"
+	"DataService/Common"
 	"flag"
 	"fmt"
 	"log"
@@ -41,8 +41,8 @@ import (
 	"github.com/salesforce/UniTAO/lib/Schema"
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
-	"github.com/salesforce/UniTAO/lib/Util"
 	"github.com/salesforce/UniTAO/lib/Util/Http"
+	"github.com/salesforce/UniTAO/lib/Util/Json"
 )
 
 type AdminArgs struct {
@@ -171,7 +171,7 @@ func (a *Admin) addDsRecord() error {
 		return fmt.Errorf("failed to query Data Service record, [%s]=[%s], Status:%d, Error:%s", Record.DataId, a.args.ops.id, err.Status, err)
 	}
 	dsRecord := InvRecord.NewDsInfo(a.args.ops.id, a.args.ops.url)
-	payload, e := Util.StructToMap(dsRecord)
+	payload, e := Json.StructToMap(dsRecord)
 	if e != nil {
 		return e
 	}
@@ -234,7 +234,7 @@ func (a *Admin) getDsTypeHash(dsId string) (map[string]bool, error) {
 	}
 	typeHash := map[string]bool{}
 	for _, dataType := range result.([]interface{}) {
-		if _, ok := DataServer.InternalTypes[dataType.(string)]; !ok && dataType != JsonKey.Schema && dataType != Record.KeyRecord {
+		if _, ok := Common.InternalTypes[dataType.(string)]; !ok {
 			typeHash[dataType.(string)] = true
 		}
 	}
@@ -284,7 +284,7 @@ func (a *Admin) addType(dsId string, dataType string) error {
 		SchemaVer: schemaRecord.(map[string]interface{})[Record.Version].(string),
 		DsId:      dsId,
 	}
-	referralData, _ := Util.StructToMap(referral.GetRecord())
+	referralData, _ := Json.StructToMap(referral.GetRecord())
 	a.handler.Db.Create(RefRecord.Referral, referralData)
 	return nil
 }

@@ -29,12 +29,12 @@ import (
 	"testing"
 
 	"github.com/salesforce/UniTAO/lib/SchemaPath"
-	"github.com/salesforce/UniTAO/lib/Util"
+	"github.com/salesforce/UniTAO/lib/Util/Json"
 )
 
 func LoadIterResult(data interface{}) (*SchemaPath.IteratorResult, error) {
 	result := SchemaPath.IteratorResult{}
-	err := Util.ObjCopy(data, &result)
+	err := Json.CopyTo(data, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -50,6 +50,7 @@ func TestIterOneFork(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "IterEntry",
+					"version": "0.0.1",
 					"key": "{iterKey}",
 					"properties": {
 						"iterKey": {
@@ -110,6 +111,7 @@ func TestIterOneFork(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "refObj",
+					"version": "0.0.1",
 					"key": "ref{key1}_{key2}",
 					"properties": {
 						"key1": {
@@ -301,6 +303,7 @@ func TestIterTwoForks(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "IterEntry",
+					"version": "0.0.1",
 					"key": "{iterKey}",
 					"properties": {
 						"iterKey": {
@@ -361,6 +364,7 @@ func TestIterTwoForks(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "refObj",
+					"version": "0.0.1",
 					"key": "ref{key1}_{key2}",
 					"properties": {
 						"key1": {
@@ -705,6 +709,7 @@ func TestIterFilter(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "IterEntry",
+					"version": "0.0.1",
 					"key": "{iterKey}",
 					"properties": {
 						"iterKey": {
@@ -765,6 +770,7 @@ func TestIterFilter(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "refObj",
+					"version": "0.0.1",
 					"key": "ref{key1}_{key2}",
 					"properties": {
 						"key1": {

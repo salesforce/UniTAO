@@ -107,14 +107,14 @@ func (srv *Server) Run() {
 
 func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
-	case Http.GET:
+	case http.MethodGet:
 		srv.handleGet(w, r)
-	case Http.PUT:
+	case http.MethodPut:
 		srv.handleUpdate(w, r)
-	case Http.DELETE:
+	case http.MethodDelete:
 		srv.handlerDelete(w, r)
 	default:
-		err := Http.NewHttpError(fmt.Sprintf("method=[%s] not supported. only support method=[%s, %s]", r.Method, Http.PUT, Http.DELETE), http.StatusMethodNotAllowed)
+		err := Http.NewHttpError(fmt.Sprintf("method=[%s] not supported. only support method=[%s, %s]", r.Method, http.MethodPut, http.MethodDelete), http.StatusMethodNotAllowed)
 		Http.ResponseJson(w, err, err.Status, srv.config.Http)
 	}
 }

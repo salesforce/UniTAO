@@ -26,6 +26,7 @@ This copyright notice and license applies to all files in this directory or sub-
 package SchemaDoc
 
 import (
+	"encoding/json"
 	"fmt"
 	"path"
 	"reflect"
@@ -33,11 +34,13 @@ import (
 
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Util"
+	"github.com/salesforce/UniTAO/lib/Util/Json"
 	"github.com/salesforce/UniTAO/lib/Util/Template"
 )
 
 type SchemaDoc struct {
 	Id          string
+	Version     string
 	Parent      *SchemaDoc
 	KeyTemplate *Template.StrTemp
 	Data        map[string]interface{}
@@ -48,20 +51,42 @@ type SchemaDoc struct {
 }
 
 type CMTDocRef struct {
-	Doc         *SchemaDoc
-	Name        string
-	CmtType     string
-	ContentType string
+	Doc           *SchemaDoc
+	Name          string
+	CmtType       string
+	ContentType   string
+	IndexTemplate string
 }
 
 func create(data map[string]interface{}, id string, parent *SchemaDoc) (*SchemaDoc, error) {
+	version, vreExists := data[JsonKey.Version].(string)
+	schemaName, nameExists := data[JsonKey.Name]
+	if parent == nil {
+		if !nameExists || schemaName.(string) == "" {
+			return nil, fmt.Errorf("missing key=[%s] in schema data", JsonKey.Name)
+		}
+		if id != "" && id != schemaName.(string) {
+			return nil, fmt.Errorf("given id=[%s] not match schema name=[%s]", id, schemaName)
+		}
+		id = schemaName.(string)
+		if !vreExists {
+			return nil, fmt.Errorf("missing key=[%s] at schema document root", JsonKey.Version)
+		}
+	} else {
+		if nameExists && id != schemaName.(string) {
+			return nil, fmt.Errorf("def key=[%s] not match def name=[%s]", id, schemaName)
+		}
+		if !vreExists {
+			version = ""
+		}
+	}
 	parentPath := ""
 	if parent != nil {
 		parentPath = parent.Path()
 	}
 	_, ok := data[JsonKey.Properties].(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("missing key [%s], failed to create doc path=[%s/%s]", JsonKey.Properties, parentPath, id)
+		return nil, fmt.Errorf("missing key [%s], failed to create doc path=[%s/%s]", JsonKey.Properties, parentPath, schemaName)
 	}
 	keyTemplate, ok := data[JsonKey.Key].(string)
 	if !ok {
@@ -73,6 +98,7 @@ func create(data map[string]interface{}, id string, parent *SchemaDoc) (*SchemaD
 	}
 	doc := SchemaDoc{
 		Id:          id,
+		Version:     version,
 		Parent:      parent,
 		Data:        data,
 		KeyTemplate: template,
@@ -80,15 +106,15 @@ func create(data map[string]interface{}, id string, parent *SchemaDoc) (*SchemaD
 		SubDocs:     map[string]*SchemaDoc{},
 	}
 	if parent == nil {
-		rawDataIface, err := Util.JsonCopy(data)
+		rawDataIface, err := Json.Copy(data)
 		if err != nil {
 			return nil, fmt.Errorf("failed to copy SchemaDoc Data. @path=[%s], Error:%s", parentPath, err)
 		}
 		doc.RAW = rawDataIface.(map[string]interface{})
 	} else {
-		rawData, err := parent.GetDefinitionRaw(id)
+		rawData, err := parent.GetDefinitionRaw(doc.Id)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get Raw Schema for definition dataType=[%s]", id)
+			return nil, fmt.Errorf("failed to get Raw Schema for definition dataType=[%s]", doc.Id)
 		}
 		doc.RAW = rawData
 	}
@@ -97,13 +123,13 @@ func create(data map[string]interface{}, id string, parent *SchemaDoc) (*SchemaD
 	if ok {
 		defMap, ok := docDefs.(map[string]interface{})
 		if !ok {
-			return nil, fmt.Errorf("failed to parse field=[%s], path=[%s/%s]", JsonKey.Definitions, parentPath, id)
+			return nil, fmt.Errorf("failed to parse field=[%s], path=[%s/%s]", JsonKey.Definitions, parentPath, doc.Id)
 		}
 		doc.Definitions = make(map[string]*SchemaDoc, len(defMap))
 		for key, def := range defMap {
 			defObj, ok := def.(map[string]interface{})
 			if !ok {
-				return nil, fmt.Errorf("failed to parse definition to object. path=[%s/%s/%s/%s]", parentPath, id, JsonKey.Definitions, key)
+				return nil, fmt.Errorf("failed to parse definition to object. path=[%s/%s/%s/%s]", parentPath, doc.Id, JsonKey.Definitions, key)
 			}
 			defDoc, err := create(defObj, key, &doc)
 			if err != nil {
@@ -115,8 +141,17 @@ func create(data map[string]interface{}, id string, parent *SchemaDoc) (*SchemaD
 	return &doc, nil
 }
 
-func New(data map[string]interface{}, id string, parent *SchemaDoc) (*SchemaDoc, error) {
-	doc, err := create(data, id, parent)
+func FromString(data string) (*SchemaDoc, error) {
+	dataObj := map[string]interface{}{}
+	err := json.Unmarshal([]byte(data), &dataObj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse string as map[string]interface{}, Error:%s", err)
+	}
+	return New(dataObj)
+}
+
+func New(data map[string]interface{}) (*SchemaDoc, error) {
+	doc, err := create(data, "", nil)
 	if err != nil {
 		return nil, fmt.Errorf("faile to create doc tree. Error: %s", err)
 	}
@@ -349,10 +384,15 @@ func (d *SchemaDoc) getCmtRef(pname string, prop map[string]interface{}) error {
 	switch cmtType {
 	case JsonKey.Inventory:
 		ref := CMTDocRef{
-			Doc:         d,
-			Name:        pname,
-			CmtType:     JsonKey.Inventory,
-			ContentType: dataType,
+			Doc:           d,
+			Name:          pname,
+			CmtType:       JsonKey.Inventory,
+			ContentType:   dataType,
+			IndexTemplate: "",
+		}
+		idxTemp, ok := prop[JsonKey.IndexTemplate]
+		if ok {
+			ref.IndexTemplate = idxTemp.(string)
 		}
 		d.CmtRefs[ref.Name] = &ref
 		return nil
@@ -463,6 +503,25 @@ func (d *SchemaDoc) IsAncestor(docId string) bool {
 		return d.Parent.IsAncestor(docId)
 	}
 	return false
+}
+
+func (d *SchemaDoc) MapArray(attr string, data []interface{}) map[string]interface{} {
+	keyMap := map[string]interface{}{}
+	if len(data) == 0 {
+		return keyMap
+	}
+	itemDef := d.Data[JsonKey.Properties].(map[string]interface{})[attr].(map[string]interface{})[JsonKey.Items].(map[string]interface{})
+	itemType := itemDef[JsonKey.Type].(string)
+	for _, item := range data {
+		if itemType != JsonKey.Object {
+			keyMap[item.(string)] = item
+			continue
+		}
+		itemSchema := d.SubDocs[attr]
+		itemKey, _ := itemSchema.BuildKey(item.(map[string]interface{}))
+		keyMap[itemKey] = item
+	}
+	return keyMap
 }
 
 func IsMap(attrDef map[string]interface{}) bool {

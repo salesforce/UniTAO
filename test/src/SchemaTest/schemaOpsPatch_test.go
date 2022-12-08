@@ -36,6 +36,7 @@ import (
 func TestPatchSimpePath(t *testing.T) {
 	schemaStr := `{
 		"name": "testRoot",
+		"version": "0.0.1",
 		"properties": {
 			"attr1": {
 				"type": "string"
@@ -63,6 +64,7 @@ func TestPatchSimpePath(t *testing.T) {
 func TestPatchArrayStr(t *testing.T) {
 	schemaStr := `{
 		"name": "testRoot",
+		"version": "0.0.1",
 		"properties": {
 			"attr1": {
 				"type": "array",
@@ -122,6 +124,7 @@ func TestPatchArrayStr(t *testing.T) {
 func TestPatchArrayObj(t *testing.T) {
 	schemaStr := `{
 		"name": "testRoot",
+		"version": "0.0.1",
 		"properties": {
 			"attr1": {
 				"type": "array",
@@ -191,6 +194,7 @@ func TestPatchArrayObj(t *testing.T) {
 func TestPatchMapStr(t *testing.T) {
 	schemaStr := `{
 		"name": "testRoot",
+		"version": "0.0.1",
 		"properties": {
 			"attr1": {
 				"type": "map",
@@ -255,6 +259,7 @@ func TestPatchMapStr(t *testing.T) {
 func TestPatchMapObj(t *testing.T) {
 	schemaStr := `{
 		"name": "testRoot",
+		"version": "0.0.1",
 		"properties": {
 			"attr1": {
 				"type": "map",

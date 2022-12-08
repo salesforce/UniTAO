@@ -31,8 +31,8 @@ import (
 
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
-	"github.com/salesforce/UniTAO/lib/Util"
 	"github.com/salesforce/UniTAO/lib/Util/Http"
+	"github.com/salesforce/UniTAO/lib/Util/Json"
 )
 
 type RecordFunction func(dataType string, dataId string) (*Record.Record, *Http.HttpError)
@@ -59,7 +59,7 @@ func (c *Connection) cacheData(dataType string, id string) (interface{}, *Http.H
 	}
 	data, ok := c.cache[dataType].IdCache[id]
 	if ok {
-		dataCopy, ex := Util.JsonCopy(data)
+		dataCopy, ex := Json.Copy(data)
 		if ex != nil {
 			return nil, Http.WrapError(ex, "failed to copy cache data", http.StatusInternalServerError)
 		}
@@ -76,7 +76,7 @@ func (c *Connection) cacheData(dataType string, id string) (interface{}, *Http.H
 	if err != nil {
 		return nil, err
 	}
-	dataCopy, ex := Util.JsonCopy(data)
+	dataCopy, ex := Json.Copy(data)
 	if ex != nil {
 		return nil, Http.WrapError(ex, "failed to copy cache data", http.StatusInternalServerError)
 	}

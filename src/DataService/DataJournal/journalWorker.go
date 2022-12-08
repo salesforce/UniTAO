@@ -28,7 +28,15 @@ package DataJournal
 
 import (
 	"DataService/DataJournal/ProcessIface"
+	"fmt"
 	"log"
+	"net/http"
+	"os"
+	"syscall"
+	"time"
+
+	"github.com/salesforce/UniTAO/lib/Schema/Record"
+	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
 
 type JournalWorker struct {
@@ -39,18 +47,71 @@ type JournalWorker struct {
 	processes []ProcessIface.JournalProcess
 }
 
-func (w *JournalWorker) Run(event chan interface{}) {
-	entry := w.lib.NextJournalEntry(w.dataType, w.dataId)
+func ProcessNextEntry(lib *JournalLib, processes []ProcessIface.JournalProcess, dataType string, dataId string, log *log.Logger) *Http.HttpError {
+	entry := lib.NextJournalEntry(dataType, dataId)
 	if entry == nil {
-		w.lib.CleanArchivedPages(w.dataType, w.dataId)
-		return
+		err := lib.CleanArchivedPages(dataType, dataId)
+		if err != nil {
+			return err
+		}
+		return Http.NewHttpError(fmt.Sprintf("failed to get journal of %s/%s", dataType, dataId), http.StatusNotFound)
 	}
-	for _, p := range w.processes {
-		ex := p.ProcessEntry(w.dataType, w.dataId, entry)
-		if ex != nil {
-			w.log.Printf("%s: failed to process entry. Error:%s", p.Name(), ex)
-			return
+	versionList := make([]string, 0, 2)
+	if entry.Before != nil {
+		versionList = append(versionList, entry.Before[Record.Version].(string))
+	}
+	if entry.After != nil {
+		afterVer := entry.After[Record.Version].(string)
+		if len(versionList) == 0 || versionList[0] != afterVer {
+			versionList = append(versionList, afterVer)
 		}
 	}
-	w.lib.ArchiveJournalEntry(w.dataType, w.dataId, entry)
+	for _, p := range processes {
+		canHandle := false
+		for _, ver := range versionList {
+			can, err := p.HandleType(dataType, ver)
+			if err != nil {
+				return Http.WrapError(err, fmt.Sprintf("not able to determine [%s] can handle type=[%s] & ver=[%s]", p.Name(), dataType, ver), http.StatusInternalServerError)
+			}
+			if can {
+				canHandle = can
+				break
+			}
+		}
+		if canHandle {
+			err := p.ProcessEntry(dataType, dataId, entry)
+			if err != nil {
+				if err.Status != http.StatusNotModified {
+					return Http.WrapError(err, fmt.Sprintf("%s: failed to process entry", p.Name()), http.StatusInternalServerError)
+				}
+				log.Printf("%s: entry processed [%d-%d] with no modification.\n Message: %s", p.Name(), entry.Page, entry.Idx, err)
+			}
+		}
+	}
+	err := lib.ArchiveJournalEntry(dataType, dataId, entry)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (w *JournalWorker) Run(notify chan interface{}) {
+	for {
+		select {
+		case event := <-notify:
+			signal, ok := event.(os.Signal)
+			if ok && signal == syscall.SIGINT {
+				return
+			}
+		default:
+			err := ProcessNextEntry(w.lib, w.processes, w.dataType, w.dataId, w.log)
+			if err != nil {
+				if err.Status != http.StatusNotFound {
+					w.log.Print(err)
+				}
+				w.log.Printf("no more entry for %s/%s, sleep for 5 seconds", w.dataType, w.dataId)
+				time.Sleep(5 * time.Second)
+			}
+		}
+	}
 }

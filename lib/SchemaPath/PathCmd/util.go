@@ -26,6 +26,7 @@ This copyright notice and license applies to all files in this directory or sub-
 package PathCmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -69,8 +70,7 @@ func Validate(cmd string) *Http.HttpError {
 		return nil
 	}
 	e := Http.NewHttpError(fmt.Sprintf("unknown path cmd=[%s]", cmd), http.StatusBadRequest)
-	e.Context = append(e.Context, map[string]interface{}{
-		"available options": CmdList,
-	})
+	cmdListStr, _ := json.MarshalIndent(CmdList, "", "     ")
+	e.Context = append(e.Context, fmt.Sprintf("available options\n%s", cmdListStr))
 	return e
 }

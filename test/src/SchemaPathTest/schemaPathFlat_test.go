@@ -86,6 +86,7 @@ func TestFlatRecord(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "FlatTest",
+					"version": "0.0.1",
 					"description": "test for retrieve flat",
 					"properties": {
 						"simpleAttr": {
@@ -166,6 +167,7 @@ func TestFlatRecord(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "refObj",
+					"version": "0.0.1",
 					"key": "{key1}_{key2}",
 					"properties": {
 						"key1": {
@@ -300,6 +302,7 @@ func TestFlatSimple(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "FlatTest",
+					"version": "0.0.1",
 					"description": "test for retrieve flat",
 					"properties": {
 						"simpleAttr": {
@@ -380,6 +383,7 @@ func TestFlatSimple(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "refObj",
+					"version": "0.0.1",
 					"key": "{key1}_{key2}",
 					"properties": {
 						"key1": {
@@ -527,6 +531,7 @@ func TestFlatObj(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "FlatTest",
+					"version": "0.0.1",
 					"description": "test for retrieve flat",
 					"properties": {
 						"simpleAttr": {
@@ -607,6 +612,7 @@ func TestFlatObj(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "refObj",
+					"version": "0.0.1",
 					"key": "{key1}_{key2}",
 					"properties": {
 						"key1": {
@@ -760,6 +766,7 @@ func TestFlatRef(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "FlatTest",
+					"version": "0.0.1",
 					"description": "test for retrieve flat",
 					"properties": {
 						"simpleAttr": {
@@ -840,6 +847,7 @@ func TestFlatRef(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "refObj",
+					"version": "0.0.1",
 					"key": "{key1}_{key2}",
 					"properties": {
 						"key1": {
@@ -1035,6 +1043,7 @@ func TestFlat2LayerArrayAll(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "entry",
+					"version": "0.0.1",
 					"properties": {
 						"arrayObj": {
 							"type": "array",
@@ -1239,6 +1248,7 @@ func TestFlatDeDupe(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "entry",
+					"version": "0.0.1",
 					"properties": {
 						"simpleAry": {
 							"type": "array",
@@ -1290,6 +1300,7 @@ func TestFlatDeDupe(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "refObj",
+					"version": "0.0.1",
 					"key": "ref-{key}",
 					"properties": {
 						"key": {

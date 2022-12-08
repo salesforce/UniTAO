@@ -27,22 +27,26 @@ package Thread
 
 import (
 	"fmt"
+	"log"
 	"sync"
 
 	"github.com/google/uuid"
 )
 
 type ThreadCtrl struct {
-	wg      *sync.WaitGroup
 	workers map[string]*Worker
 	lock    sync.Mutex
+	log     *log.Logger
 }
 
-func NewThreadController() *ThreadCtrl {
+func NewThreadController(logger *log.Logger) *ThreadCtrl {
+	if logger == nil {
+		logger = log.Default()
+	}
 	c := ThreadCtrl{
-		wg:      &sync.WaitGroup{},
 		workers: map[string]*Worker{},
 		lock:    sync.Mutex{},
+		log:     logger,
 	}
 	return &c
 }
@@ -56,7 +60,7 @@ func (c *ThreadCtrl) AddWorker(workerId string, funcToCall func(chan interface{}
 	if _, ok := c.workers[workerId]; ok {
 		return nil, fmt.Errorf("worker %s already exists", workerId)
 	}
-	worker := NewWorker(workerId, c.wg, funcToCall)
+	worker := NewWorker(workerId, 0, c.log, funcToCall, c.RemoveWorker)
 	c.workers[workerId] = worker
 	return worker, nil
 }
@@ -67,6 +71,13 @@ func (c *ThreadCtrl) GetWorker(workerId string) *Worker {
 		return nil
 	}
 	return worker
+}
+
+func (c *ThreadCtrl) RemoveWorker(workerId string) error {
+	c.lock.Lock()
+	defer c.lock.Lock()
+	delete(c.workers, workerId)
+	return nil
 }
 
 func (c *ThreadCtrl) Broadcast(event interface{}) {

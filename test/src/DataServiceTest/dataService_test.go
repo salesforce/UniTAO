@@ -80,6 +80,7 @@ func TestDataHandler(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "region",
+					"version": "0.0.1",
 					"description": "geographical regions Schema",
 					"properties": {
 						"id": {
@@ -104,6 +105,7 @@ func TestDataHandler(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "data_center",
+					"version": "0.0.1",
 					"description": "geographical regions Schema",
 					"properties": {
 						"id": {
@@ -136,8 +138,8 @@ func TestDataHandler(t *testing.T) {
 		}
 		return mockDb, nil
 	}
-	handler, err := DataHandler.New(config, nil, connectDb)
-	if err != nil {
+	handler, ex := DataHandler.New(config, nil, connectDb)
+	if ex != nil {
 		t.Fatalf("failed to create handler")
 	}
 
@@ -269,6 +271,8 @@ func TestDataHandlerPatchAttr(t *testing.T) {
 				"__type": "schema",
 				"__ver": "0.0.1",
 				"data": {
+					"name": "test",
+					"version": "0.0.1",
 					"properties": {
 						"attr1": {
 							"type": "string"
@@ -318,9 +322,12 @@ func TestDataHandlerPatchAttr(t *testing.T) {
 	}
 	handler, err := DataHandler.New(config, nil, connectDb)
 	if err != nil {
-		t.Fatalf("failed to create handler")
+		t.Fatalf("failed to create handler, Error:%s", err)
 	}
-	handler.Patch("test", "test01/attr1", "ok")
+	_, e := handler.Patch("test", "test01/attr1", "ok")
+	if e != nil {
+		t.Fatalf("failed to get patched data")
+	}
 	data, e := handler.Get("test", "test01")
 	if e != nil {
 		t.Fatalf("failed to get patched data")
@@ -404,6 +411,8 @@ func TestDataHandlerPatchArrayObj(t *testing.T) {
 				"__type": "schema",
 				"__ver": "0.0.1",
 				"data": {
+					"name": "test",
+					"version": "0.0.1",
 					"properties": {
 						"attr1": {
 							"type": "array",
@@ -627,6 +636,8 @@ func TestDataHandlerPatchArraySimpleStr(t *testing.T) {
 				"__type": "schema",
 				"__ver": "0.0.1",
 				"data": {
+					"name": "test",
+					"version": "0.0.1",
 					"properties": {
 						"attr1": {
 							"type": "array",
@@ -829,6 +840,8 @@ func TestDataHandlerPatchArrayInt(t *testing.T) {
 				"__type": "schema",
 				"__ver": "0.0.1",
 				"data": {
+					"name": "test",
+					"version": "0.0.1",
 					"properties": {
 						"attr1": {
 							"type": "array",
@@ -879,6 +892,7 @@ func TestDataHandlerPatchArrayInt(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "testCmt",
+					"version": "0.0.1",
 					"key": "{cmtKey}",
 					"properties": {
 						"cmtKey": {
@@ -1051,6 +1065,8 @@ func TestDataHandlerPatchArrayCmt(t *testing.T) {
 				"__type": "schema",
 				"__ver": "0.0.1",
 				"data": {
+					"name": "test",
+					"version": "0.0.1",
 					"properties": {
 						"attr1": {
 							"type": "array",
@@ -1101,6 +1117,7 @@ func TestDataHandlerPatchArrayCmt(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "testCmt",
+					"version": "0.0.1",
 					"key": "{cmtKey}",
 					"properties": {
 						"cmtKey": {

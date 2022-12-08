@@ -38,13 +38,17 @@ import (
 	"time"
 )
 
-const (
-	DELETE = "DELETE"
-	GET    = "GET"
-	PATCH  = "PATCH"
-	POST   = "POST"
-	PUT    = "PUT"
-)
+var UpdateMethods = map[string]bool{
+	http.MethodPost:  true,
+	http.MethodPatch: true,
+	http.MethodPut:   true,
+}
+
+var SuccessCodes = map[int]bool{
+	http.StatusAccepted: true,
+	http.StatusOK:       true,
+	http.StatusCreated:  true,
+}
 
 type Config struct {
 	HttpType  string                 `json:"type"`
@@ -73,9 +77,9 @@ func ResponseJson(w http.ResponseWriter, data interface{}, status int, httpCfg C
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	jsonData = append(jsonData, "\n"...)
+	jsonStr := fmt.Sprintf("%s\n", string(jsonData))
 	w.Header().Set("Content-Type", "application/json")
-	Response(w, jsonData, status, httpCfg)
+	Response(w, []byte(jsonStr), status, httpCfg)
 }
 
 func ResponseText(w http.ResponseWriter, txt []byte, status int, httpCfg Config) {
@@ -109,9 +113,9 @@ func ResponseErr(w http.ResponseWriter, err error, code int, httpCfg Config) {
 }
 
 func GetRestData(url string) (interface{}, int, error) {
-	response, err := http.Get(url)
+	response, code, err := SubmitPayload(url, http.MethodGet, nil, nil)
 	if err != nil {
-		return nil, http.StatusBadRequest, fmt.Errorf("failed to get response, [url]=[%s], Err:%s", url, err)
+		return nil, code, fmt.Errorf("failed to get response, [url]=[%s], Err:%s", url, err)
 	}
 	responseData, err := ioutil.ReadAll(response.Body)
 	if response.StatusCode >= 200 && response.StatusCode <= 299 {
@@ -128,16 +132,50 @@ func GetRestData(url string) (interface{}, int, error) {
 	return nil, response.StatusCode, fmt.Errorf("invalid response from url=[%s], Err:%s", url, string(responseData))
 }
 
-func PostRestData(dataUrl string, payload interface{}) (int, error) {
-	json_data, err := json.Marshal(payload)
-	if err != nil {
-		return http.StatusBadRequest, fmt.Errorf("failed to marshal payload. Error: %s", err)
+func SubmitPayload(dataUrl string, method string, headers map[string]string, payload interface{}) (*http.Response, int, error) {
+	if _, ok := UpdateMethods[method]; !ok {
+		return nil, http.StatusBadRequest, fmt.Errorf("invalid method=[%s], not a update method", method)
 	}
-	resp, err := http.Post(dataUrl, "application/json", bytes.NewBuffer(json_data))
-	if err != nil {
-		return resp.StatusCode, fmt.Errorf("failed to post data to [url]=[%s], Error:%s", dataUrl, err)
+	client := &http.Client{}
+	var req *http.Request
+	if payload == nil {
+		if method != http.MethodGet && method != http.MethodDelete && method != http.MethodPatch {
+			return nil, http.StatusBadRequest, fmt.Errorf("invalid method=[%s], only [%s, %s] allow payload=nil", method, http.MethodPatch, http.MethodDelete)
+		}
+		r, err := http.NewRequest(method, dataUrl, nil)
+		if err != nil {
+			return nil, http.StatusInternalServerError, fmt.Errorf("failed to create request. Error:%s", err)
+		}
+		req = r
+	} else {
+		json_data, err := json.MarshalIndent(payload, "", "    ")
+		if err != nil {
+			return nil, http.StatusBadRequest, fmt.Errorf("failed to marshal payload. Error: %s", err)
+		}
+		r, err := http.NewRequest(method, dataUrl, bytes.NewBuffer(json_data))
+		if err != nil {
+			return nil, http.StatusInternalServerError, fmt.Errorf("failed to create request. Error:%s", err)
+		}
+		req = r
 	}
-	return http.StatusAccepted, nil
+	defaultHeaders := map[string]string{
+		"Content-Type": "application/json",
+	}
+	for hKey, hValue := range headers {
+		req.Header.Set(hKey, hValue)
+		delete(defaultHeaders, hKey)
+	}
+	for hKey, hValue := range headers {
+		req.Header.Set(hKey, hValue)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return resp, http.StatusInternalServerError, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return resp, resp.StatusCode, fmt.Errorf("failed to [%s] data to [url]=[%s], Code: %d", method, dataUrl, resp.StatusCode)
+	}
+	return resp, resp.StatusCode, nil
 }
 
 func SiteReachable(url string) bool {

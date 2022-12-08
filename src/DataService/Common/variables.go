@@ -23,78 +23,23 @@ This copyright notice and license applies to all files in this directory or sub-
 ************************************************************************************************************
 */
 
-package Thread
+// functions to record all data changes
+package Common
 
 import (
-	"log"
-	"sync"
-	"syscall"
-	"time"
+	"github.com/salesforce/UniTAO/lib/Schema/CmtIndex"
+	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
+	"github.com/salesforce/UniTAO/lib/Schema/Record"
 )
 
-const (
-	DefaultInt = 5 * time.Second // by default sleep 5 second if error
-)
-
-type Worker struct {
-	Id       string
-	wg       *sync.WaitGroup
-	stopped  bool
-	interval time.Duration
-	log      *log.Logger
-	event    chan interface{}
-	run      func(chan interface{})
-	cleanup  func(id string) error
+var InternalTypes = map[string]interface{}{
+	KeyJournal:                true,
+	CmtIndex.KeyCmtIdx:        true,
+	CmtIndex.KeyCmtSubscriber: true,
+	JsonKey.Schema:            true,
+	Record.KeyRecord:          true,
 }
 
-func NewWorker(workerId string, interval time.Duration, logger *log.Logger, run func(chan interface{}), cleanup func(id string) error) *Worker {
-	if interval <= 0 {
-		interval = DefaultInt
-	}
-	if logger == nil {
-		logger = log.Default()
-	}
-	worker := Worker{
-		Id:       workerId,
-		interval: interval,
-		log:      logger,
-		event:    make(chan interface{}),
-		run:      run,
-		cleanup:  cleanup,
-	}
-	return &worker
-}
-
-func (w *Worker) setup() {
-	w.stopped = false
-	w.wg.Add(1)
-}
-
-func (w *Worker) postRun() {
-	for {
-		err := w.cleanup(w.Id)
-		if err == nil {
-			return
-		}
-		w.log.Printf("failed to run cleanup function, sleep and try again. Error: %s", err)
-		time.Sleep(w.interval)
-	}
-}
-
-func (w *Worker) workerRoutine() {
-	w.setup()
-	defer w.postRun()
-	w.run(w.event)
-}
-
-func (w *Worker) Run() {
-	go w.workerRoutine()
-}
-
-func (w *Worker) Notify(event interface{}) {
-	w.event <- event
-}
-
-func (w *Worker) Stop() {
-	w.event <- syscall.SIGINT
+var ReadOnlyTypes = map[string]interface{}{
+	KeyJournal: true,
 }

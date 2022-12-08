@@ -41,6 +41,7 @@ func TestWalkArraySchema(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "schemaWitArray",
+					"version": "0.0.1",
 					"description": "schema of object with array of object in attribute",
 					"properties": {
 						"attrArray": {
@@ -87,6 +88,7 @@ func TestWalkArraySchema(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "refObj",
+					"version": "0.0.1",
 					"description": "item object of an array",
 					"key": "{key1}_{key2}",
 					"properties": {
@@ -232,6 +234,7 @@ func TestWalkMapSchema(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "schemaWithMap",
+					"version": "0.0.1",
 					"description": "schema of object with Map of object in attribute",
 					"properties": {
 						"attrMap": {
@@ -278,6 +281,7 @@ func TestWalkMapSchema(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "refObj",
+					"version": "0.0.1",
 					"description": "item object of an array",
 					"key": "{key1}_{key2}",
 					"properties": {

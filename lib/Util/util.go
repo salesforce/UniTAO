@@ -26,23 +26,14 @@ This copyright notice and license applies to all files in this directory or sub-
 package Util
 
 import (
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
 )
-
-type HttpConfig struct {
-	HttpType  string                 `json:"type"`
-	DnsName   string                 `json:"dns"`
-	Port      string                 `json:"port"`
-	Id        string                 `json:"id"`
-	HeaderCfg map[string]interface{} `json:"headers"`
-}
 
 func ParsePath(path string) (string, string) {
 	return ParseCustomPath(path, "/")
@@ -66,54 +57,23 @@ func ParseCustomPath(path string, div string) (string, string) {
 }
 
 func ParseArrayPath(path string) (string, string, error) {
-	if path[len(path)-1:] != "]" {
-		return path, "", nil
-	}
 	keyIdx := strings.Index(path, "[")
 	if keyIdx < 1 {
 		return path, "", nil
 	}
+	if path[len(path)-1:] != "]" {
+		return path, "", nil
+	}
 	attrName := path[:keyIdx]
-	key := path[keyIdx+1 : len(path)-1]
-	if key == "" {
+	keyStr := path[keyIdx+1 : len(path)-1]
+	if keyStr == "" {
 		return "", "", fmt.Errorf("invalid array path=[%s], key empty", path)
 	}
+	key, err := url.QueryUnescape(keyStr)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to unescape key=[%s], Error:%s", keyStr, err)
+	}
 	return attrName, key, nil
-}
-
-func LoadJsonFile(filePath string) (interface{}, error) {
-	jsonFile, err := os.Open(filePath)
-	if err != nil {
-		newErr := fmt.Errorf("failed to open JSON file: [%s]", filePath)
-		return nil, newErr
-	}
-	defer jsonFile.Close()
-	byteValue, _ := ioutil.ReadAll(jsonFile)
-	var data interface{}
-	json.Unmarshal([]byte(byteValue), &data)
-	return data, nil
-}
-
-func LoadJSONMap(filePath string) (map[string]interface{}, error) {
-	data, err := LoadJsonFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-	if reflect.TypeOf(data).Kind() != reflect.Map {
-		return nil, fmt.Errorf("data is not map, [path]=[%s], Error:%s", filePath, err)
-	}
-	return data.(map[string]interface{}), nil
-}
-
-func LoadJSONList(filePath string) ([]interface{}, error) {
-	data, err := LoadJsonFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-	if reflect.TypeOf(data).Kind() != reflect.Slice {
-		return nil, fmt.Errorf("data is not Slice, [path]=[%s], Error:%s", filePath, err)
-	}
-	return data.([]interface{}), nil
 }
 
 func IdxList(searchAry []interface{}) map[interface{}]int {
@@ -165,44 +125,6 @@ func DirExists(dirPath string) bool {
 		return false
 	}
 	return !info.IsDir()
-}
-
-func StructToMap(sData interface{}) (map[string]interface{}, error) {
-	sDataBytes, err := json.Marshal(sData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to Marshal data. Error:%s", err)
-	}
-	data := make(map[string]interface{})
-	err = json.Unmarshal(sDataBytes, &data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to Unmarshal sData to map[string]interface{}, Error:%s", err)
-	}
-	return data, nil
-}
-
-func JsonCopy(data interface{}) (interface{}, error) {
-	dataBytes, err := json.Marshal(data)
-	if err != nil {
-		return nil, fmt.Errorf("Util.JsonCopy failed to Marshal data, Error: %s", err)
-	}
-	var result interface{}
-	err = json.Unmarshal(dataBytes, &result)
-	if err != nil {
-		return nil, fmt.Errorf("Util.JsonCopy failed to UnMarshal data, Error: %s", err)
-	}
-	return result, nil
-}
-
-func ObjCopy(src interface{}, targetAddr interface{}) error {
-	dataBytes, err := json.Marshal(src)
-	if err != nil {
-		return fmt.Errorf("Util.JsonCopy failed to Marshal data, Error: %s", err)
-	}
-	err = json.Unmarshal(dataBytes, targetAddr)
-	if err != nil {
-		return fmt.Errorf("Util.JsonCopy failed to UnMarshal data, Error: %s", err)
-	}
-	return nil
 }
 
 func PrefixStrLst(strList []string, prefix string) {

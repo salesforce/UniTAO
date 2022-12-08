@@ -26,10 +26,12 @@ This copyright notice and license applies to all files in this directory or sub-
 // functions to record all data changes
 package ProcessIface
 
+import "github.com/salesforce/UniTAO/lib/Util/Http"
+
 type JournalProcess interface {
 	Name() string
-	HandleTypes() map[string]bool
-	ProcessEntry(dataType string, dataId string, entry *JournalEntry) error
+	HandleType(dataType string, version string) (bool, error)
+	ProcessEntry(dataType string, dataId string, entry *JournalEntry) *Http.HttpError
 	Log(message string)
 }
 

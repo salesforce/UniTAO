@@ -36,11 +36,11 @@ import (
 const TAB = "    "
 
 type HttpError struct {
-	Status  int           `json:"httpStatus"`
-	Message []string      `json:"message"`
-	Code    int           `json:"code"`
-	Context []interface{} `json:"context"`
-	Payload interface{}   `json:"payload"`
+	Status  int         `json:"httpStatus"`
+	Message []string    `json:"message"`
+	Code    int         `json:"code"`
+	Context []string    `json:"context"`
+	Payload interface{} `json:"payload"`
 }
 
 func (e HttpError) Error() string {
@@ -63,7 +63,7 @@ func (e HttpError) Error() string {
 func AppendError(srcErr *HttpError, err *HttpError) {
 	Util.PrefixStrLst(err.Message, TAB)
 	srcErr.Message = append(srcErr.Message, err.Message...)
-	srcErr.Context = append(srcErr.Context, err)
+	srcErr.Context = append(srcErr.Context, err.Context...)
 }
 
 func IsHttpError(err error) bool {
@@ -75,12 +75,12 @@ func NewHttpError(msg string, status int) *HttpError {
 	return &HttpError{
 		Status:  status,
 		Message: strings.Split(msg, "\n"),
-		Context: []interface{}{},
+		Context: []string{},
 	}
 }
 
 func WrapError(err error, newMsg string, newStatus int) *HttpError {
 	newErr := NewHttpError(newMsg, newStatus)
-	newErr.Context = append(newErr.Context, err)
+	newErr.Context = append(newErr.Context, err.Error())
 	return newErr
 }

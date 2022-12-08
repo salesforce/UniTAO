@@ -138,6 +138,7 @@ func TestPathNode(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "schema1",
+					"version": "0.0.1",
 					"description": "test schema 01",
 					"properties": {
 						"name": {
@@ -176,6 +177,7 @@ func TestPathNode(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "schema2",
+					"version": "0.0.1",
 					"description": "cross recod type schema 02",
 					"properties": {
 						"test": {

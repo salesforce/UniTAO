@@ -41,6 +41,7 @@ func TestPathNodeOneObj(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "SchemaEntry",
+					"version": "0.0.1",
 					"properties": {
 						"test": {
 							"type": "string"
@@ -99,6 +100,7 @@ func TestPathNodeSubItem(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "SchemaEntry",
+					"version": "0.0.1",
 					"properties": {
 						"simpleObj": {
 							"type": "object",
@@ -244,6 +246,7 @@ func TestPathNodeRefItem(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "SchemaEntry",
+					"version": "0.0.1",
 					"properties": {
 						"simpleRef": {
 							"type": "string",
@@ -272,6 +275,7 @@ func TestPathNodeRefItem(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "refObj",
+					"version": "0.0.1",
 					"key": "{key1}_{key2}",
 					"properties": {
 						"key1": {

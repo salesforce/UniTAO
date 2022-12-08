@@ -33,11 +33,13 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/salesforce/UniTAO/lib/Schema/CmtIndex"
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
 	"github.com/salesforce/UniTAO/lib/Util"
 	"github.com/salesforce/UniTAO/lib/Util/Http"
+	"github.com/salesforce/UniTAO/lib/Util/Json"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
@@ -76,11 +78,11 @@ func (schema *SchemaOps) init() error {
 	if schema.Record.Type != JsonKey.Schema {
 		return fmt.Errorf("schema record has wrong [%s], [%s]!=[%s]", Record.DataType, schema.Record.Id, JsonKey.Schema)
 	}
-	schemaData, err := Util.JsonCopy(schema.Record.Data)
+	schemaData, err := Json.Copy(schema.Record.Data)
 	if err != nil {
 		return fmt.Errorf("copy schema.Record.Data failed. Error: %s", err)
 	}
-	doc, err := SchemaDoc.New(schemaData.(map[string]interface{}), schema.Record.Id, nil)
+	doc, err := SchemaDoc.New(schemaData.(map[string]interface{}))
 	if err != nil {
 		return fmt.Errorf("failed to create Schema Doc, err: %s", err)
 	}
@@ -98,8 +100,11 @@ func (schema *SchemaOps) init() error {
 }
 
 func (schema *SchemaOps) ValidateRecord(record *Record.Record) error {
-	if schema.Record.Id != record.Type {
+	if schema.Schema.Id != record.Type {
 		return fmt.Errorf("schema id and payload data type does not match, [%s]!=[%s]", schema.Record.Id, record.Type)
+	}
+	if schema.Schema.Version != record.Version {
+		return fmt.Errorf("schema version=[%s] does not match record schema version=[%s]", schema.Schema.Version, record.Version)
 	}
 	_, err := Record.ParseVersion(record.Version)
 	if err != nil {
@@ -107,9 +112,25 @@ func (schema *SchemaOps) ValidateRecord(record *Record.Record) error {
 	}
 	if record.Type == JsonKey.Schema {
 		for _, char := range JsonKey.InvalidTypeChars {
-			if strings.Contains(record.Type, char) {
+			if strings.Contains(record.Id, char) {
 				return fmt.Errorf("data type name [%s] contain illigal key [%s]", record.Type, char)
 			}
+		}
+		s, err := SchemaDoc.New(record.Data)
+		if err != nil {
+			return err
+		}
+		autoIdxList := CmtIndex.FindAutoIndex(s, "")
+		errList := make([]string, 0, len(autoIdxList))
+		for _, autoIdx := range autoIdxList {
+			err := CmtIndex.ValidateIndexTemplate(autoIdx)
+			if err != nil {
+				errList = append(errList, err.Error())
+			}
+		}
+		if len(errList) > 0 {
+			errMsg, _ := json.MarshalIndent(errList, "", "     ")
+			return fmt.Errorf(string(errMsg))
 		}
 	} else {
 		if strings.Contains(record.Type, JsonKey.ArchivedSchemaIdDiv) {
@@ -325,11 +346,15 @@ func setAttrData(schema *SchemaDoc.SchemaDoc, data map[string]interface{}, attrP
 	case JsonKey.Array:
 		itemType := attrDef[JsonKey.Items].(map[string]interface{})[JsonKey.Type].(string)
 		if itemType != JsonKey.Object {
-			if SchemaDoc.IsCmtRef(attrDef[JsonKey.Items].(map[string]interface{})) {
-				return setArrayCmt(data, attrName, key, newData)
-			}
+			isIdx := true
 			setIdx, err := strconv.Atoi(key)
 			if err != nil {
+				isIdx = false
+			}
+			if !isIdx {
+				if itemType == JsonKey.String {
+					return setStrArrayItem(data, attrName, key, newData)
+				}
 				return Http.WrapError(err, fmt.Sprintf("invalid key=[%s] to set for simple array. cannot parse to int", key), http.StatusBadRequest)
 			}
 			return setArraySimple(data, attrName, setIdx, newData)
@@ -365,14 +390,14 @@ func setAttrData(schema *SchemaDoc.SchemaDoc, data map[string]interface{}, attrP
 				if _, ok := attrData[key]; ok {
 					if strVal == key {
 						// key already exists
-						return nil
+						return Http.NewHttpError(fmt.Sprintf("no change, %s already exists", key), http.StatusNotModified)
 					}
 					// newkey different from old key
 					delete(attrData, key)
 				}
 				if _, ok := attrData[strVal]; ok {
 					// new key already exists
-					return nil
+					return Http.NewHttpError(fmt.Sprintf("no change, %s already exists", strVal), http.StatusNotModified)
 				}
 				attrData[strVal] = strVal
 				return nil
@@ -387,28 +412,38 @@ func setAttrData(schema *SchemaDoc.SchemaDoc, data map[string]interface{}, attrP
 	}
 }
 
-func setArrayCmt(data map[string]interface{}, attrName string, key string, newData interface{}) *Http.HttpError {
-	newRef := newData.(string)
+func setStrArrayItem(data map[string]interface{}, attrName string, key string, newData interface{}) *Http.HttpError {
 	dataList := data[attrName].([]interface{})
 	refHash := Util.IdxList(dataList)
 	keyIdx, keyExists := refHash[key]
-	refIdx, refExists := refHash[newRef]
+	refIdx := -1
+	refExists := false
+	if newData != nil {
+		idx, ok := refHash[newData.(string)]
+		refIdx = idx
+		refExists = ok
+	}
 	if keyExists {
-		if refExists {
-			if refIdx != keyIdx {
-				return Http.NewHttpError(fmt.Sprintf("invalid operation, ref=[%s] already exists.", newRef), http.StatusBadRequest)
-			}
+		if newData == nil {
+			data[attrName] = append(dataList[:keyIdx], dataList[keyIdx+1:]...)
 			return nil
 		}
-		dataList[keyIdx] = newRef
+		if refExists {
+			if refIdx != keyIdx {
+				return Http.NewHttpError(fmt.Sprintf("invalid operation, ref=[%s] already exists.", newData.(string)), http.StatusBadRequest)
+			}
+			return Http.NewHttpError(fmt.Sprintf("key=[%s] already exists", key), http.StatusNotModified)
+		}
+		dataList[keyIdx] = newData.(string)
 		return nil
+	}
+	if newData == nil {
+		return Http.NewHttpError(fmt.Sprintf("key=[%s] does not exists", key), http.StatusNotModified)
 	}
 	if refExists {
-		return nil
+		return Http.NewHttpError(fmt.Sprintf("key ref=[%s] already exists", newData.(string)), http.StatusNotModified)
 	}
-	if newData != nil {
-		data[attrName] = append(dataList, newRef)
-	}
+	data[attrName] = append(dataList, newData.(string))
 	return nil
 }
 
@@ -453,6 +488,7 @@ func setArrayObject(schema *SchemaDoc.SchemaDoc, data map[string]interface{}, at
 	}
 	if newData != nil {
 		data[attrName] = append(dataList, newData)
+		return nil
 	}
-	return nil
+	return Http.NewHttpError("key=[%s] not found. no change", http.StatusNotModified)
 }

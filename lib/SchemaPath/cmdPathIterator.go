@@ -32,8 +32,8 @@ import (
 	"github.com/salesforce/UniTAO/lib/SchemaPath/Data"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/Node"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/PathCmd"
-	"github.com/salesforce/UniTAO/lib/Util"
 	"github.com/salesforce/UniTAO/lib/Util/Http"
+	"github.com/salesforce/UniTAO/lib/Util/Json"
 )
 
 const (
@@ -92,7 +92,7 @@ func (c *CmdPathIterator) WalkValue() (interface{}, *Http.HttpError) {
 		Path:         c.path,
 		QueryResults: queryResult,
 	}
-	result, cErr := Util.JsonCopy(iterResult)
+	result, cErr := Json.Copy(iterResult)
 	if cErr != nil {
 		return nil, Http.WrapError(cErr, "failed to convert struct [IteratorResult] to json", http.StatusInternalServerError)
 	}

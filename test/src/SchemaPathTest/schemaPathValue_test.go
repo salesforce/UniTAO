@@ -41,6 +41,7 @@ func TestWalkInObjectAndMap(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "schema1",
+					"version": "0.0.1",
 					"description": "test schema 01",
 					"properties": {
 						"name": {
@@ -142,6 +143,7 @@ func TestWalkInArray(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "schemaWitArray",
+					"version": "0.0.1",
 					"description": "schema of object with array of object in attribute",
 					"properties": {
 						"attrArray": {
@@ -231,6 +233,7 @@ func TestWalkInAll(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "SchemaAllPath",
+					"version": "0.0.1",
 					"description": "Entry Point for Schema Path All Test",
 					"properties": {
 						"arrayObj": {
@@ -287,7 +290,8 @@ func TestWalkInAll(t *testing.T) {
 				"__type": "schema",
 				"__ver": "0.0.1",
 				"data": {
-					"name": "itemObj",
+					"name": "refObj",
+					"version": "0.0.1",
 					"key": "{key1}_{key2}",
 					"properties": {
 						"key1": {
@@ -423,6 +427,7 @@ func TestWalkRecordCmtRecordDirect(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "entry",
+					"version": "0.0.1",
 					"properties": {
 						"nextList": {
 							"type": "array",
@@ -440,6 +445,7 @@ func TestWalkRecordCmtRecordDirect(t *testing.T) {
 				"__ver": "0.0.1",
 				"data": {
 					"name": "next",
+					"version": "0.0.1",
 					"key": "{itemKey}",
 					"properties": {
 						"itemKey": {

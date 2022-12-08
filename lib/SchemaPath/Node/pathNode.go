@@ -141,9 +141,12 @@ func (p *PathNode) syncFromConn() *Http.HttpError {
 			return err
 		}
 	}
-	schema, ex := SchemaDoc.New(schemaRecord.Data, p.DataType, nil)
+	schema, ex := SchemaDoc.New(schemaRecord.Data)
 	if ex != nil {
 		return Http.WrapError(ex, fmt.Sprintf("failed to create SchemaDoc @path=[%s]", p.FullPath()), http.StatusInternalServerError)
+	}
+	if p.DataType != schema.Id {
+		return Http.NewHttpError(fmt.Sprintf("invalid schema, %s=[%s] and schema=[%s] not match", JsonKey.Name, p.DataType, schema.Id), http.StatusInternalServerError)
 	}
 	p.Schema = schema
 	return nil
