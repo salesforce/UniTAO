@@ -324,7 +324,7 @@ func TestDataHandlerPatchAttr(t *testing.T) {
 	if e != nil {
 		t.Fatalf("failed to create handler, Error:%s", e)
 	}
-	_, e = handler.Patch("test", "test01/attr1", "ok")
+	_, e = handler.Patch("test", "test01/attr1", nil, "ok")
 	if e != nil {
 		t.Fatalf("failed to get patched data")
 	}
@@ -335,7 +335,7 @@ func TestDataHandlerPatchAttr(t *testing.T) {
 	if data[Record.Data].(map[string]interface{})["attr1"].(string) != "ok" {
 		t.Fatalf("patch failed")
 	}
-	handler.Patch("test", "test01/attr2", 2)
+	handler.Patch("test", "test01/attr2", nil, 2)
 	data, e = handler.Get("test", "test01")
 	if e != nil {
 		t.Fatalf("failed to get patched data")
@@ -343,11 +343,11 @@ func TestDataHandlerPatchAttr(t *testing.T) {
 	if data[Record.Data].(map[string]interface{})["attr2"].(float64) != 2 {
 		t.Fatalf("patch failed")
 	}
-	_, e = handler.Patch("test", "test01/attr2", "test")
+	_, e = handler.Patch("test", "test01/attr2", nil, "test")
 	if e == nil {
 		t.Fatalf("failed to catch the wrong format")
 	}
-	_, e = handler.Patch("test", "test01/attr3/subAttr1", "ok")
+	_, e = handler.Patch("test", "test01/attr3/subAttr1", nil, "ok")
 	if e != nil {
 		t.Fatalf("failed to patch next level of attr. Err: %s", e)
 	}
@@ -361,7 +361,7 @@ func TestDataHandlerPatchAttr(t *testing.T) {
 	pathData := map[string]interface{}{
 		"subAttr1": "okAgain",
 	}
-	_, e = handler.Patch("test", "test01/attr3", pathData)
+	_, e = handler.Patch("test", "test01/attr3", nil, pathData)
 	if e != nil {
 		t.Fatalf("failed to patch next level of attr. Err: %s", e)
 	}
@@ -524,7 +524,7 @@ func TestDataHandlerPatchArrayObj(t *testing.T) {
 		"subKey":   "attr1K1",
 		"subAttr1": "ok",
 	}
-	_, e = handler.Patch("test", "test01/attr1[attr1K1]", subData)
+	_, e = handler.Patch("test", "test01/attr1[attr1K1]", nil, subData)
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
@@ -539,7 +539,7 @@ func TestDataHandlerPatchArrayObj(t *testing.T) {
 		t.Fatalf("failed to patch new data into array")
 	}
 	subData["subAttr1"] = "ok1"
-	_, e = handler.Patch("test", "test01/attr1[attr1K1]", subData)
+	_, e = handler.Patch("test", "test01/attr1[attr1K1]", nil, subData)
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
@@ -553,7 +553,7 @@ func TestDataHandlerPatchArrayObj(t *testing.T) {
 	if data[Record.Data].(map[string]interface{})["attr1"].([]interface{})[0].(map[string]interface{})["subAttr1"].(string) != "ok1" {
 		t.Fatalf("failed to patch new data into array")
 	}
-	_, e = handler.Patch("test", "test01/attr1[attr1K1]/subAttr1", "ok")
+	_, e = handler.Patch("test", "test01/attr1[attr1K1]/subAttr1", nil, "ok")
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
@@ -569,7 +569,7 @@ func TestDataHandlerPatchArrayObj(t *testing.T) {
 	}
 	subData["subKey"] = "attr1K2"
 	subData["subAttr1"] = "ok2"
-	_, e = handler.Patch("test", "test01/attr1[attr1K2]", subData)
+	_, e = handler.Patch("test", "test01/attr1[attr1K2]", nil, subData)
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
@@ -583,7 +583,7 @@ func TestDataHandlerPatchArrayObj(t *testing.T) {
 	if data[Record.Data].(map[string]interface{})["attr1"].([]interface{})[1].(map[string]interface{})["subAttr1"].(string) != "ok2" {
 		t.Fatalf("failed to patch new data into array")
 	}
-	_, e = handler.Patch("test", "test01/attr1[attr1K1]", nil)
+	_, e = handler.Patch("test", "test01/attr1[attr1K1]", nil, nil)
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
@@ -745,7 +745,7 @@ func TestDataHandlerPatchArraySimpleStr(t *testing.T) {
 	if e != nil {
 		t.Fatalf("failed to create handler, Error:%s", e)
 	}
-	_, e = handler.Patch("test", "test01/attr2[-1]", "test")
+	_, e = handler.Patch("test", "test01/attr2[-1]", nil, "test")
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
@@ -759,7 +759,7 @@ func TestDataHandlerPatchArraySimpleStr(t *testing.T) {
 	if data[Record.Data].(map[string]interface{})["attr2"].([]interface{})[0].(string) != "test" {
 		t.Fatalf("failed to patch new data into array")
 	}
-	_, e = handler.Patch("test", "test01/attr2[0]", "ok")
+	_, e = handler.Patch("test", "test01/attr2[0]", nil, "ok")
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
@@ -773,7 +773,7 @@ func TestDataHandlerPatchArraySimpleStr(t *testing.T) {
 	if data[Record.Data].(map[string]interface{})["attr2"].([]interface{})[0].(string) != "ok" {
 		t.Fatalf("failed to patch new data into array")
 	}
-	_, e = handler.Patch("test", "test01/attr2[-1]", "test")
+	_, e = handler.Patch("test", "test01/attr2[-1]", nil, "test")
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
@@ -787,7 +787,7 @@ func TestDataHandlerPatchArraySimpleStr(t *testing.T) {
 	if data[Record.Data].(map[string]interface{})["attr2"].([]interface{})[0].(string) != "test" {
 		t.Fatalf("failed to patch new data into array")
 	}
-	_, e = handler.Patch("test", "test01/attr2[100]", "test01")
+	_, e = handler.Patch("test", "test01/attr2[100]", nil, "test01")
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
@@ -950,7 +950,7 @@ func TestDataHandlerPatchArrayInt(t *testing.T) {
 	if e != nil {
 		t.Fatalf("failed to create handler, Error:%s", e)
 	}
-	_, e = handler.Patch("test", "test01/attr3[-1]", 0)
+	_, e = handler.Patch("test", "test01/attr3[-1]", nil, 0)
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
@@ -964,7 +964,7 @@ func TestDataHandlerPatchArrayInt(t *testing.T) {
 	if data[Record.Data].(map[string]interface{})["attr3"].([]interface{})[0].(float64) != 0 {
 		t.Fatalf("failed to patch new data into array")
 	}
-	_, e = handler.Patch("test", "test01/attr3[-1]", -1)
+	_, e = handler.Patch("test", "test01/attr3[-1]", nil, -1)
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
@@ -978,7 +978,7 @@ func TestDataHandlerPatchArrayInt(t *testing.T) {
 	if data[Record.Data].(map[string]interface{})["attr3"].([]interface{})[0].(float64) != -1 {
 		t.Fatalf("failed to patch new data into array")
 	}
-	_, e = handler.Patch("test", "test01/attr3[100]", 1)
+	_, e = handler.Patch("test", "test01/attr3[100]", nil, 1)
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
@@ -992,7 +992,7 @@ func TestDataHandlerPatchArrayInt(t *testing.T) {
 	if data[Record.Data].(map[string]interface{})["attr3"].([]interface{})[2].(float64) != 1 {
 		t.Fatalf("failed to patch new data into array")
 	}
-	_, e = handler.Patch("test", "test01/attr3[1]", nil)
+	_, e = handler.Patch("test", "test01/attr3[1]", nil, nil)
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
@@ -1009,7 +1009,7 @@ func TestDataHandlerPatchArrayInt(t *testing.T) {
 	if data[Record.Data].(map[string]interface{})["attr3"].([]interface{})[1].(float64) != 1 {
 		t.Fatalf("failed to patch new data into array")
 	}
-	_, e = handler.Patch("test", "test01/attr4[testCmt01]", "testCmt01")
+	_, e = handler.Patch("test", "test01/attr4[testCmt01]", nil, "testCmt01")
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
@@ -1175,7 +1175,7 @@ func TestDataHandlerPatchArrayCmt(t *testing.T) {
 	if e != nil {
 		t.Fatalf("failed to create handler, Error:%s", e)
 	}
-	_, e = handler.Patch("test", "test01/attr4[testCmt01]", "testCmt01")
+	_, e = handler.Patch("test", "test01/attr4[testCmt01]", nil, "testCmt01")
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
@@ -1189,7 +1189,7 @@ func TestDataHandlerPatchArrayCmt(t *testing.T) {
 	if data[Record.Data].(map[string]interface{})["attr4"].([]interface{})[0].(string) != "testCmt01" {
 		t.Fatalf("patch failed")
 	}
-	_, e = handler.Patch("test", "test01/attr4[testCmt01]", "testCmt02")
+	_, e = handler.Patch("test", "test01/attr4[testCmt01]", nil, "testCmt02")
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
@@ -1203,11 +1203,11 @@ func TestDataHandlerPatchArrayCmt(t *testing.T) {
 	if data[Record.Data].(map[string]interface{})["attr4"].([]interface{})[0].(string) != "testCmt02" {
 		t.Fatalf("patch failed")
 	}
-	_, e = handler.Patch("test", "test01/attr4[testCmt01]", "testCmt03")
+	_, e = handler.Patch("test", "test01/attr4[testCmt01]", nil, "testCmt03")
 	if e == nil {
 		t.Fatalf("failed to catch CmtRef Error")
 	}
-	_, e = handler.Patch("test", "test01/attr4[testCmt01]", "testCmt01")
+	_, e = handler.Patch("test", "test01/attr4[testCmt01]", nil, "testCmt01")
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
@@ -1221,7 +1221,7 @@ func TestDataHandlerPatchArrayCmt(t *testing.T) {
 	if data[Record.Data].(map[string]interface{})["attr4"].([]interface{})[1].(string) != "testCmt01" {
 		t.Fatalf("patch failed")
 	}
-	_, e = handler.Patch("test", "test01/attr4[testCmt01]", "testCmt02")
+	_, e = handler.Patch("test", "test01/attr4[testCmt01]", nil, "testCmt02")
 	if e == nil {
 		t.Fatalf("failed to catch duplicate error")
 	}

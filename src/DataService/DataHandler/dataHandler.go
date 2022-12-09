@@ -585,7 +585,7 @@ func (h *Handler) deleteData(dataType string, dataId string) *Http.HttpError {
 	return nil
 }
 
-func (h *Handler) Patch(dataType string, idPath string, data interface{}) (map[string]interface{}, *Http.HttpError) {
+func (h *Handler) Patch(dataType string, idPath string, headers map[string]interface{}, data interface{}) (map[string]interface{}, *Http.HttpError) {
 	dataId, nextPath := Util.ParsePath(idPath)
 	if dataId == "" {
 		return nil, Http.NewHttpError(fmt.Sprintf("invalid path=[%s/%s], expect format=[{dataType}/{dataId}/{dataPath}]", dataType, dataId), http.StatusBadRequest)
@@ -606,6 +606,12 @@ func (h *Handler) Patch(dataType string, idPath string, data interface{}) (map[s
 	patchRecord, e := Record.LoadMap(patchData)
 	if err != nil {
 		return nil, Http.WrapError(e, fmt.Sprintf("failed to load data [%s/%s] as record", dataType, dataId), http.StatusInternalServerError)
+	}
+	patchVer, ok := headers[JsonKey.Version]
+	if ok {
+		if patchRecord.Version != patchVer {
+			return nil, Http.NewHttpError(fmt.Sprintf("current record:[%s/%s] version:[%s] does not match specified version:[%s]", dataType, dataId, patchRecord.Version, patchVer), http.StatusNotModified)
+		}
 	}
 	schema, err := h.LocalSchema(dataType, patchRecord.Version)
 	if err != nil {

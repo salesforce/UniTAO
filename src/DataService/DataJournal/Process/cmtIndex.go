@@ -36,6 +36,7 @@ import (
 
 	"github.com/salesforce/UniTAO/lib/Schema/CmtIndex"
 	"github.com/salesforce/UniTAO/lib/Schema/Compare"
+	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Util"
 	"github.com/salesforce/UniTAO/lib/Util/Http"
@@ -235,19 +236,14 @@ func (s *CmtIndexChanges) setIndex(dataType string, version string, dataPath str
 		s.log.Printf("empty dataPath, not able to get data Path to write the index into. @path=[%s]", dataPath)
 		return nil
 	}
-	pathRecord, err := s.Data.Inventory.Get(dataType, dataId)
-	if err != nil {
-		s.log.Printf("failed to get index record. [%s/%s]", dataType, dataPath)
-		return nil
+	headers := map[string]interface{}{
+		JsonKey.Version: version,
 	}
-	if pathRecord.Version != version {
-		s.log.Printf("index record version=[%s] != expected version[%s]", pathRecord.Version, version)
-		return nil
-	}
+	var err *Http.HttpError
 	if idxId == "" {
-		err = s.Data.Inventory.Patch(dataType, dataId, nextPath, nil, nil)
+		err = s.Data.Inventory.Patch(dataType, dataId, nextPath, headers, nil)
 	} else {
-		err = s.Data.Inventory.Patch(dataType, dataId, nextPath, nil, idxId)
+		err = s.Data.Inventory.Patch(dataType, dataId, nextPath, headers, idxId)
 	}
 	if err != nil {
 		return err

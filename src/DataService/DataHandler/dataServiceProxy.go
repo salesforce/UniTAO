@@ -264,14 +264,14 @@ func (i *DataServiceProxy) Put(record *Record.Record) *Http.HttpError {
 	return nil
 }
 
-func (i *DataServiceProxy) Patch(dataType string, dataId string, dataPath string, headers map[string]string, data interface{}) *Http.HttpError {
+func (i *DataServiceProxy) Patch(dataType string, dataId string, dataPath string, headers map[string]interface{}, data interface{}) *Http.HttpError {
 	isLocal, err := i.IsLocal(dataType, dataId)
 	if err != nil {
 		return err
 	}
 	if isLocal {
 		idPath := fmt.Sprintf("%s/%s", dataId, dataPath)
-		_, err := i.handler.Patch(dataType, idPath, data)
+		_, err := i.handler.Patch(dataType, idPath, headers, data)
 		if err != nil {
 			return err
 		}

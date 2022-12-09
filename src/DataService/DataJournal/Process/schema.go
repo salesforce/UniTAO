@@ -314,7 +314,7 @@ func (s *SchemaChanges) fillIdx(afterRec *Record.Record, idx CmtIndex.AutoIndex)
 		}
 		idPath := fmt.Sprintf("%s[%s]", patchPath, url.QueryEscape(id.(string)))
 		hasChange = true
-		_, err = s.Data.Patch(afterRec.Type, idPath, id.(string))
+		_, err = s.Data.Patch(afterRec.Type, idPath, map[string]interface{}{JsonKey.Version: afterRec.Version}, id.(string))
 		if err != nil {
 			return err
 		}

@@ -317,7 +317,8 @@ func (srv *Server) handlePatch(w http.ResponseWriter, r *http.Request, dataType 
 		Http.ResponseJson(w, e, e.Status, srv.config.Http)
 		return
 	}
-	response, e := srv.data.Patch(dataType, idPath, payload)
+	headers := Http.ParseHeaders(r)
+	response, e := srv.data.Patch(dataType, idPath, headers, payload)
 	if e != nil {
 		Http.ResponseJson(w, e, e.Status, srv.config.Http)
 		return

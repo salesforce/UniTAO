@@ -132,7 +132,7 @@ func GetRestData(url string) (interface{}, int, error) {
 	return nil, response.StatusCode, fmt.Errorf("invalid response from url=[%s], Err:%s", url, string(responseData))
 }
 
-func SubmitPayload(dataUrl string, method string, headers map[string]string, payload interface{}) (*http.Response, int, error) {
+func SubmitPayload(dataUrl string, method string, headers map[string]interface{}, payload interface{}) (*http.Response, int, error) {
 	if _, ok := UpdateMethods[method]; !ok {
 		return nil, http.StatusBadRequest, fmt.Errorf("invalid method=[%s], not a update method", method)
 	}
@@ -158,15 +158,21 @@ func SubmitPayload(dataUrl string, method string, headers map[string]string, pay
 		}
 		req = r
 	}
-	defaultHeaders := map[string]string{
+	defaultHeaders := map[string]interface{}{
 		"Content-Type": "application/json",
 	}
 	for hKey, hValue := range headers {
-		req.Header.Set(hKey, hValue)
+		code, err := AddHeaders(req, hKey, hValue)
+		if err != nil {
+			return nil, code, err
+		}
 		delete(defaultHeaders, hKey)
 	}
-	for hKey, hValue := range headers {
-		req.Header.Set(hKey, hValue)
+	for hKey, hValue := range defaultHeaders {
+		code, err := AddHeaders(req, hKey, hValue)
+		if err != nil {
+			return nil, code, err
+		}
 	}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -201,4 +207,37 @@ func URLPathJoin(sUrl string, sPath ...string) (*string, error) {
 	u.Path = path.Join(pathList...)
 	jUrl := u.String()
 	return &jUrl, nil
+}
+
+func ParseHeaders(r *http.Request) map[string]interface{} {
+	headers := map[string]interface{}{}
+	for key, valList := range r.Header {
+		if len(valList) == 0 {
+			continue
+		}
+		if len(valList) > 1 {
+			headers[key] = valList
+		}
+		headers[key] = valList[0]
+	}
+	return headers
+}
+
+func AddHeaders(r *http.Request, key string, value interface{}) (int, error) {
+	if reflect.TypeOf(value).Kind() == reflect.Slice {
+		valList, ok := value.([]string)
+		if !ok {
+			return http.StatusBadRequest, fmt.Errorf("invalid header value. key=[%s], should be string or []string", key)
+		}
+		for _, valStr := range valList {
+			r.Header.Add(key, valStr)
+		}
+	} else {
+		hValStr, ok := value.(string)
+		if !ok {
+			return http.StatusBadRequest, fmt.Errorf("invalid header value. key=[%s], should be string or []string", key)
+		}
+		r.Header.Add(key, hValStr)
+	}
+	return http.StatusOK, nil
 }
