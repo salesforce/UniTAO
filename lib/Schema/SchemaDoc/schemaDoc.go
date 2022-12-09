@@ -182,6 +182,10 @@ func (d *SchemaDoc) preprocess() error {
 	if err != nil {
 		return fmt.Errorf("preprocess failed @processRequired, [path]=[%s], Error:%s", d.Path(), err)
 	}
+	err = d.processAttrInvalidKeyChar()
+	if err != nil {
+		return err
+	}
 	err = d.processMap()
 	if err != nil {
 		return fmt.Errorf("preprocess failed @processRequired, [path]=[%s], Error:%s", d.Path(), err)
@@ -201,6 +205,16 @@ func (d *SchemaDoc) preprocess() error {
 				return err
 			}
 		}
+	}
+	return nil
+}
+
+func (d *SchemaDoc) processAttrInvalidKeyChar() error {
+	propPath := path.Join(d.Path(), JsonKey.Properties)
+	propMap := d.Data[JsonKey.Properties].(map[string]interface{})
+	invalidChars := Util.CheckInvalidKeys(JsonKey.InvalidKeyChars, propMap)
+	if len(invalidChars) > 0 {
+		return fmt.Errorf("invalid property names found. path:[%s], invalid names: %s", propPath, invalidChars)
 	}
 	return nil
 }
@@ -267,6 +281,16 @@ func (d *SchemaDoc) validateKeyAttrs() error {
 	keyMap, err := d.KeyTemplate.BuildVarMap(reqMap)
 	if err != nil {
 		return fmt.Errorf("required key attr definition validaton failed. Error: %s", err)
+	}
+	testValue := d.KeyTemplate.TestValue()
+	invalidChars := make([]string, 0, len(JsonKey.InvalidKeyChars))
+	for _, invalidC := range JsonKey.InvalidKeyChars {
+		if strings.Contains(testValue, invalidC) {
+			invalidChars = append(invalidChars, invalidC)
+		}
+	}
+	if len(invalidChars) > 0 {
+		return fmt.Errorf("invalid schema key definition [%s], found illegal chars [%s] @[%s]", d.KeyTemplate.Template, invalidChars, d.Path())
 	}
 	for attr, attrDef := range keyMap {
 		attrType := attrDef.(map[string]interface{})[JsonKey.Type].(string)

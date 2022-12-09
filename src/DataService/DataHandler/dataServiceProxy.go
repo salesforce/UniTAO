@@ -134,6 +134,9 @@ func (i *DataServiceProxy) getIdUrl(dataType string, dataId string) (string, *Ht
 		return "", Http.WrapError(err, "failed to get Data Service [working] Url", http.StatusInternalServerError)
 	}
 	idUrl, err := Http.URLPathJoin(dsUrl, dataType, dataId)
+	if err != nil {
+		return "", Http.WrapError(err, fmt.Sprintf("failed to build path with [%s, %s, %s]", dsUrl, dataType, dataId), http.StatusInternalServerError)
+	}
 	return *idUrl, nil
 }
 

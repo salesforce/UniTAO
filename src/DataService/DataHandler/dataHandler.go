@@ -635,6 +635,8 @@ func (h *Handler) Patch(dataType string, idPath string, headers map[string]inter
 	}
 	if h.AddJournal != nil {
 		h.AddJournal(dataType, dataId, before, patchRecord.Map())
+	} else {
+		h.log.Printf("AddJournal is not defined here.")
 	}
 	return patchRecord.Map(), nil
 }

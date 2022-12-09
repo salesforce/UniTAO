@@ -53,4 +53,12 @@ var InvalidTypeChars = []string{
 	"/",
 	"#",
 	"$",
+	"[",
+	"]",
+}
+
+var InvalidKeyChars = []string{
+	"/",
+	"[",
+	"]",
 }

@@ -141,3 +141,21 @@ func RootDir() (string, error) {
 	}
 	return dir, nil
 }
+
+func CheckInvalidKeys(invalidChars []string, data map[string]interface{}) []string {
+	result := make([]string, 0, len(invalidChars))
+	foundChars := map[string]bool{}
+	for _, c := range invalidChars {
+		if _, ok := foundChars[c]; ok {
+			continue
+		}
+		for key := range data {
+			if strings.Contains(key, c) {
+				foundChars[c] = true
+				result = append(result, c)
+				break
+			}
+		}
+	}
+	return result
+}

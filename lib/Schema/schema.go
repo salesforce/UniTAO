@@ -100,6 +100,11 @@ func (schema *SchemaOps) init() error {
 }
 
 func (schema *SchemaOps) ValidateRecord(record *Record.Record) error {
+	for _, c := range JsonKey.InvalidKeyChars {
+		if strings.Contains(record.Id, c) {
+			return fmt.Errorf("invalid char found in record id:[%s], please make sure not include following chars:\n%s", record.Id, JsonKey.InvalidKeyChars)
+		}
+	}
 	if schema.Schema.Id != record.Type {
 		return fmt.Errorf("schema id and payload data type does not match, [%s]!=[%s]", schema.Record.Id, record.Type)
 	}
@@ -207,6 +212,10 @@ func ValidateSchemaKeys(schema *SchemaDoc.SchemaDoc, data map[string]interface{}
 			value, ok := data[attr].(map[string]interface{})
 			if !ok || len(value) == 0 {
 				continue
+			}
+			invalidChars := Util.CheckInvalidKeys(JsonKey.InvalidKeyChars, value)
+			if len(invalidChars) > 0 {
+				return fmt.Errorf("in map %s, found invalid chars %s. @path=[%s]", attr, invalidChars, dataPath)
 			}
 			nextDoc := schema.SubDocs[attr]
 			if SchemaDoc.IsMap(attrDef) {

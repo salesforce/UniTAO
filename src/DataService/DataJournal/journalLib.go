@@ -229,6 +229,7 @@ func (j *JournalLib) AddJournal(dataType string, dataId string, before map[strin
 	cache := j.Cache[dataType][dataId]
 	cache.Lock.Lock()
 	defer cache.Lock.Unlock()
+	j.Logger.Printf("adding Journal for [%s/%s]", dataType, dataId)
 	err := j.addJournalEntry(dataType, dataId, before, after)
 	if err != nil {
 		return err
@@ -343,5 +344,6 @@ func (j *JournalLib) addJournalEntry(dataType string, dataId string, before map[
 	if err != nil {
 		return err
 	}
+	j.Logger.Printf("add Journal [%s/%s] %d-%d", dataType, dataId, tail.Idx, entry.Idx)
 	return nil
 }
