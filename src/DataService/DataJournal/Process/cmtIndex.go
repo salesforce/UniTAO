@@ -213,9 +213,11 @@ func (s *CmtIndexChanges) processDataChange(dataType string, dataId string, entr
 				}
 				hasChange = true
 				if beforePath != "" {
+					s.Log(fmt.Sprintf("remove path [%s/%s/%s]", dataType, version, beforePath))
 					s.setIndex(dataType, version, beforePath, "")
 				}
 				if afterPath != "" {
+					s.Log(fmt.Sprintf("set path [%s/%s/%s]", dataType, version, afterPath))
 					s.setIndex(dataType, version, afterPath, dataId)
 				}
 			}

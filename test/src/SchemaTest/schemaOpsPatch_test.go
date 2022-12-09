@@ -241,18 +241,8 @@ func TestPatchMapStr(t *testing.T) {
 	if e != nil {
 		t.Fatal("failed to update Cmt to ok")
 	}
-	if _, ok := record.Data["attrCmt"].(map[string]interface{})["ok"]; !ok {
+	if record.Data["attrCmt"].(map[string]interface{})["test01"] != "ok" {
 		t.Fatal("failed to change test_01 to ok")
-	}
-	e = patchData(schemaStr, record, "attrCmt[ok]", "test02")
-	if e != nil {
-		t.Fatal("failed to update Cmt to ok")
-	}
-	if _, ok := record.Data["attrCmt"].(map[string]interface{})["ok"]; ok {
-		t.Fatal("failed to change ok to test02")
-	}
-	if len(record.Data["attrCmt"].(map[string]interface{})) != 1 {
-		t.Fatal("failed to remove the renamed ok")
 	}
 }
 

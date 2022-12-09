@@ -24,15 +24,43 @@ This copyright notice and license applies to all files in this directory or sub-
 */
 
 // functions to record all data changes
-package ProcessIface
+package DataJournal
 
 import (
-	"github.com/salesforce/UniTAO/lib/Util/Http"
+	"DataService/DataJournal/ProcessIface"
+	"fmt"
+	"sync"
 )
 
-type JournalProcess interface {
-	Name() string
-	HandleType(dataType string, version string) (bool, error)
-	ProcessEntry(dataType string, dataId string, entry *JournalEntry) *Http.HttpError
-	Log(message string)
+type JournalCache struct {
+	DataType string
+	DataId   string
+	Head     *ProcessIface.JournalPage
+	Tail     *ProcessIface.JournalPage
+	Lock     sync.Mutex
+}
+
+func NewCache(dataType string, dataId string) *JournalCache {
+	cache := JournalCache{
+		DataType: dataType,
+		DataId:   dataId,
+		Head:     ProcessIface.NewPage(dataType, dataId, -1),
+		Tail:     ProcessIface.NewPage(dataType, dataId, -1),
+		Lock:     sync.Mutex{},
+	}
+	return &cache
+}
+
+func (cache *JournalCache) Key() string {
+	return fmt.Sprintf("journal[%s/%s]", cache.DataType, cache.DataId)
+}
+
+func (cache *JournalCache) ListPages() []string {
+	pageCount := cache.Tail.Idx - cache.Head.Idx + 1
+	pageList := make([]string, 0, pageCount)
+	idx := cache.Head.Idx
+	for idx <= cache.Tail.Idx {
+		pageList = append(pageList, ProcessIface.PageId(cache.DataType, cache.DataId, idx))
+	}
+	return pageList
 }

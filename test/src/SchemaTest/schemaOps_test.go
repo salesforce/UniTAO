@@ -45,7 +45,7 @@ func TestSchemaValidate(t *testing.T) {
 		"schema": {
 			"__id": "infrastructure",
 			"__type": "schema",
-			"__ver": "1.01.01",
+			"__ver": "0.0.1",
 			"data": {
 				"name": "infrastructure",
 				"version": "0.0.1",
@@ -68,7 +68,7 @@ func TestSchemaValidate(t *testing.T) {
 		"data": {   
 			"__id":         "global",
 			"__type":       "infrastructure",
-			"__ver":        "1.01.01",
+			"__ver":        "0.0.1",
 			"data": {
 				"id": "global", 
 				"description": "Global Root of all infrastructure",
@@ -79,7 +79,7 @@ func TestSchemaValidate(t *testing.T) {
 			{
 				"__id":         "global",
 				"__type":       "infrastructure",
-				"__ver":        "1.01.01",
+				"__ver":        "0.0.1",
 				"data": {
 					"Id": "global", 
 					"description": "Global Root of all infrastructure",

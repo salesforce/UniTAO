@@ -54,7 +54,6 @@ func (e HttpError) Error() string {
 			},
 			Code: e.Status,
 		}
-
 		return newErr.Error()
 	}
 	return string(errTxtBytes)
@@ -63,7 +62,7 @@ func (e HttpError) Error() string {
 func AppendError(srcErr *HttpError, err *HttpError) {
 	Util.PrefixStrLst(err.Message, TAB)
 	srcErr.Message = append(srcErr.Message, err.Message...)
-	srcErr.Context = append(srcErr.Context, err.Context...)
+	srcErr.Context = append(srcErr.Context, err.Error())
 }
 
 func IsHttpError(err error) bool {

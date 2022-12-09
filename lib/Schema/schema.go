@@ -386,22 +386,7 @@ func setAttrData(schema *SchemaDoc.SchemaDoc, data map[string]interface{}, attrP
 			if !ok {
 				return Http.NewHttpError(fmt.Sprintf("new Cmt Value is not a string. type=[%s] is not [string]", reflect.TypeOf(newData).Kind()), http.StatusBadRequest)
 			}
-			if _, ok := attrDef[JsonKey.Items].(map[string]interface{})[JsonKey.ContentMediaType]; ok {
-				if _, ok := attrData[key]; ok {
-					if strVal == key {
-						// key already exists
-						return Http.NewHttpError(fmt.Sprintf("no change, %s already exists", key), http.StatusNotModified)
-					}
-					// newkey different from old key
-					delete(attrData, key)
-				}
-				if _, ok := attrData[strVal]; ok {
-					// new key already exists
-					return Http.NewHttpError(fmt.Sprintf("no change, %s already exists", strVal), http.StatusNotModified)
-				}
-				attrData[strVal] = strVal
-				return nil
-			}
+			// for map, we don't need to check duplication, as the key is redfine its purpose even duplicated
 			attrData[key] = strVal
 		default:
 			attrData[key] = newData

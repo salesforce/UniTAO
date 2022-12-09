@@ -320,11 +320,11 @@ func TestDataHandlerPatchAttr(t *testing.T) {
 		}
 		return mockDb, nil
 	}
-	handler, err := DataHandler.New(config, nil, connectDb)
-	if err != nil {
-		t.Fatalf("failed to create handler, Error:%s", err)
+	handler, e := DataHandler.New(config, nil, connectDb)
+	if e != nil {
+		t.Fatalf("failed to create handler, Error:%s", e)
 	}
-	_, e := handler.Patch("test", "test01/attr1", "ok")
+	_, e = handler.Patch("test", "test01/attr1", "ok")
 	if e != nil {
 		t.Fatalf("failed to get patched data")
 	}
@@ -516,15 +516,15 @@ func TestDataHandlerPatchArrayObj(t *testing.T) {
 		}
 		return mockDb, nil
 	}
-	handler, err := DataHandler.New(config, nil, connectDb)
-	if err != nil {
-		t.Fatalf("failed to create handler, Error:%s", err)
+	handler, e := DataHandler.New(config, nil, connectDb)
+	if e != nil {
+		t.Fatalf("failed to create handler, Error:%s", e)
 	}
 	subData := map[string]interface{}{
 		"subKey":   "attr1K1",
 		"subAttr1": "ok",
 	}
-	_, e := handler.Patch("test", "test01/attr1[attr1K1]", subData)
+	_, e = handler.Patch("test", "test01/attr1[attr1K1]", subData)
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
@@ -741,11 +741,11 @@ func TestDataHandlerPatchArraySimpleStr(t *testing.T) {
 		}
 		return mockDb, nil
 	}
-	handler, err := DataHandler.New(config, nil, connectDb)
-	if err != nil {
-		t.Fatalf("failed to create handler, Error:%s", err)
+	handler, e := DataHandler.New(config, nil, connectDb)
+	if e != nil {
+		t.Fatalf("failed to create handler, Error:%s", e)
 	}
-	_, e := handler.Patch("test", "test01/attr2[-1]", "test")
+	_, e = handler.Patch("test", "test01/attr2[-1]", "test")
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
@@ -946,11 +946,11 @@ func TestDataHandlerPatchArrayInt(t *testing.T) {
 		}
 		return mockDb, nil
 	}
-	handler, err := DataHandler.New(config, nil, connectDb)
-	if err != nil {
-		t.Fatalf("failed to create handler, Error:%s", err)
+	handler, e := DataHandler.New(config, nil, connectDb)
+	if e != nil {
+		t.Fatalf("failed to create handler, Error:%s", e)
 	}
-	_, e := handler.Patch("test", "test01/attr3[-1]", 0)
+	_, e = handler.Patch("test", "test01/attr3[-1]", 0)
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
@@ -1171,11 +1171,11 @@ func TestDataHandlerPatchArrayCmt(t *testing.T) {
 		}
 		return mockDb, nil
 	}
-	handler, err := DataHandler.New(config, nil, connectDb)
-	if err != nil {
-		t.Fatalf("failed to create handler, Error:%s", err)
+	handler, e := DataHandler.New(config, nil, connectDb)
+	if e != nil {
+		t.Fatalf("failed to create handler, Error:%s", e)
 	}
-	_, e := handler.Patch("test", "test01/attr4[testCmt01]", "testCmt01")
+	_, e = handler.Patch("test", "test01/attr4[testCmt01]", "testCmt01")
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}

@@ -82,7 +82,7 @@ func TestObjectKey(t *testing.T) {
 		}
 	}`
 	recordStr := `{
-		"__id": "test_key_01",
+		"__id": "test_key_0.0.1",
 		"__type": "test",
 		"__ver": "0.0.1",
 		"data": {

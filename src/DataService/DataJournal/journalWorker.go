@@ -50,10 +50,6 @@ type JournalWorker struct {
 func ProcessNextEntry(lib *JournalLib, processes []ProcessIface.JournalProcess, dataType string, dataId string, log *log.Logger) *Http.HttpError {
 	entry := lib.NextJournalEntry(dataType, dataId)
 	if entry == nil {
-		err := lib.CleanArchivedPages(dataType, dataId)
-		if err != nil {
-			return err
-		}
 		return Http.NewHttpError(fmt.Sprintf("failed to get journal of %s/%s", dataType, dataId), http.StatusNotFound)
 	}
 	versionList := make([]string, 0, 2)

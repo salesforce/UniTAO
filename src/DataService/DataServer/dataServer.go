@@ -99,7 +99,7 @@ func (srv *Server) Run() {
 		srv.log.Fatalf("failed to initialize data layer, Err:%s", err)
 	}
 	srv.data = handler
-	journal, err := DataJournal.NewJournalLib(handler.DB, srv.config.DataTable.Data)
+	journal, err := DataJournal.NewJournalLib(handler.DB, srv.config.DataTable.Data, srv.log)
 	if err != nil {
 		srv.log.Fatalf("failed to create Journal Library. Error: %s", err)
 	}

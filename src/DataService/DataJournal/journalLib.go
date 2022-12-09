@@ -31,15 +31,11 @@ import (
 	"DataService/Common"
 	"DataService/DataJournal/ProcessIface"
 	"fmt"
+	"log"
 	"net/http"
-	"sort"
-	"strconv"
-	"strings"
-	"sync"
 	"time"
 
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
-	"github.com/salesforce/UniTAO/lib/Util"
 	"github.com/salesforce/UniTAO/lib/Util/Http"
 	"github.com/salesforce/UniTAO/lib/Util/Json"
 )
@@ -51,79 +47,79 @@ const (
 	KeyAfter        = "after"
 	KeyArchived     = "archived"
 	KeyBefore       = "before"
-	KeyDataId       = "dataId"
-	KeyDataType     = "dataType"
 	KeyId           = "id"
 	KeyIdx          = "idx"
-	KeyPage         = "page"
 	KeyTime         = "time"
 )
 
-type JournalCache struct {
-	Sort  []int
-	Pages map[int]*ProcessIface.JournalPage
-}
-
-func NewCache() *JournalCache {
-	return &JournalCache{
-		Sort:  []int{},
-		Pages: map[int]*ProcessIface.JournalPage{},
-	}
-}
-
 type JournalLib struct {
-	db    DbIface.Database
-	table string
-	Cache map[string]map[string]*JournalCache
-	lock  sync.Mutex
+	db     DbIface.Database
+	table  string
+	Cache  map[string]map[string]*JournalCache
+	Logger *log.Logger
 }
 
-func NewJournalLib(db DbIface.Database, table string) (*JournalLib, *Http.HttpError) {
-	lib := JournalLib{
-		db:    db,
-		table: table,
-		Cache: map[string]map[string]*JournalCache{},
+func NewJournalLib(db DbIface.Database, table string, logger *log.Logger) (*JournalLib, *Http.HttpError) {
+	if logger == nil {
+		logger = log.Default()
 	}
-	err := lib.retrieveJournals()
+	lib := JournalLib{
+		db:     db,
+		table:  table,
+		Cache:  map[string]map[string]*JournalCache{},
+		Logger: logger,
+	}
+	err := lib.initCache()
 	if err != nil {
 		return nil, err
 	}
 	return &lib, nil
 }
 
-func PageId(dataType string, dataId string, idx int) string {
-	pageId := fmt.Sprintf("%s:%s_%s:%s_%s:%d", KeyDataType, dataType, KeyDataId, dataId, KeyPage, idx)
-	return pageId
-}
-
-func ParseJournalId(journalId string) (string, string, int, error) {
-	typeTag := fmt.Sprintf("%s:", KeyDataType)
-	idTag := fmt.Sprintf("_%s:", KeyDataId)
-	pageTag := fmt.Sprintf("_%s:", KeyPage)
-	if !strings.HasPrefix(journalId, typeTag) {
-		return "", "", 0, fmt.Errorf("invalid journalId=[%s], missing prefix=[%s]", journalId, KeyDataType)
-	}
-	typeStr, idStr := Util.ParseCustomPath(journalId, idTag)
-	dataType := typeStr[len(typeTag):]
-	if idStr == "" {
-		if strings.Contains(dataType, pageTag) {
-			return "", "", 0, fmt.Errorf("invalid journalId=[%s], missing tag=[%s]", journalId, idTag)
-		}
-		return dataType, "", 0, nil
-	}
-	dataId, pageStr := Util.ParseCustomPath(idStr, pageTag)
-	if pageStr == "" {
-		return dataType, dataId, 0, nil
-	}
-	idx, err := strconv.Atoi(pageStr)
+func (j *JournalLib) initCache() *Http.HttpError {
+	recordList, err := j.QueryJournal("")
 	if err != nil {
-		return "", "", 0, fmt.Errorf("invalid journalId=[%s], failed to convert pageNo=[%s] to int, Error:%s", journalId, pageStr, err)
+		return err
 	}
-	return dataType, dataId, idx, nil
+	pageMap := map[string]*Record.Record{}
+	for _, record := range recordList.([]*Record.Record) {
+		dataType, dataId, idx, ex := ProcessIface.ParseJournalId(record.Id)
+		if ex != nil {
+			return Http.WrapError(ex, fmt.Sprintf("failed to parse journal id=[%s]", record.Id), http.StatusInternalServerError)
+		}
+		pageMap[record.Id] = record
+		if _, ok := j.Cache[dataType]; !ok {
+			j.Cache[dataType] = map[string]*JournalCache{}
+		}
+		if _, ok := j.Cache[dataType][dataId]; !ok {
+			j.Cache[dataType][dataId] = NewCache(dataType, dataId)
+		}
+		cache := j.Cache[dataType][dataId]
+		if cache.Head.Idx == -1 || cache.Head.Idx > idx {
+			cache.Head.Idx = idx
+		}
+		if cache.Tail.Idx < idx {
+			cache.Tail.Idx = idx
+		}
+	}
+	for dataType := range j.Cache {
+		for dataId := range j.Cache[dataType] {
+			cache := j.Cache[dataType][dataId]
+			headRecord := pageMap[ProcessIface.PageId(dataType, dataId, cache.Head.Idx)]
+			cache.Head.LoadMap(headRecord.Data)
+			if cache.Head.Idx == cache.Tail.Idx {
+				cache.Tail = cache.Head
+				continue
+			}
+			tailRecord := pageMap[ProcessIface.PageId(dataType, dataId, cache.Tail.Idx)]
+			cache.Tail.LoadMap(tailRecord.Data)
+		}
+	}
+	return nil
 }
 
 func (j *JournalLib) GetJournal(journalId string) (interface{}, *Http.HttpError) {
-	dataType, dataId, idx, err := ParseJournalId(journalId)
+	dataType, dataId, idx, err := ProcessIface.ParseJournalId(journalId)
 	if err != nil {
 		return nil, Http.NewHttpError(err.Error(), http.StatusBadRequest)
 	}
@@ -136,9 +132,9 @@ func (j *JournalLib) GetJournal(journalId string) (interface{}, *Http.HttpError)
 	case dataId == "":
 		return j.ListJournalIds(dataType), nil
 	case idx == 0:
-		return j.ListJournalPages(dataType, dataId), nil
+		return j.ListJournalPages(dataType, dataId)
 	default:
-		return j.GetJournalPage(dataType, dataId, idx)
+		return j.QueryJournal(journalId)
 	}
 }
 
@@ -161,29 +157,18 @@ func (j *JournalLib) ListJournalIds(dataType string) []string {
 	return idList
 }
 
-func (j *JournalLib) ListJournalPages(dataType string, dataId string) []*ProcessIface.JournalPage {
+func (j *JournalLib) ListJournalPages(dataType string, dataId string) ([]string, *Http.HttpError) {
 	if _, ok := j.Cache[dataType]; !ok {
-		return []*ProcessIface.JournalPage{}
+		return nil, Http.NewHttpError(fmt.Sprintf("journal page of [%s] does not exists", dataType), http.StatusNotFound)
 	}
-
-	if _, ok := j.Cache[dataType][dataId]; !ok {
-		return []*ProcessIface.JournalPage{}
+	cache, ok := j.Cache[dataType][dataId]
+	if !ok {
+		return nil, Http.NewHttpError(fmt.Sprintf("journal page of [%s/%s] does not exists", dataType, dataId), http.StatusNotFound)
 	}
-	pageList := make([]*ProcessIface.JournalPage, 0, len(j.Cache[dataType][dataId].Sort))
-	for _, idx := range j.Cache[dataType][dataId].Sort {
-		page := j.Cache[dataType][dataId].Pages[idx]
-		pageList = append(pageList, page)
-	}
-	return pageList
+	return cache.ListPages(), nil
 }
 
-func (j *JournalLib) CleanArchivedPages(dataType string, dataId string) *Http.HttpError {
-	j.lock.Lock()
-	defer j.lock.Unlock()
-	err := j.retrieveJournals()
-	if err != nil {
-		return err
-	}
+func (j *JournalLib) NextJournalEntry(dataType string, dataId string) *ProcessIface.JournalEntry {
 	if _, ok := j.Cache[dataType]; !ok {
 		return nil
 	}
@@ -191,62 +176,60 @@ func (j *JournalLib) CleanArchivedPages(dataType string, dataId string) *Http.Ht
 	if !ok {
 		return nil
 	}
-	for idx, pageId := range cache.Sort {
-		page := cache.Pages[pageId]
-		if page.LastEntry >= MaxEntryPerPage && len(page.Active) == 0 {
-			j.removeJournal(page)
-			delete(cache.Pages, pageId)
-			continue
-		}
-		cache.Sort = cache.Sort[idx:]
+	if len(cache.Head.Active) == 0 {
 		return nil
 	}
-	// all page removed
-	cache.Sort = []int{}
-	return nil
+	return cache.Head.Active[0]
 }
 
-func (j *JournalLib) NextJournalEntry(dataType string, dataId string) *ProcessIface.JournalEntry {
-	if _, ok := j.Cache[dataType]; !ok {
-		return nil
+func (j *JournalLib) QueryJournal(journalId string) (interface{}, *Http.HttpError) {
+	args := make(map[string]interface{})
+	args[DbIface.Table] = j.table
+	args[Record.DataType] = Common.KeyJournal
+	if journalId != "" {
+		args[Record.DataId] = journalId
 	}
-	if _, ok := j.Cache[dataType][dataId]; !ok {
-		return nil
+	dataList, err := j.db.Get(args)
+	if err != nil {
+		return nil, Http.NewHttpError(err.Error(), http.StatusInternalServerError)
 	}
-	if len(j.Cache[dataType][dataId].Sort) == 0 {
-		return nil
-	}
-	for _, pageId := range j.Cache[dataType][dataId].Sort {
-		page := j.Cache[dataType][dataId].Pages[pageId]
-		if len(page.Active) > 0 {
-			return page.Active[0]
+	if journalId != "" {
+		if len(dataList) == 0 {
+			return nil, Http.NewHttpError(fmt.Sprintf("journal page:[%s] does not exists", journalId), http.StatusNotFound)
 		}
+		if len(dataList) > 1 {
+			return nil, Http.NewHttpError(fmt.Sprintf("found %d pages of id:[%s]", len(dataList), journalId), http.StatusInternalServerError)
+		}
+		record, err := Record.LoadMap(dataList[0])
+		if err != nil {
+			return nil, Http.WrapError(err, fmt.Sprintf("journal:[%s] failed to be load as Record", journalId), http.StatusInternalServerError)
+		}
+		return record, nil
 	}
-	return nil
-}
-
-func (j *JournalLib) GetJournalPage(dataType string, dataId string, idx int) (*ProcessIface.JournalPage, *Http.HttpError) {
-	if _, ok := j.Cache[dataType]; !ok {
-		return nil, Http.NewHttpError(fmt.Sprintf("journal page, type=[%s] does not exists.", dataType), http.StatusNotFound)
+	result := []*Record.Record{}
+	for idx, data := range dataList {
+		record, err := Record.LoadMap(data)
+		if err != nil {
+			return nil, Http.WrapError(err, fmt.Sprintf("failed to load %d journal as record", idx), http.StatusInternalServerError)
+		}
+		result = append(result, record)
 	}
-	if _, ok := j.Cache[dataType][dataId]; !ok {
-		return nil, Http.NewHttpError(fmt.Sprintf("journal page, type=[%s] id=[%s] does not exists.", dataType, dataId), http.StatusNotFound)
-	}
-	page, ok := j.Cache[dataType][dataId].Pages[idx]
-	if !ok {
-		return nil, Http.NewHttpError(fmt.Sprintf("journal page, type=[%s] id=[%s] idx=[%d] does not exists.", dataType, dataId, idx), http.StatusNotFound)
-	}
-	return page, nil
+	return result, nil
 }
 
 func (j *JournalLib) AddJournal(dataType string, dataId string, before map[string]interface{}, after map[string]interface{}) *Http.HttpError {
-	j.lock.Lock()
-	defer j.lock.Unlock()
-	err := j.retrieveJournals()
-	if err != nil {
-		return err
+	if _, ok := j.Cache[dataType]; !ok {
+		j.Cache[dataType] = map[string]*JournalCache{}
 	}
-	err = j.addJournalEntry(dataType, dataId, before, after)
+	if _, ok := j.Cache[dataType][dataId]; !ok {
+		c := NewCache(dataType, dataId)
+		c.Head = c.Tail
+		j.Cache[dataType][dataId] = c
+	}
+	cache := j.Cache[dataType][dataId]
+	cache.Lock.Lock()
+	defer cache.Lock.Unlock()
+	err := j.addJournalEntry(dataType, dataId, before, after)
 	if err != nil {
 		return err
 	}
@@ -254,78 +237,74 @@ func (j *JournalLib) AddJournal(dataType string, dataId string, before map[strin
 }
 
 func (j *JournalLib) ArchiveJournalEntry(dataType string, dataId string, entry *ProcessIface.JournalEntry) *Http.HttpError {
-	j.lock.Lock()
-	defer j.lock.Unlock()
-	err := j.retrieveJournals()
+	if _, ok := j.Cache[dataType]; !ok {
+		j.Logger.Printf("no journal for type=[%s]", dataType)
+		return nil
+	}
+	if _, ok := j.Cache[dataType][dataId]; !ok {
+		j.Logger.Printf("no journal for data=[%s/%s]", dataType, dataId)
+		return nil
+	}
+	cache := j.Cache[dataType][dataId]
+	if cache.Head.Idx != entry.Page {
+		j.Logger.Printf("entry page [%d]!= head page [%d]", entry.Page, cache.Head.Idx)
+		return nil
+	}
+	if len(cache.Head.Active) == 0 {
+		j.Logger.Printf("no entry to archive @[%s]", cache.Head.Id())
+		return nil
+	}
+	if cache.Head.Active[0].Idx != entry.Idx {
+		j.Logger.Printf("entry idx [%d]!= current entry idx [%d]", entry.Idx, cache.Head.Active[0].Idx)
+		return nil
+	}
+	if cache.Head.Idx == cache.Tail.Idx {
+		cache.Lock.Lock()
+		defer cache.Lock.Unlock()
+	}
+	cache.Head.Active = cache.Head.Active[1:]
+	cache.Head.Archived = append(cache.Head.Archived, entry)
+	if len(cache.Head.Active) > 0 || cache.Head.Idx == cache.Tail.Idx {
+		return j.updateJournal(cache.Head)
+	}
+	j.Logger.Printf("finish process Journal Page:[%s], remove it", cache.Head.Id())
+	err := j.removeJournal(cache.Head.Id())
 	if err != nil {
 		return err
 	}
-	if _, ok := j.Cache[dataType]; !ok {
-		return Http.NewHttpError(fmt.Sprintf("entry type=[%s] not found", dataType), http.StatusBadRequest)
+	nextHeadIdx := cache.Head.Idx + 1
+	for nextHeadIdx < cache.Tail.Idx {
+		nextId := ProcessIface.PageId(cache.DataType, cache.DataId, nextHeadIdx)
+		j.Logger.Printf("Query next Journal Page: [%s]", nextId)
+		data, err := j.QueryJournal(nextId)
+		if err != nil {
+			if err.Status == http.StatusNotFound {
+				nextHeadIdx += 1
+				j.Logger.Printf("journal page [%s] does not exists. skip: %d", nextId, nextHeadIdx)
+				continue
+			}
+			return err
+		}
+		cache.Head = ProcessIface.NewPage(cache.DataType, cache.DataId, nextHeadIdx)
+		ex := cache.Head.LoadMap(data.(*Record.Record).Data)
+		if ex != nil {
+			return Http.WrapError(ex, fmt.Sprintf("failed to load journalPage from record [%s/%s]", Common.KeyJournal, nextId), http.StatusInternalServerError)
+		}
 	}
-	if _, ok := j.Cache[dataType][dataId]; !ok {
-		return Http.NewHttpError(fmt.Sprintf("entry type=[%s], id=[%s] not found", dataType, dataId), http.StatusBadRequest)
-	}
-	if _, ok := j.Cache[dataType][dataId].Pages[entry.Page]; !ok {
-		return Http.NewHttpError(fmt.Sprintf("entry type=[%s], id=[%s], idx=[%d] not found", dataType, dataId, entry.Page), http.StatusBadRequest)
-	}
-	page := j.Cache[dataType][dataId].Pages[entry.Page]
-	if len(page.Active) == 0 || page.Active[0].Idx != entry.Idx {
-		return Http.NewHttpError("entry not active", http.StatusInternalServerError)
-	}
-	page.Active = page.Active[1:]
-	page.Archived = append([]*ProcessIface.JournalEntry{entry}, page.Archived...)
-	return j.updateJournal(page)
+	j.Logger.Printf("Processing Last Page.[%s]", cache.Tail.Id())
+	cache.Head = cache.Tail
+	return nil
 }
 
-func (j *JournalLib) removeJournal(page *ProcessIface.JournalPage) *Http.HttpError {
-	recId := PageId(page.DataType, page.DataId, page.Idx)
+func (j *JournalLib) removeJournal(journalId string) *Http.HttpError {
 	keys := make(map[string]interface{})
 	keys[Record.DataType] = Common.KeyJournal
-	keys[Record.DataId] = recId
+	keys[Record.DataId] = journalId
 	ex := j.db.Delete(j.table, keys)
 	if ex != nil {
-		return Http.WrapError(ex, fmt.Sprintf("failed to delete record [type/id]=[%s/%s]", Common.KeyJournal, recId), http.StatusInternalServerError)
+		return Http.WrapError(ex, fmt.Sprintf("failed to delete record [type/id]=[%s/%s]", Common.KeyJournal, journalId), http.StatusInternalServerError)
 	}
 	return nil
-}
-
-func (j *JournalLib) retrieveJournals() *Http.HttpError {
-	args := make(map[string]interface{})
-	args[DbIface.Table] = j.table
-	args[Record.DataType] = Common.KeyJournal
-	journalList, err := j.db.Get(args)
-	if err != nil {
-		return Http.NewHttpError(err.Error(), http.StatusInternalServerError)
-	}
-	for _, page := range journalList {
-		record, err := Record.LoadMap(page)
-		if err != nil {
-			return Http.WrapError(err, fmt.Sprintf("failed to load data as record. Error: %s", err), http.StatusInternalServerError)
-		}
-		journal := ProcessIface.JournalPage{}
-		err = Json.CopyTo(record.Data, &journal)
-		if err != nil {
-			return Http.WrapError(err, fmt.Sprintf("failed to load data as journal page. Error:%s", err), http.StatusInternalServerError)
-		}
-	}
-	return nil
-}
-
-func (j *JournalLib) addPageToCache(journal *ProcessIface.JournalPage) {
-	if _, ok := j.Cache[journal.DataType]; !ok {
-		j.Cache[journal.DataType] = map[string]*JournalCache{}
-	}
-	typeMap := j.Cache[journal.DataType]
-	if _, ok := typeMap[journal.DataId]; !ok {
-		typeMap[journal.DataId] = NewCache()
-	}
-	cache := typeMap[journal.DataId]
-	if _, ok := cache.Pages[journal.Idx]; !ok {
-		cache.Pages[journal.Idx] = journal
-		cache.Sort = append(cache.Sort, journal.Idx)
-		sort.Ints(cache.Sort)
-	}
 }
 
 func (j *JournalLib) updateJournal(page *ProcessIface.JournalPage) *Http.HttpError {
@@ -334,7 +313,7 @@ func (j *JournalLib) updateJournal(page *ProcessIface.JournalPage) *Http.HttpErr
 	if err != nil {
 		return Http.WrapError(err, fmt.Sprintf("failed to create Record Data. Error:%s", err), http.StatusBadRequest)
 	}
-	pageId := PageId(page.DataType, page.DataId, page.Idx)
+	pageId := ProcessIface.PageId(page.DataType, page.DataId, page.Idx)
 	pageRecord := Record.NewRecord(Common.KeyJournal, CurrentVer, pageId, pageData)
 	err = j.db.Create(j.table, pageRecord.Map())
 	if err != nil {
@@ -343,47 +322,24 @@ func (j *JournalLib) updateJournal(page *ProcessIface.JournalPage) *Http.HttpErr
 	return nil
 }
 
-func (j *JournalLib) newJournalPage(dataType string, dataId string, idx int) *ProcessIface.JournalPage {
-	page := ProcessIface.JournalPage{
-		DataType:  dataType,
-		DataId:    dataId,
-		Idx:       idx,
-		LastEntry: 0,
-		Active:    []*ProcessIface.JournalEntry{},
-		Archived:  []*ProcessIface.JournalEntry{},
-	}
-	j.addPageToCache(&page)
-	return &page
-}
-
 func (j *JournalLib) addJournalEntry(dataType string, dataId string, before map[string]interface{}, after map[string]interface{}) *Http.HttpError {
-	if _, ok := j.Cache[dataType]; !ok {
-		j.Cache[dataType] = map[string]*JournalCache{}
+	if j.Cache[dataType][dataId].Tail.LastEntry() >= MaxEntryPerPage {
+		nextIdx := j.Cache[dataType][dataId].Tail.Idx + 1
+		j.Cache[dataType][dataId].Tail = ProcessIface.NewPage(dataType, dataId, nextIdx)
 	}
-	if _, ok := j.Cache[dataType][dataId]; !ok {
-		j.Cache[dataType][dataId] = NewCache()
-	}
-	cache := j.Cache[dataType][dataId]
-	var page *ProcessIface.JournalPage
-	if len(cache.Pages) == 0 {
-		page = j.newJournalPage(dataType, dataId, 0)
-	} else {
-		lastPageIdx := cache.Sort[len(cache.Sort)-1]
-		page = cache.Pages[lastPageIdx]
-		if page.LastEntry >= MaxEntryPerPage {
-			page = j.newJournalPage(dataType, dataId, lastPageIdx+1)
-		}
+	tail := j.Cache[dataType][dataId].Tail
+	if tail.Idx == -1 {
+		tail.Idx = 1
 	}
 	entry := ProcessIface.JournalEntry{
 		Time:   time.Now().String(),
-		Page:   page.Idx,
-		Idx:    page.LastEntry + 1,
+		Page:   tail.Idx,
+		Idx:    tail.LastEntry() + 1,
 		Before: before,
 		After:  after,
 	}
-	page.Active = append(page.Active, &entry)
-	page.LastEntry = entry.Idx
-	err := j.updateJournal(page)
+	tail.Active = append(tail.Active, &entry)
+	err := j.updateJournal(tail)
 	if err != nil {
 		return err
 	}

@@ -37,7 +37,7 @@ import (
 // multiple leaf register in same parent record on different path
 
 func TestOneLayerWithMultipleIdxPath(t *testing.T) {
-	prepEnv(t)
+	env := prepEnv(t)
 	leafSchema := `{
 		"__id": "leaf",
 		"__type": "schema",
@@ -68,7 +68,7 @@ func TestOneLayerWithMultipleIdxPath(t *testing.T) {
 			}
 		}
 	}`
-	addSchema(t, leafSchema)
+	addSchema(env, leafSchema)
 	layer1Schema := `{
 		"__id": "layer1",
 		"__type": "schema",
@@ -173,11 +173,11 @@ func TestOneLayerWithMultipleIdxPath(t *testing.T) {
 			}
 		}
 	}`
-	jC := addSchema(t, layer1Schema)
+	jC := addSchema(env, layer1Schema)
 	if jC != 1 {
 		t.Fatalf("invalid journal processed, [%d]!= 1", jC)
 	}
-	jC = processJournal(t, CmtIndex.KeyCmtIdx, "leaf")
+	jC = processJournal(env, CmtIndex.KeyCmtIdx, "leaf")
 	if jC != 3 {
 		t.Fatalf("invalid journal processed, [%d]!= 3", jC)
 	}
@@ -222,7 +222,7 @@ func TestOneLayerWithMultipleIdxPath(t *testing.T) {
 
 		}
 	}`
-	jC = addData(t, layer1Str)
+	jC = addData(env, layer1Str)
 	if jC != 1 {
 		t.Fatalf("invalid journal processed, [%d]!= 1", jC)
 	}
@@ -268,19 +268,19 @@ func TestOneLayerWithMultipleIdxPath(t *testing.T) {
 		}`,
 	}
 	for _, leafStr := range leafList {
-		jC = addData(t, leafStr)
+		jC = addData(env, leafStr)
 		if jC != 1 {
 			t.Fatalf("invalid journal processed, [%d]!= 1", jC)
 		}
-		jC = processJournal(t, "layer1", "layer1-01")
+		jC = processJournal(env, "layer1", "layer1-01")
 		if jC != 3 {
-			t.Fatalf("invalid journal processed, [%d]!= 1", jC)
+			t.Fatalf("invalid journal processed, [%d]!= 3", jC)
 		}
 	}
 }
 
 func TestForAddLayerToExistsIdxTree(t *testing.T) {
-	prepEnv(t)
+	env := prepEnv(t)
 	leafSchemaV1 := `{
 		"__id": "leaf",
 		"__type": "schema",
@@ -299,7 +299,7 @@ func TestForAddLayerToExistsIdxTree(t *testing.T) {
 			}
 		}
 	}`
-	addSchema(t, leafSchemaV1)
+	addSchema(env, leafSchemaV1)
 	Layer1SchemaV1 := `{
 		"__id": "layer1",
 		"__type": "schema",
@@ -319,8 +319,8 @@ func TestForAddLayerToExistsIdxTree(t *testing.T) {
 			}
 		}
 	}`
-	addSchema(t, Layer1SchemaV1)
-	jC := processJournal(t, CmtIndex.KeyCmtIdx, "leaf")
+	addSchema(env, Layer1SchemaV1)
+	jC := processJournal(env, CmtIndex.KeyCmtIdx, "leaf")
 	if jC != 1 {
 		t.Fatalf("invalid journal processed, [%d]!= 1", jC)
 	}
@@ -332,7 +332,7 @@ func TestForAddLayerToExistsIdxTree(t *testing.T) {
 			"leafs": []
 		}
 	}`
-	addData(t, layer1V1)
+	addData(env, layer1V1)
 	leafV1 := []string{
 		`{
 			"__id": "leaf-01",
@@ -363,8 +363,8 @@ func TestForAddLayerToExistsIdxTree(t *testing.T) {
 		}`,
 	}
 	for _, leaf := range leafV1 {
-		addData(t, leaf)
-		jC = processJournal(t, "layer1", "layer1-01")
+		addData(env, leaf)
+		jC = processJournal(env, "layer1", "layer1-01")
 		if jC != 1 {
 			t.Fatalf("invalid journal processed, [%d]!= 1", jC)
 		}
@@ -391,7 +391,7 @@ func TestForAddLayerToExistsIdxTree(t *testing.T) {
 			}
 		}
 	}`
-	addSchema(t, leafSchemaV2)
+	addSchema(env, leafSchemaV2)
 	leafV2 := []string{
 		`{
 			"__id": "leaf-01",
@@ -425,8 +425,8 @@ func TestForAddLayerToExistsIdxTree(t *testing.T) {
 		}`,
 	}
 	for _, leaf := range leafV2 {
-		setData(t, leaf)
-		jC = processJournal(t, "layer1", "layer1-01")
+		setData(env, leaf)
+		jC = processJournal(env, "layer1", "layer1-01")
 		if jC != 0 {
 			t.Fatalf("invalid journal processed, [%d]!= 0", jC)
 		}
@@ -450,23 +450,23 @@ func TestForAddLayerToExistsIdxTree(t *testing.T) {
 			}
 		}
 	}`
-	addSchema(t, layer2SchemaV1)
-	jC = processJournal(t, CmtIndex.KeyCmtIdx, "leaf")
+	addSchema(env, layer2SchemaV1)
+	jC = processJournal(env, CmtIndex.KeyCmtIdx, "leaf")
 	if jC != 1 {
 		t.Fatalf("invalid journal processed, [%d]!= 1", jC)
 	}
-	leafList, err := handler.List("leaf")
+	leafList, err := env.Handler.List("leaf")
 	if err != nil {
 		t.Fatal(err)
 	}
 	// process journal for all leaves so there should be no change from the journal process
 	for _, id := range leafList {
-		jC = processJournal(t, "leaf", id.(string))
+		jC = processJournal(env, "leaf", id.(string))
 		if jC != 1 {
 			t.Fatalf("invalid journal processed, [%d]!= 1", jC)
 		}
 	}
-	jC = processJournal(t, "layer1", "layer1-01")
+	jC = processJournal(env, "layer1", "layer1-01")
 	if jC != 0 {
 		t.Fatalf("invalid journal processed, [%d]!= 0", jC)
 	}
@@ -489,14 +489,14 @@ func TestForAddLayerToExistsIdxTree(t *testing.T) {
 		}`,
 	}
 	for _, layer2V1 := range layer2V1List {
-		jC = addData(t, layer2V1)
+		jC = addData(env, layer2V1)
 		if jC < 2 {
 			t.Fatalf("invalid journal processed, [%d] < 2", jC)
 		}
 	}
-	layer2List, _ := handler.List("layer2")
+	layer2List, _ := env.Handler.List("layer2")
 	for _, id := range layer2List {
-		record, _ := handler.Inventory.Get("layer2", id.(string))
+		record, _ := env.Handler.Inventory.Get("layer2", id.(string))
 		if len(record.Data["leafs"].([]interface{})) == 0 {
 			t.Fatalf("failed to add idx for id=[%s]", id.(string))
 		}
@@ -504,5 +504,4 @@ func TestForAddLayerToExistsIdxTree(t *testing.T) {
 			log.Printf("layer2:[%s] - leaf:[%s]", id, leaf)
 		}
 	}
-
 }
