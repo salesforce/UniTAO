@@ -308,13 +308,17 @@ func (s *SchemaChanges) fillIdx(afterRec *Record.Record, idx CmtIndex.AutoIndex)
 		if ex != nil {
 			return Http.WrapError(ex, fmt.Sprintf("failed to build index path with [%s/%s]", idx.ContentType, id.(string)), http.StatusNotModified)
 		}
-		patchId, _ := Util.ParsePath(patchPath)
+		typePatchPath, idPatchPath := Util.ParsePath(patchPath)
+		if typePatchPath != afterRec.Type {
+			continue
+		}
+		patchId, _ := Util.ParsePath(idPatchPath)
 		if patchId != afterRec.Id {
 			continue
 		}
-		idPath := fmt.Sprintf("%s[%s]", patchPath, url.QueryEscape(id.(string)))
+		idPatchPath = fmt.Sprintf("%s[%s]", idPatchPath, url.QueryEscape(id.(string)))
 		hasChange = true
-		_, err = s.Data.Patch(afterRec.Type, idPath, map[string]interface{}{JsonKey.Version: afterRec.Version}, id.(string))
+		_, err = s.Data.Patch(afterRec.Type, idPatchPath, map[string]interface{}{JsonKey.Version: afterRec.Version}, id.(string))
 		if err != nil {
 			return err
 		}

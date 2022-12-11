@@ -269,7 +269,7 @@ func addLayer1SchemaDataAndUpgradSchema(t *TestEnv) {
 					"items": {
 						"type": "string",
 						"contentMediaType": "inventory/test",
-						"indexTemplate": "{categoryLayer1}/testAry"
+						"indexTemplate": "categoryLayer1/{categoryLayer1}/testAry"
 					}
 				}
 			}
@@ -309,8 +309,8 @@ func addLayer1SchemaDataAndUpgradSchema(t *TestEnv) {
 	if len(verPath.IndexTemplate) != 1 {
 		t.T.Fatalf("invalid index template number. [%d]!=[1]", len(verPath.IndexTemplate))
 	}
-	if verPath.IndexTemplate[0].(string) != "{categoryLayer1}/testAry" {
-		t.T.Fatalf("cmtIdx path[%s]!=[{categoryLayer1}/testAry]", verPath.IndexTemplate[0].(string))
+	if verPath.IndexTemplate[0].(string) != "categoryLayer1/{categoryLayer1}/testAry" {
+		t.T.Fatalf("cmtIdx path[%s]!=[categoryLayer1/{categoryLayer1}/testAry]", verPath.IndexTemplate[0].(string))
 	}
 }
 

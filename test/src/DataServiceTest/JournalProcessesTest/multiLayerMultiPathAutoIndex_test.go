@@ -85,7 +85,7 @@ func TestOneLayerWithMultipleIdxPath(t *testing.T) {
 					"items": {
 						"type": "string",
 						"contentMediaType": "inventory/leaf",
-						"indexTemplate": "{layer1}/leafs"
+						"indexTemplate": "layer1/{layer1}/leafs"
 					}
 				},
 				"cat1": {
@@ -132,7 +132,7 @@ func TestOneLayerWithMultipleIdxPath(t *testing.T) {
 							"items": {
 								"type": "string",
 								"contentMediaType": "inventory/leaf",
-								"indexTemplate": "{layer1}/cat1[{cat1}]/cat1a[{cat1a}]/leafs"
+								"indexTemplate": "layer1/{layer1}/cat1[{cat1}]/cat1a[{cat1a}]/leafs"
 							}
 						}
 					}
@@ -165,7 +165,7 @@ func TestOneLayerWithMultipleIdxPath(t *testing.T) {
 							"items": {
 								"type": "string",
 								"contentMediaType": "inventory/leaf",
-								"indexTemplate": "{layer1}/cat2[{cat2}]/cat2a[{cat2a}]/leafs"
+								"indexTemplate": "layer1/{layer1}/cat2[{cat2}]/cat2a[{cat2a}]/leafs"
 							}
 						}
 					}
@@ -313,7 +313,7 @@ func TestForAddLayerToExistsIdxTree(t *testing.T) {
 					"items": {
 						"type": "string",
 						"contentMediaType": "inventory/leaf",
-						"indexTemplate": "{layer1}/leafs"
+						"indexTemplate": "layer1/{layer1}/leafs"
 					}
 				}
 			}
@@ -444,7 +444,7 @@ func TestForAddLayerToExistsIdxTree(t *testing.T) {
 					"items": {
 						"type": "string",
 						"contentMediaType": "inventory/leaf",
-						"indexTemplate": "{layer1}-{layer2PostFix}/leafs"
+						"indexTemplate": "layer2/{layer1}-{layer2PostFix}/leafs"
 					}
 				}
 			}

@@ -177,6 +177,10 @@ func (d *SchemaDoc) Path() string {
 	return path.Join(d.Parent.Path(), d.Id)
 }
 
+func (d *SchemaDoc) Properties() map[string]interface{} {
+	return d.Data[JsonKey.Properties].(map[string]interface{})
+}
+
 func (d *SchemaDoc) preprocess() error {
 	err := d.processRequired()
 	if err != nil {

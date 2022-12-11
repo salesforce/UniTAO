@@ -1207,6 +1207,9 @@ func TestDataHandlerPatchArrayCmt(t *testing.T) {
 	if e == nil {
 		t.Fatalf("failed to catch CmtRef Error")
 	}
+	if e.Status != http.StatusNotFound {
+		t.Fatalf("invalid status, [%d] is not expected [%d]", e.Status, http.StatusNotFound)
+	}
 	_, e = handler.Patch("test", "test01/attr4[testCmt01]", nil, "testCmt01")
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)

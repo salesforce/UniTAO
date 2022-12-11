@@ -194,20 +194,26 @@ func (s *CmtIndexChanges) processDataChange(dataType string, dataId string, entr
 				}
 				beforePath := ""
 				if beforeRec != nil {
-					idPath, ex := template.BuildValue(beforeRec.Data)
+					dataPath, ex := template.BuildValue(beforeRec.Data)
 					if ex != nil {
 						s.log.Printf("failed to build id from template on entry.Before. [%s/%s]", dataType, dataId)
 						continue
 					}
-					beforePath = fmt.Sprintf("%s[%s]", idPath, url.QueryEscape(dataId))
+					beforeType, idPath := Util.ParsePath(dataPath)
+					if dataType == beforeType {
+						beforePath = fmt.Sprintf("%s[%s]", idPath, url.QueryEscape(dataId))
+					}
 				}
 				afterPath := ""
 				if afterRec != nil {
-					idPath, ex := template.BuildValue(afterRec.Data)
+					dataPath, ex := template.BuildValue(afterRec.Data)
 					if ex != nil {
 						return Http.WrapError(ex, "not able to build a good idPath, no change", http.StatusNotModified)
 					}
-					afterPath = fmt.Sprintf("%s[%s]", idPath, url.QueryEscape(dataId))
+					afterType, idPath := Util.ParsePath(dataPath)
+					if dataType == afterType {
+						afterPath = fmt.Sprintf("%s[%s]", idPath, url.QueryEscape(dataId))
+					}
 				}
 				if beforePath == afterPath {
 					continue
@@ -215,11 +221,17 @@ func (s *CmtIndexChanges) processDataChange(dataType string, dataId string, entr
 				hasChange = true
 				if beforePath != "" {
 					s.Log(fmt.Sprintf("remove path [%s/%s/%s]", dataType, version, beforePath))
-					s.setIndex(dataType, version, beforePath, "")
+					err = s.setIndex(dataType, version, beforePath, "")
+					if err != nil && err.Status != http.StatusNotModified && err.Status != http.StatusNotFound {
+						return Http.WrapError(err, fmt.Sprintf("failed to delete @path=[%s/%s/%s]", dataType, version, beforePath), err.Status)
+					}
 				}
 				if afterPath != "" {
 					s.Log(fmt.Sprintf("set path [%s/%s/%s]", dataType, version, afterPath))
-					s.setIndex(dataType, version, afterPath, dataId)
+					err = s.setIndex(dataType, version, afterPath, dataId)
+					if err != nil && err.Status != http.StatusNotModified && err.Status != http.StatusNotFound {
+						return Http.WrapError(err, fmt.Sprintf("failed to set @path=[%s/%s/%s]", dataType, version, beforePath), err.Status)
+					}
 				}
 			}
 		}
@@ -230,7 +242,7 @@ func (s *CmtIndexChanges) processDataChange(dataType string, dataId string, entr
 	return nil
 }
 
-func (s *CmtIndexChanges) setIndex(dataType string, version string, dataPath string, idxId string) error {
+func (s *CmtIndexChanges) setIndex(dataType string, version string, dataPath string, idxId string) *Http.HttpError {
 	dataId, nextPath := Util.ParsePath(dataPath)
 	if dataId == "" {
 		s.log.Printf("empty dataPath, not able to get data Path to write the index into. @path=[%s]", dataPath)

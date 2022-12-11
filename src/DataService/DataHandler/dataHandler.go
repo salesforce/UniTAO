@@ -30,7 +30,6 @@ import (
 	"log"
 	"net/http"
 	"path"
-	"reflect"
 	"strings"
 	"sync"
 
@@ -219,154 +218,118 @@ func (h *Handler) Validate(record *Record.Record) *Http.HttpError {
 	return nil
 }
 
-func (h *Handler) ValidateDataRefs(doc *SchemaDoc.SchemaDoc, data interface{}, dataPath string) *Http.HttpError {
-	dataMap, ok := data.(map[string]interface{})
-	if !ok {
-		return Http.NewHttpError("failed to convert data to map", http.StatusBadRequest)
-	}
-	err := h.validateCmtRefs(doc, dataMap, dataPath)
-	if err != nil {
-		return err
-	}
-	return h.validateSubDoc(doc, dataMap, dataPath)
-}
-
-// Validate Content Media Type Reference Values
-func (h *Handler) validateCmtRefs(doc *SchemaDoc.SchemaDoc, data map[string]interface{}, dataPath string) *Http.HttpError {
-	errList := []*Http.HttpError{}
-	for _, ref := range doc.CmtRefs {
-		value, ok := data[ref.Name]
+func (h *Handler) ValidateDataRefs(doc *SchemaDoc.SchemaDoc, data map[string]interface{}, dataPath string) *Http.HttpError {
+	for attrName, def := range doc.Properties() {
+		value, ok := data[attrName]
 		if !ok {
 			continue
 		}
-		refPath := path.Join(dataPath, ref.Name)
-		switch reflect.TypeOf(value).Kind() {
-		case reflect.String:
-			hasRef, err := h.validateCmtRefValue(ref, value.(string), dataPath)
+		attrDef := def.(map[string]interface{})
+		attrPath := fmt.Sprintf("%s/%s", dataPath, attrName)
+		ref, isRef := doc.CmtRefs[attrName]
+		subDoc, isSubDoc := doc.SubDocs[attrName]
+		errList := []*Http.HttpError{}
+		switch attrDef[JsonKey.Type] {
+		case JsonKey.String:
+			if !isRef {
+				continue
+			}
+			err := h.validateCmtRefValue(ref, value.(string), attrPath)
 			if err != nil {
-				return err
+				errList = append(errList, err)
 			}
-			if !hasRef {
-				errList = append(errList, Http.NewHttpError(
-					fmt.Sprintf("broken reference @[%s], '%s:%s' does not exists", refPath, ref.ContentType, value),
-					http.StatusBadRequest))
+		case JsonKey.Object:
+			valueObj := value.(map[string]interface{})
+			if !SchemaDoc.IsMap(attrDef) {
+				return h.ValidateDataRefs(subDoc, valueObj, attrPath)
 			}
-		case reflect.Slice:
-			for idx, item := range value.([]interface{}) {
-				idxPath := fmt.Sprintf("%s[%s]", refPath, item.(string))
-				hasRef, err := h.validateCmtRefValue(ref, item.(string), idxPath)
-				if err != nil {
-					errList = append(errList,
-						Http.WrapError(err, fmt.Sprintf("broken reference @[%s] idx=[%d], '%s:%s' value validate failed.", idxPath, idx, ref.ContentType, item),
-							http.StatusBadRequest))
+			if !isRef && !isSubDoc {
+				continue
+			}
+			for key, keyValue := range valueObj {
+				keyPath := fmt.Sprintf("%s[%s]", attrPath, key)
+				if isRef {
+					err := h.validateCmtRefValue(ref, keyValue.(string), keyPath)
+					if err != nil {
+						errList = append(errList, err)
+					}
 					continue
 				}
-				if !hasRef {
-					errList = append(errList, Http.NewHttpError(
-						fmt.Sprintf("broken reference @[%s], '%s:%s' does not exist.", idxPath, ref.ContentType, item),
-						http.StatusBadRequest))
+				if isSubDoc {
+					err := h.ValidateDataRefs(subDoc, keyValue.(map[string]interface{}), keyPath)
+					if err != nil {
+						errList = append(errList, err)
+					}
 				}
 			}
-		case reflect.Map:
-			for key, value := range value.(map[string]interface{}) {
-				keyPath := fmt.Sprintf("%s[%s]", refPath, key)
-				hasRef, err := h.validateCmtRefValue(ref, value.(string), keyPath)
-				if err != nil {
-					errList = append(errList,
-						Http.WrapError(err, fmt.Sprintf("broken reference @[%s], '%s:%s' value validate failed.", keyPath, ref.ContentType, value),
-							http.StatusBadRequest))
+		case JsonKey.Array:
+			valueAry := value.([]interface{})
+			if !isRef && !isSubDoc {
+				continue
+			}
+			for _, item := range valueAry {
+				if isRef {
+					itemPath := fmt.Sprintf("%s[%s]", attrPath, item.(string))
+					err := h.validateCmtRefValue(ref, item.(string), itemPath)
+					if err != nil {
+						errList = append(errList, err)
+					}
 					continue
 				}
-				if !hasRef {
-					errList = append(errList, Http.NewHttpError(
-						fmt.Sprintf("broken reference @[%s], '%s:%s' does not exist.", keyPath, ref.ContentType, value),
-						http.StatusBadRequest))
+				if isSubDoc {
+					itemKey, _ := subDoc.BuildKey(item.(map[string]interface{}))
+					itemPath := fmt.Sprintf("%s[%s]", attrPath, itemKey)
+					err := h.ValidateDataRefs(subDoc, item.(map[string]interface{}), itemPath)
+					if err != nil {
+						errList = append(errList, err)
+					}
 				}
 			}
-		default:
-			errList = append(errList, Http.NewHttpError(
-				fmt.Sprintf("broken reference @[%s], 'dataType=[%s]' are not supported. only support string or array", refPath, reflect.TypeOf(value).Kind()),
-				http.StatusBadRequest))
 		}
-	}
-	if len(errList) > 0 {
-		if len(errList) > 1 {
-			err := Http.NewHttpError("broken references:", http.StatusBadRequest)
-			for _, itemErr := range errList {
-				Http.AppendError(err, itemErr)
-			}
-			return err
+		switch len(errList) {
+		case 0:
+			continue
+		case 1:
+			return errList[0]
 		}
-		return errList[0]
+		err := Http.NewHttpError(fmt.Sprintf("Data Reference validation failure @path=[%s]", attrPath), http.StatusBadRequest)
+		for _, sub := range errList {
+			err.AppendError(sub)
+		}
+		return err
 	}
 	return nil
 }
 
-func (h *Handler) validateCmtRefValue(ref *SchemaDoc.CMTDocRef, value string, dataPath string) (bool, *Http.HttpError) {
+func (h *Handler) validateCmtRefValue(ref *SchemaDoc.CMTDocRef, value string, dataPath string) *Http.HttpError {
 	if ref.CmtType != Schema.Inventory {
 		// ContentMediaType not start with inventory, we don't understand
-		return true, nil
+		return nil
 	}
 	if ref.ContentType == JsonKey.Schema {
-		return false, Http.NewHttpError("should not refer to schema of schema as data type", http.StatusBadRequest)
+		return Http.NewHttpError("should not refer to schema of schema as data type", http.StatusBadRequest)
 	}
 	cmtRecord, err := h.Inventory.Get(ref.ContentType, value)
 	if err != nil {
 		if err.Status == http.StatusNotFound {
-			return false, nil
+			return Http.NewHttpError(fmt.Sprintf("reference %s:%s with value=[%s] does not exists. @path=[%s]", ref.CmtType, ref.ContentType, value, dataPath), http.StatusBadRequest)
 		}
-		return false, err
+		return err
 	}
 	if ref.IndexTemplate != "" {
 		idxTemp, ex := Template.ParseStr(ref.IndexTemplate, "{", "}")
 		if ex != nil {
-			return false, Http.WrapError(ex, fmt.Sprintf("failed to parse IndexTemplate, @path=[%s]", dataPath), http.StatusInternalServerError)
+			return Http.WrapError(ex, fmt.Sprintf("failed to parse IndexTemplate, @path=[%s]", dataPath), http.StatusInternalServerError)
 		}
 		attrPath, ex := idxTemp.BuildValue(cmtRecord.Data)
 		if ex != nil {
-			return false, Http.WrapError(ex, fmt.Sprintf("failed to build CmtKey from cmtRecord.Error:%s", ex), http.StatusInternalServerError)
+			return Http.WrapError(ex, fmt.Sprintf("failed to build CmtKey from cmtRecord.Error:%s", ex), http.StatusInternalServerError)
 		}
 		indexPath := fmt.Sprintf("%s[%s]", attrPath, value)
-		_, idPath := Util.ParsePath(dataPath)
-		if indexPath != idPath {
-			return false, Http.NewHttpError(fmt.Sprintf("cmt Record=[%s/%s] build path=[%s] does not match data path=[%s]", cmtRecord.Type, cmtRecord.Id, indexPath, dataPath), http.StatusBadRequest)
+		if indexPath != dataPath {
+			return Http.NewHttpError(fmt.Sprintf("cmt Record=[%s/%s] build path=[%s] does not match data path=[%s]", cmtRecord.Type, cmtRecord.Id, indexPath, dataPath), http.StatusBadRequest)
 		}
 	}
-	return true, nil
-}
-
-func (h *Handler) validateSubDoc(doc *SchemaDoc.SchemaDoc, data map[string]interface{}, dataPath string) *Http.HttpError {
-	for pname, pDoc := range doc.SubDocs {
-		subPath := path.Join(dataPath, pname)
-		subData, ok := data[pname]
-		if !ok {
-			// property does not exists
-			continue
-		}
-		switch reflect.TypeOf(subData).Kind() {
-		case reflect.Map:
-			// Object, validate directly
-			err := h.ValidateDataRefs(pDoc, subData, subPath)
-			if err != nil {
-				return err
-			}
-		case reflect.Slice:
-			// check each item value of array
-			for idx, idxData := range subData.([]interface{}) {
-				idxPath := fmt.Sprintf("%s[%d]", subPath, idx)
-				err := h.ValidateDataRefs(pDoc, idxData, idxPath)
-				if err != nil {
-					return err
-				}
-			}
-		default:
-			// data value does not match schema
-			return Http.NewHttpError(fmt.Sprintf("data is not [%s or %s] @[path]=[%s]", reflect.Map, reflect.Slice, subPath), http.StatusBadRequest)
-		}
-		// itemized data type passed
-		return nil
-	}
-
 	return nil
 }
 

@@ -59,10 +59,14 @@ func (e HttpError) Error() string {
 	return string(errTxtBytes)
 }
 
-func AppendError(srcErr *HttpError, err *HttpError) {
-	Util.PrefixStrLst(err.Message, TAB)
-	srcErr.Message = append(srcErr.Message, err.Message...)
-	srcErr.Context = append(srcErr.Context, err.Error())
+func (e *HttpError) AppendError(err error) {
+	if !IsHttpError(err) {
+		e.Context = append(e.Context, e.Error())
+	}
+	newE := err.(*HttpError)
+	Util.PrefixStrLst(newE.Context, TAB)
+	e.Context = append(e.Context, newE.Message...)
+	e.Context = append(e.Context, newE.Context...)
 }
 
 func IsHttpError(err error) bool {

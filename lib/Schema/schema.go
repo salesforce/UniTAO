@@ -128,7 +128,7 @@ func (schema *SchemaOps) ValidateRecord(record *Record.Record) error {
 		autoIdxList := CmtIndex.FindAutoIndex(s, "")
 		errList := make([]string, 0, len(autoIdxList))
 		for _, autoIdx := range autoIdxList {
-			err := CmtIndex.ValidateIndexTemplate(autoIdx)
+			err := CmtIndex.ValidateIndexTemplate(record.Id, autoIdx)
 			if err != nil {
 				errList = append(errList, err.Error())
 			}
@@ -432,7 +432,12 @@ func setStrArrayItem(data map[string]interface{}, attrName string, key string, n
 		return nil
 	}
 	if newData == nil {
-		return Http.NewHttpError(fmt.Sprintf("key=[%s] does not exists", key), http.StatusNotModified)
+		// key already deleted
+		return Http.NewHttpError(fmt.Sprintf("key=[%s] already deleted", key), http.StatusNotModified)
+	}
+	if key != newData.(string) {
+		// key to repoint does not exists, return not found
+		return Http.NewHttpError(fmt.Sprintf("key=[%s] does not exists", key), http.StatusNotFound)
 	}
 	if refExists {
 		return Http.NewHttpError(fmt.Sprintf("key ref=[%s] already exists", newData.(string)), http.StatusNotModified)

@@ -33,6 +33,7 @@ import (
 	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
 	"github.com/salesforce/UniTAO/lib/Util"
 	"github.com/salesforce/UniTAO/lib/Util/Json"
+	"github.com/salesforce/UniTAO/lib/Util/Template"
 )
 
 const (
@@ -164,8 +165,16 @@ func getItemAutoIndex(schema *SchemaDoc.SchemaDoc, attr string, itemDef map[stri
 	return linkList
 }
 
-func ValidateIndexTemplate(idx AutoIndex) error {
-	idTemp, idxPath := Util.ParsePath(idx.IndexTemplate)
+func ValidateIndexTemplate(dataType string, idx AutoIndex) error {
+	typePart, idPath := Util.ParsePath(idx.IndexTemplate)
+	typeTemp, err := Template.ParseStr(typePart, "{", "}")
+	if err != nil {
+		return fmt.Errorf("invalid template, failed to parse the dataType part [%s] of index Template[%s]", dataType, idx.IndexTemplate)
+	}
+	if len(typeTemp.Vars) == 0 && typePart != dataType {
+		return fmt.Errorf("invalid template, the data type part[%s]!=subscription type[%s]", typePart, dataType)
+	}
+	idTemp, idxPath := Util.ParsePath(idPath)
 	if idTemp == "" {
 		return fmt.Errorf("invalid [%s], cannot be empty string", JsonKey.IndexTemplate)
 	}
