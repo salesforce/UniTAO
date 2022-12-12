@@ -56,6 +56,7 @@ func NewWorker(workerId string, interval time.Duration, logger *log.Logger, run 
 	}
 	worker := Worker{
 		Id:       workerId,
+		wg:       &sync.WaitGroup{},
 		interval: interval,
 		log:      logger,
 		event:    make(chan interface{}),
