@@ -32,10 +32,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/url"
 
 	"github.com/salesforce/UniTAO/lib/Schema/CmtIndex"
-	"github.com/salesforce/UniTAO/lib/Schema/Compare"
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Util"
@@ -86,6 +84,7 @@ func (s *CmtIndexChanges) Log(message string) {
 }
 
 func (s *CmtIndexChanges) ProcessEntry(dataType string, dataId string, entry *ProcessIface.JournalEntry) *Http.HttpError {
+	s.Log(fmt.Sprintf("process Entry of %s", dataType))
 	switch dataType {
 	case CmtIndex.KeyCmtIdx:
 		return s.processCmtIndexChange(dataId, entry)
@@ -98,45 +97,47 @@ func (s *CmtIndexChanges) processCmtIndexChange(dataType string, entry *ProcessI
 	// if data remove on the CmtIndex record, It means the Schema with IndexTemplate is being removed.
 	// Remov the empty subscription by level. record or dataType
 	if entry.After == nil {
-		return Http.NewHttpError(fmt.Sprintf("deletion on %s/%s, do nothing", CmtIndex.KeyCmtIdx, dataType), http.StatusNotModified)
+		errMsg := fmt.Sprintf("deletion on %s/%s, do nothing", CmtIndex.KeyCmtIdx, dataType)
+		s.Log(errMsg)
+		return Http.NewHttpError(errMsg, http.StatusNotModified)
 	}
 	if entry.Before == nil {
 		return s.processNewSubscription(dataType)
 	}
 	// if data add on the CmtIndex record then add journal to all data record
-	schema, err := s.Data.LocalSchema(dataType, "")
-	if err != nil {
-		return err
-	}
 	beforeRec, ex := Record.LoadMap(entry.Before)
 	if ex != nil {
 		// do not recognize entry as record.
-		s.log.Printf("failed to load entry Before. @type=[%s], page=[%d], entry=[%d]", dataType, entry.Page, entry.Idx)
+		s.log.Printf("failed to load entry Before. @type=[%s], page=[%d], entry=[%d], Error:%s", dataType, entry.Page, entry.Idx, ex)
 		return nil
 	}
 	afterRec, ex := Record.LoadMap(entry.After)
 	if ex != nil {
 		// do not recognize entry as record.
-		return Http.NewHttpError(fmt.Sprintf("failed to load entry After. @type=[%s], page=[%d], entry=[%d]", dataType, entry.Page, entry.Idx), http.StatusNotModified)
+		s.log.Printf("failed to load entry After. @type=[%s], page=[%d], entry=[%d], Error:%s", dataType, entry.Page, entry.Idx, ex)
+		return nil
 	}
-	cmp := Compare.SchemaCompare{
-		Schema: schema.Schema,
+	hasNewIdx, ex := CmtIndex.HasNewIdx(beforeRec.Data, afterRec.Data)
+	if ex != nil {
+		s.Log(fmt.Sprintf("failed to compare before and after of type[%s]", CmtIndex.KeyCmtIdx))
+		return nil
 	}
-	diffs := cmp.CompareObj(beforeRec.Data, afterRec.Data, "")
-	for _, diff := range diffs {
-		if diff.Action == Compare.Add {
-			return s.processNewSubscription(dataType)
-		}
+	if hasNewIdx {
+		s.processNewSubscription(dataType)
 	}
 	return nil
 }
 
 func (s *CmtIndexChanges) processNewSubscription(dataType string) *Http.HttpError {
+	s.Log(fmt.Sprintf("process new Subscription for type=[%s]", dataType))
 	if s.Data.AddJournal == nil {
+		s.Log("AddJournal=nil, do nothing")
 		return Http.NewHttpError("AddJournal=nil, do nothing", http.StatusNotModified)
 	}
 	allRecords, err := s.Data.QueryDb(dataType, "")
 	if err != nil {
+		s.Log(fmt.Sprintf("failed to query record of type [%s]", dataType))
+		s.Log(err.Error())
 		return err
 	}
 	for _, data := range allRecords {
@@ -196,23 +197,24 @@ func (s *CmtIndexChanges) processDataChange(dataType string, dataId string, entr
 				if beforeRec != nil {
 					dataPath, ex := template.BuildValue(beforeRec.Data)
 					if ex != nil {
-						s.log.Printf("failed to build id from template on entry.Before. [%s/%s]", dataType, dataId)
-						continue
-					}
-					beforeType, idPath := Util.ParsePath(dataPath)
-					if dataType == beforeType {
-						beforePath = fmt.Sprintf("%s[%s]", idPath, url.QueryEscape(dataId))
+						s.Log(fmt.Sprintf("not able to build a good idPath. Before. [%s/%s], Error:%s", dataType, dataId, ex))
+					} else {
+						beforeType, idPath := Util.ParsePath(dataPath)
+						if dataType == beforeType {
+							beforePath = idPath
+						}
 					}
 				}
 				afterPath := ""
 				if afterRec != nil {
 					dataPath, ex := template.BuildValue(afterRec.Data)
 					if ex != nil {
-						return Http.WrapError(ex, "not able to build a good idPath, no change", http.StatusNotModified)
-					}
-					afterType, idPath := Util.ParsePath(dataPath)
-					if dataType == afterType {
-						afterPath = fmt.Sprintf("%s[%s]", idPath, url.QueryEscape(dataId))
+						s.Log(fmt.Sprintf("not able to build a good idPath, After. [%s/%s], Error:%s", dataType, dataId, ex))
+					} else {
+						afterType, idPath := Util.ParsePath(dataPath)
+						if dataType == afterType {
+							afterPath = idPath
+						}
 					}
 				}
 				if beforePath == afterPath {
@@ -220,17 +222,18 @@ func (s *CmtIndexChanges) processDataChange(dataType string, dataId string, entr
 				}
 				hasChange = true
 				if beforePath != "" {
-					s.Log(fmt.Sprintf("remove path [%s/%s/%s]", dataType, version, beforePath))
-					err = s.setIndex(dataType, version, beforePath, "")
+					removePath := fmt.Sprintf("%s[%s]", beforePath, dataId)
+					s.Log(fmt.Sprintf("remove path [%s/%s/%s]", dataType, version, removePath))
+					err = s.setIndex(dataType, version, removePath, "")
 					if err != nil && err.Status != http.StatusNotModified && err.Status != http.StatusNotFound {
-						return Http.WrapError(err, fmt.Sprintf("failed to delete @path=[%s/%s/%s]", dataType, version, beforePath), err.Status)
+						return Http.WrapError(err, fmt.Sprintf("failed to delete idx @path=[%s/%s/%s]", dataType, version, beforePath), err.Status)
 					}
 				}
 				if afterPath != "" {
-					s.Log(fmt.Sprintf("set path [%s/%s/%s]", dataType, version, afterPath))
+					s.Log(fmt.Sprintf("set path [%s/%s/%s] with id=[%s]", dataType, version, afterPath, dataId))
 					err = s.setIndex(dataType, version, afterPath, dataId)
 					if err != nil && err.Status != http.StatusNotModified && err.Status != http.StatusNotFound {
-						return Http.WrapError(err, fmt.Sprintf("failed to set @path=[%s/%s/%s]", dataType, version, beforePath), err.Status)
+						return Http.WrapError(err, fmt.Sprintf("failed to set idx @path=[%s/%s/%s], with id=[%s]", dataType, version, beforePath, dataId), err.Status)
 					}
 				}
 			}
@@ -245,7 +248,7 @@ func (s *CmtIndexChanges) processDataChange(dataType string, dataId string, entr
 func (s *CmtIndexChanges) setIndex(dataType string, version string, dataPath string, idxId string) *Http.HttpError {
 	dataId, nextPath := Util.ParsePath(dataPath)
 	if dataId == "" {
-		s.log.Printf("empty dataPath, not able to get data Path to write the index into. @path=[%s]", dataPath)
+		s.Log(fmt.Sprintf("empty dataPath, not able to get data Path to write the index into. @path=[%s]", dataPath))
 		return nil
 	}
 	headers := map[string]interface{}{
@@ -258,6 +261,7 @@ func (s *CmtIndexChanges) setIndex(dataType string, version string, dataPath str
 		err = s.Data.Inventory.Patch(dataType, dataId, nextPath, headers, idxId)
 	}
 	if err != nil {
+		s.Log(fmt.Sprintf("failed to patch [%s/%s/%s] with id=[%s],\nError:%s", dataType, dataId, nextPath, idxId, err))
 		return err
 	}
 	return nil

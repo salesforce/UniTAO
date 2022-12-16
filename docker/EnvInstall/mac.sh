@@ -23,18 +23,8 @@
 # This copyright notice and license applies to all files in this directory or sub-directories, except when stated otherwise explicitly.
 # ************************************************************************************************************
 
-
-SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]:-$0}"; )" &> /dev/null && pwd 2> /dev/null; )";
-IMAGE_NAME="$(echo "UniTAO/${SCRIPT_DIR##*/}:localbuild" | awk '{print tolower($0)}';)"
-
-pushd $SCRIPT_DIR/../../
-
-docker pull golang:1.18
-docker pull centos:latest
-
-# Create the docker image with tag localbuild the image with same tag will be set as empty
-docker build --no-cache -t $IMAGE_NAME -f $SCRIPT_DIR/dockerfile .
-# remove the empty image from previous command
-docker rmi $(docker images --filter "dangling=true" -q --no-trunc)
-
-popd
+brew install colima
+brew install docker
+brew install docker-compose
+brew install docker-credential-helper
+colima start

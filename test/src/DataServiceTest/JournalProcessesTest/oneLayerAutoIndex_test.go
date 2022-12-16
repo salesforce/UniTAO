@@ -131,9 +131,10 @@ func setData(t *TestEnv, recordStr string) int {
 }
 
 func processJournal(t *TestEnv, dataType string, dataId string) int {
+	worker := DataJournal.NewJournalWorker(t.Journal, dataType, dataId, nil, t.Processes)
 	count := 0
 	for {
-		err := DataJournal.ProcessNextEntry(t.Journal, t.Processes, dataType, dataId, log.Default())
+		err := worker.ProcessNextEntry()
 		if err != nil {
 			if err.Status == http.StatusNotFound {
 				log.Printf("run out of Journal Entry on %s/%s", dataType, dataId)

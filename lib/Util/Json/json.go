@@ -68,7 +68,7 @@ func LoadJSONList(filePath string) ([]interface{}, error) {
 	return data.([]interface{}), nil
 }
 
-func StructToMap(sData interface{}) (map[string]interface{}, error) {
+func CopyToMap(sData interface{}) (map[string]interface{}, error) {
 	data := make(map[string]interface{})
 	err := CopyTo(sData, &data)
 	if err != nil {

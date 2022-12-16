@@ -116,7 +116,7 @@ func (srv *Server) RunHttp() {
 }
 
 func (srv *Server) RunJournalHandler() {
-	journal, err := DataJournal.NewJournalHandler(srv.data, srv.journal, 0, srv.log)
+	journal, err := DataJournal.NewJournalHandler(srv.data, srv.journal, srv.log)
 	if err != nil {
 		srv.log.Fatalf("failed to load Journal Handler. Error:%s", err)
 	}
@@ -260,11 +260,14 @@ func ParseRecord(noRecordList []string, payload map[string]interface{}, dataType
 }
 
 func (srv *Server) handlePost(w http.ResponseWriter, r *http.Request, dataType string, dataId string) {
-	payload := make(map[string]interface{})
-	err := Http.LoadRequest(r, &payload)
+	reqBody, err := Http.LoadRequest(r)
 	if err != nil {
 		Http.ResponseJson(w, err, err.Status, srv.config.Http)
 		return
+	}
+	payload, ok := reqBody.(map[string]interface{})
+	if !ok {
+		Http.ResponseJson(w, "failed to parse request into JSON object", http.StatusBadRequest, srv.config.Http)
 	}
 	record, e := ParseRecord(r.Header.Values(Record.NotRecord), payload, dataType, dataId)
 	if e != nil {
@@ -280,11 +283,14 @@ func (srv *Server) handlePost(w http.ResponseWriter, r *http.Request, dataType s
 }
 
 func (srv *Server) handlePut(w http.ResponseWriter, r *http.Request, dataType string, dataId string) {
-	payload := make(map[string]interface{})
-	e := Http.LoadRequest(r, &payload)
+	reqBody, e := Http.LoadRequest(r)
 	if e != nil {
 		Http.ResponseJson(w, e, e.Status, srv.config.Http)
 		return
+	}
+	payload, ok := reqBody.(map[string]interface{})
+	if !ok {
+		Http.ResponseJson(w, "failed to parse request into JSON object", http.StatusBadRequest, srv.config.Http)
 	}
 	record, e := ParseRecord(r.Header.Values(Record.NotRecord), payload, dataType, dataId)
 	if e != nil {
@@ -311,8 +317,7 @@ func (srv *Server) handleDelete(w http.ResponseWriter, dataType string, dataId s
 }
 
 func (srv *Server) handlePatch(w http.ResponseWriter, r *http.Request, dataType string, idPath string) {
-	payload := make(map[string]interface{})
-	e := Http.LoadRequest(r, &payload)
+	payload, e := Http.LoadRequest(r)
 	if e != nil {
 		Http.ResponseJson(w, e, e.Status, srv.config.Http)
 		return

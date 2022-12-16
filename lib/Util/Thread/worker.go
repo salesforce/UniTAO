@@ -26,6 +26,7 @@ This copyright notice and license applies to all files in this directory or sub-
 package Thread
 
 import (
+	"fmt"
 	"log"
 	"sync"
 	"syscall"
@@ -43,11 +44,11 @@ type Worker struct {
 	interval time.Duration
 	log      *log.Logger
 	event    chan interface{}
-	run      func(chan interface{})
+	run      func(chan interface{}) error
 	cleanup  func(id string) error
 }
 
-func NewWorker(workerId string, interval time.Duration, logger *log.Logger, run func(chan interface{}), cleanup func(id string) error) *Worker {
+func NewWorker(workerId string, interval time.Duration, logger *log.Logger, run func(chan interface{}) error, cleanup func(id string) error) *Worker {
 	if interval <= 0 {
 		interval = DefaultInt
 	}
@@ -66,6 +67,10 @@ func NewWorker(workerId string, interval time.Duration, logger *log.Logger, run 
 	return &worker
 }
 
+func (w *Worker) Log(message string) {
+	w.log.Printf("JournalWorker[%s]: %s", w.Id, message)
+}
+
 func (w *Worker) setup() {
 	w.stopped = false
 	w.wg.Add(1)
@@ -77,7 +82,7 @@ func (w *Worker) postRun() {
 		if err == nil {
 			return
 		}
-		w.log.Printf("failed to run cleanup function, sleep and try again. Error: %s", err)
+		w.Log(fmt.Sprintf("failed to run cleanup function, sleep and try again. Error: %s", err))
 		time.Sleep(w.interval)
 	}
 }
@@ -85,7 +90,10 @@ func (w *Worker) postRun() {
 func (w *Worker) workerRoutine() {
 	w.setup()
 	defer w.postRun()
-	w.run(w.event)
+	err := w.run(w.event)
+	if err != nil {
+		w.Log(fmt.Sprintf("Run Failed. Error:%s", err))
+	}
 }
 
 func (w *Worker) Run() {

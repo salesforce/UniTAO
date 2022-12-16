@@ -27,10 +27,12 @@ package SchemaTest
 
 import (
 	"fmt"
+	"net/http"
 	"testing"
 
 	"github.com/salesforce/UniTAO/lib/Schema"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
+	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
 
 func TestPatchSimpePath(t *testing.T) {
@@ -110,7 +112,10 @@ func TestPatchArrayStr(t *testing.T) {
 	}
 	e = patchData(schemaStr, record, "attr1[test]", "ok")
 	if e == nil {
-		t.Fatal("failed to catch: 'simple array patch should use index failure'")
+		t.Fatal("failed to patch: 'test is gone, there should be no test to modify'")
+	}
+	if !Http.IsHttpError(e) || e.(*Http.HttpError).Status != http.StatusNotFound {
+		t.Fatalf("key does not exists, should return StatusNotFound[%d]", http.StatusNotFound)
 	}
 	e = patchData(schemaStr, record, "attrCmt[cmt01]", "ok")
 	if e != nil {

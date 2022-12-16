@@ -150,11 +150,14 @@ func (srv *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		Http.ResponseJson(w, err, err.Status, srv.config.Http)
 		return
 	}
-	payload := make(map[string]interface{})
-	e := Http.LoadRequest(r, &payload)
+	reqBody, e := Http.LoadRequest(r)
 	if e != nil {
 		Http.ResponseJson(w, e, e.Status, srv.config.Http)
 		return
+	}
+	payload, ok := reqBody.(map[string]interface{})
+	if !ok {
+		Http.ResponseJson(w, "failed to parse request into JSON object", http.StatusBadRequest, srv.config.Http)
 	}
 	dataId, err := srv.data.PutData(payload)
 	if err != nil {

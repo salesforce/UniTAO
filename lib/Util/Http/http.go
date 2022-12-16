@@ -58,16 +58,17 @@ type Config struct {
 	HeaderCfg map[string]interface{} `json:"headers"`
 }
 
-func LoadRequest(r *http.Request, data interface{}) *HttpError {
+func LoadRequest(r *http.Request) (interface{}, *HttpError) {
 	reqBody, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		return WrapError(err, "failed to read body from request", http.StatusBadRequest)
+		return nil, WrapError(err, "failed to read body from request", http.StatusBadRequest)
 	}
-	err = json.Unmarshal(reqBody, data)
+	data := map[string]interface{}{}
+	err = json.Unmarshal(reqBody, &data)
 	if err != nil {
-		return WrapError(err, "failed to load request body", http.StatusBadRequest)
+		return string(reqBody), nil
 	}
-	return nil
+	return data, nil
 }
 
 func ResponseJson(w http.ResponseWriter, data interface{}, status int, httpCfg Config) {
@@ -113,9 +114,10 @@ func ResponseErr(w http.ResponseWriter, err error, code int, httpCfg Config) {
 }
 
 func GetRestData(url string) (interface{}, int, error) {
-	response, code, err := SubmitPayload(url, http.MethodGet, nil, nil)
+	client := &http.Client{}
+	response, err := client.Get(url)
 	if err != nil {
-		return nil, code, fmt.Errorf("failed to get response, [url]=[%s], Err:%s", url, err)
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to get response, [url]=[%s], Err:%s", url, err)
 	}
 	responseData, err := ioutil.ReadAll(response.Body)
 	if response.StatusCode >= 200 && response.StatusCode <= 299 {
@@ -148,9 +150,16 @@ func SubmitPayload(dataUrl string, method string, headers map[string]interface{}
 		}
 		req = r
 	} else {
-		json_data, err := json.MarshalIndent(payload, "", "    ")
-		if err != nil {
-			return nil, http.StatusBadRequest, fmt.Errorf("failed to marshal payload. Error: %s", err)
+		payloadType := reflect.TypeOf(payload).Kind()
+		var json_data []byte
+		if payloadType == reflect.Slice || payloadType == reflect.Map {
+			data, err := json.MarshalIndent(payload, "", "    ")
+			if err != nil {
+				return nil, http.StatusBadRequest, fmt.Errorf("failed to marshal payload. Error: %s", err)
+			}
+			json_data = data
+		} else {
+			json_data = []byte(payload.(string))
 		}
 		r, err := http.NewRequest(method, dataUrl, bytes.NewBuffer(json_data))
 		if err != nil {

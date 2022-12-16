@@ -40,14 +40,14 @@ import (
 )
 
 const (
-	defaultInterval = 60 * time.Second
+	intervalStep = 5
+	maxInterval  = 60
 )
 
 type JournalHandler struct {
 	Data        *DataHandler.Handler
 	lib         *JournalLib
 	OpsCtrl     *Thread.ThreadCtrl
-	interval    time.Duration
 	log         *log.Logger
 	processList []ProcessIface.JournalProcess
 }
@@ -58,13 +58,19 @@ func LoadProcesses(data *DataHandler.Handler, log *log.Logger) ([]ProcessIface.J
 	if err != nil {
 		return nil, err
 	}
+	log.Printf("process [%s] created", schema.Name())
 	processList = append(processList, schema)
 	cmtIdx, err := Process.NewCmtIndexProcess(data, log)
 	if err != nil {
 		return nil, err
 	}
+	log.Printf("process [%s] created", cmtIdx.Name())
 	processList = append(processList, cmtIdx)
 	return processList, nil
+}
+
+func (o *JournalHandler) Log(message string) {
+	o.log.Printf("Journal Handler: %s", message)
 }
 
 func (o *JournalHandler) getProcessList() error {
@@ -76,20 +82,17 @@ func (o *JournalHandler) getProcessList() error {
 	return nil
 }
 
-func NewJournalHandler(data *DataHandler.Handler, lib *JournalLib, interval time.Duration, logger *log.Logger) (*JournalHandler, error) {
-	if interval == 0 {
-		interval = defaultInterval
-	}
+func NewJournalHandler(data *DataHandler.Handler, lib *JournalLib, logger *log.Logger) (*JournalHandler, error) {
 	if logger == nil {
 		logger = log.Default()
 	}
 	journal := JournalHandler{
-		Data:     data,
-		lib:      lib,
-		OpsCtrl:  Thread.NewThreadController(logger),
-		interval: interval,
-		log:      logger,
+		Data:    data,
+		lib:     lib,
+		OpsCtrl: Thread.NewThreadController(logger),
+		log:     logger,
 	}
+	journal.Log("Created")
 	err := journal.getProcessList()
 	if err != nil {
 		return nil, err
@@ -97,53 +100,68 @@ func NewJournalHandler(data *DataHandler.Handler, lib *JournalLib, interval time
 	return &journal, nil
 }
 
-func (o *JournalHandler) Run(notify chan interface{}) {
+func (o *JournalHandler) Run(notify chan interface{}) error {
+	interval := 0
+	o.Log("Start Journal Handler Loop")
 	for {
 		select {
 		case event := <-notify:
 			o.OpsCtrl.Broadcast(event)
 			signal, ok := event.(os.Signal)
 			if ok && signal == syscall.SIGINT {
-				return
+				return nil
 			}
-		case <-time.After(o.interval):
-			o.ProcessAllJournals()
+		case <-time.After(time.Duration(interval) * time.Second):
+			if !o.ProcessAllJournals() {
+				if interval < maxInterval {
+					interval += intervalStep
+				}
+			} else {
+				interval = intervalStep
+			}
+			o.Log(fmt.Sprintf("sleep for %d seconds", interval))
 		}
 	}
 }
 
-func (o *JournalHandler) ProcessAllJournals() {
-	o.log.Print("start threads process all journals")
+func (o *JournalHandler) ProcessAllJournals() bool {
+	o.Log("start threads process all journals")
+	hasChange := false
 	dataTypeList := o.lib.ListJournalTypes()
 	for _, dataType := range dataTypeList {
-		o.ProcessJournalByType(dataType)
+		o.Log(fmt.Sprintf("process journal for type:[%s]", dataType))
+		if o.ProcessJournalByType(dataType) {
+			hasChange = true
+		}
 	}
+	return hasChange
 }
 
-func (o *JournalHandler) ProcessJournalByType(dataType string) {
+func (o *JournalHandler) ProcessJournalByType(dataType string) bool {
 	dataIdList := o.lib.ListJournalIds(dataType)
+	hasChange := false
 	for _, dataId := range dataIdList {
-		o.ProcessJournalById(dataType, dataId)
+		o.Log(fmt.Sprintf("process journal for data[%s/%s]", dataType, dataId))
+		if o.ProcessJournalById(dataType, dataId) {
+			hasChange = true
+		}
 	}
+	return hasChange
 }
 
-func (o *JournalHandler) ProcessJournalById(dataType string, dataId string) {
+func (o *JournalHandler) ProcessJournalById(dataType string, dataId string) bool {
 	workerId := fmt.Sprintf("%s_%s", dataType, dataId)
 	worker := o.OpsCtrl.GetWorker(workerId)
 	if worker != nil {
-		return
+		return false
 	}
-	jWorker := JournalWorker{
-		lib:       o.lib,
-		dataType:  dataType,
-		dataId:    dataId,
-		log:       o.log,
-		processes: o.processList,
-	}
+	jWorker := NewJournalWorker(o.lib, dataType, dataId, o.log, o.processList)
+	o.Log(fmt.Sprintf("worker created: [%s]", workerId))
 	worker, err := o.OpsCtrl.AddWorker(workerId, jWorker.Run)
 	if err != nil {
 		// TODO: log error and exit without throw anything.
-		return
+		o.Log(fmt.Sprintf("failed to add workder[%s], Error:%s", workerId, err))
 	}
 	worker.Run()
+	return true
 }

@@ -171,7 +171,7 @@ func (a *Admin) addDsRecord() error {
 		return fmt.Errorf("failed to query Data Service record, [%s]=[%s], Status:%d, Error:%s", Record.DataId, a.args.ops.id, err.Status, err)
 	}
 	dsRecord := InvRecord.NewDsInfo(a.args.ops.id, a.args.ops.url)
-	payload, e := Json.StructToMap(dsRecord)
+	payload, e := Json.CopyToMap(dsRecord)
 	if e != nil {
 		return e
 	}
@@ -284,7 +284,7 @@ func (a *Admin) addType(dsId string, dataType string) error {
 		SchemaVer: schemaRecord.(map[string]interface{})[Record.Version].(string),
 		DsId:      dsId,
 	}
-	referralData, _ := Json.StructToMap(referral.GetRecord())
+	referralData, _ := Json.CopyToMap(referral.GetRecord())
 	a.handler.Db.Create(RefRecord.Referral, referralData)
 	return nil
 }

@@ -533,25 +533,6 @@ func (d *SchemaDoc) IsAncestor(docId string) bool {
 	return false
 }
 
-func (d *SchemaDoc) MapArray(attr string, data []interface{}) map[string]interface{} {
-	keyMap := map[string]interface{}{}
-	if len(data) == 0 {
-		return keyMap
-	}
-	itemDef := d.Data[JsonKey.Properties].(map[string]interface{})[attr].(map[string]interface{})[JsonKey.Items].(map[string]interface{})
-	itemType := itemDef[JsonKey.Type].(string)
-	for _, item := range data {
-		if itemType != JsonKey.Object {
-			keyMap[item.(string)] = item
-			continue
-		}
-		itemSchema := d.SubDocs[attr]
-		itemKey, _ := itemSchema.BuildKey(item.(map[string]interface{}))
-		keyMap[itemKey] = item
-	}
-	return keyMap
-}
-
 func IsMap(attrDef map[string]interface{}) bool {
 	addProps, ok := attrDef[JsonKey.AdditionalProperties]
 	if !ok || reflect.TypeOf(addProps).Kind() == reflect.Bool {

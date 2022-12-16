@@ -51,7 +51,7 @@ func NewThreadController(logger *log.Logger) *ThreadCtrl {
 	return &c
 }
 
-func (c *ThreadCtrl) AddWorker(workerId string, funcToCall func(chan interface{})) (*Worker, error) {
+func (c *ThreadCtrl) AddWorker(workerId string, funcToCall func(chan interface{}) error) (*Worker, error) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	if workerId == "" {

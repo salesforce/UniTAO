@@ -30,6 +30,7 @@ import (
 	"InventoryService/InvRecord"
 	"InventoryService/RefRecord"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 
 	"github.com/salesforce/UniTAO/lib/Schema/CmtIndex"
@@ -55,24 +56,24 @@ func CreateDsProxy(hdl *Handler) *DataServiceProxy {
 	return &inv
 }
 
-func (i *DataServiceProxy) log(message string) {
+func (i *DataServiceProxy) Log(message string) {
 	i.handler.log.Printf("DsInvProxy: %s", message)
 }
 
 func (i *DataServiceProxy) refresh() {
 	schemaUrl, ex := Http.URLPathJoin(i.Url, JsonKey.Schema)
 	if ex != nil {
-		i.log(fmt.Sprintf("failed to build inv schema url, Error:%s", ex))
+		i.Log(fmt.Sprintf("failed to build inv schema url, Error:%s", ex))
 		return
 	}
 	data, code, ex := Http.GetRestData(*schemaUrl)
 	if ex != nil {
-		i.log(fmt.Sprintf("inventory=[%s] does not work, code: %d Error: %s", *schemaUrl, code, ex))
+		i.Log(fmt.Sprintf("inventory=[%s] does not work, code: %d Error: %s", *schemaUrl, code, ex))
 		return
 	}
 	typeList, ok := data.([]interface{})
 	if !ok {
-		i.log("bad result from inventory, failed convert to array")
+		i.Log("bad result from inventory, failed convert to array")
 		return
 	}
 	for _, item := range typeList {
@@ -85,44 +86,65 @@ func (i *DataServiceProxy) refresh() {
 
 func (i *DataServiceProxy) GetDsInfo(dataType string) (*InvRecord.DataServiceInfo, *Http.HttpError) {
 	if dataType == "" {
-		return nil, Http.NewHttpError("dataType is empty, failed to get Data Source", http.StatusBadRequest)
+		errMsg := "dataType is empty, failed to get Data Source"
+		i.Log(errMsg)
+		return nil, Http.NewHttpError(errMsg, http.StatusBadRequest)
 	}
 	_, ok := Common.InternalTypes[dataType]
 	if ok {
-		return nil, Http.NewHttpError(fmt.Sprintf("internal data type of [%s], not for inventory", dataType), http.StatusBadRequest)
+		errMsg := fmt.Sprintf("internal data type of [%s], not for inventory", dataType)
+		i.Log(errMsg)
+		return nil, Http.NewHttpError(errMsg, http.StatusBadRequest)
+	}
+	if _, ok := i.DsInfo[dataType]; !ok {
+		i.refresh()
 	}
 	dsInfo, ok := i.DsInfo[dataType]
 	if !ok {
-		return nil, Http.NewHttpError(fmt.Sprintf("unknwon data type of [%s] for inventory", dataType), http.StatusBadRequest)
+		errMsg := fmt.Sprintf("unknwon data type of [%s] for inventory", dataType)
+		i.Log(errMsg)
+		return nil, Http.NewHttpError(errMsg, http.StatusBadRequest)
 	}
 	if dsInfo == nil {
 		refUrl, _ := Http.URLPathJoin(i.Url, RefRecord.Referral, dataType)
 		dsReferralInfo, status, err := Http.GetRestData(*refUrl)
 		if err != nil {
-			return nil, Http.WrapError(err, fmt.Sprintf("failed to get referral data type=[%s] from inventory=[%s]", dataType, i.Url), status)
+			errMsg := fmt.Sprintf("failed to get referral data type=[%s] from inventory=[%s]", dataType, i.Url)
+			i.Log(errMsg)
+			i.Log(err.Error())
+			return nil, Http.WrapError(err, errMsg, status)
 		}
 		dsReferralData, ok := dsReferralInfo.(map[string]interface{})
 		if !ok {
-			return nil, Http.NewHttpError(fmt.Sprintf("invalid [%s] return, not a map. Url=[%s]", RefRecord.Referral, *refUrl), http.StatusInternalServerError)
+			errMsg := fmt.Sprintf("invalid [%s] return, not a map. Url=[%s]", RefRecord.Referral, *refUrl)
+			i.Log(errMsg)
+			return nil, Http.NewHttpError(errMsg, http.StatusInternalServerError)
 		}
 		dsRefRecord, err := Record.LoadMap(dsReferralData)
 		if err != nil {
-			return nil, Http.WrapError(err, fmt.Sprintf("invalid [%s] return, failed to load as record. Url=[%s]", RefRecord.Referral, *refUrl), http.StatusInternalServerError)
+			errMsg := fmt.Sprintf("invalid [%s] return, failed to load as record. Url=[%s]", RefRecord.Referral, *refUrl)
+			i.Log(errMsg)
+			i.Log(err.Error())
+			return nil, Http.WrapError(err, errMsg, http.StatusInternalServerError)
 		}
 		dsRef := RefRecord.ReferralData{}
 		err = Json.CopyTo(dsRefRecord.Data, &dsRef)
 		if err != nil {
-			return nil, Http.WrapError(err, fmt.Sprintf("invalid [%s] return, failed to load as ReferralData. Url=[%s]", RefRecord.Referral, *refUrl), http.StatusInternalServerError)
+			errMsg := fmt.Sprintf("invalid [%s] return, failed to load as ReferralData. Url=[%s]", RefRecord.Referral, *refUrl)
+			i.Log(errMsg)
+			i.Log(err.Error())
+			return nil, Http.WrapError(err, errMsg, http.StatusInternalServerError)
 		}
 		i.DsInfo[dataType] = dsRef.DsInfo
 		dsInfo = dsRef.DsInfo
 	}
+	i.Log(fmt.Sprintf("DataService[%s] for dataType[%s]", dsInfo.Id, dataType))
 	return dsInfo, nil
 }
 
-func (i *DataServiceProxy) getIdUrl(dataType string, dataId string) (string, *Http.HttpError) {
+func (i *DataServiceProxy) getDsUrl(dataType string, dataId string) (string, *Http.HttpError) {
 	queryType := dataType
-	if dataType == CmtIndex.KeyCmtIdx {
+	if dataType == CmtIndex.KeyCmtIdx || dataType == JsonKey.Schema {
 		queryType = dataId
 	}
 	dsInfo, ex := i.GetDsInfo(queryType)
@@ -131,7 +153,19 @@ func (i *DataServiceProxy) getIdUrl(dataType string, dataId string) (string, *Ht
 	}
 	dsUrl, err := dsInfo.GetUrl()
 	if err != nil {
-		return "", Http.WrapError(err, "failed to get Data Service [working] Url", http.StatusInternalServerError)
+		errMsg := "failed to get Data Service [working] Url"
+		i.Log(errMsg)
+		i.Log(err.Error())
+		return "", Http.WrapError(err, errMsg, http.StatusInternalServerError)
+	}
+	i.Log(fmt.Sprintf("Data Service: %s[%s] for [%s/%s]", dsInfo.Id, dsUrl, dataType, dataId))
+	return dsUrl, nil
+}
+
+func (i *DataServiceProxy) getIdUrl(dataType string, dataId string) (string, *Http.HttpError) {
+	dsUrl, ex := i.getDsUrl(dataType, dataId)
+	if ex != nil {
+		return "", ex
 	}
 	idUrl, err := Http.URLPathJoin(dsUrl, dataType, dataId)
 	if err != nil {
@@ -169,7 +203,7 @@ func (i *DataServiceProxy) List(dataType string) ([]interface{}, *Http.HttpError
 
 func (i *DataServiceProxy) IsLocal(dataType string, dataId string) (bool, *Http.HttpError) {
 	var err *Http.HttpError
-	if dataType == JsonKey.Schema {
+	if dataType == JsonKey.Schema || dataType == CmtIndex.KeyCmtIdx {
 		if dataId == "" {
 			return false, nil
 		}
@@ -194,53 +228,80 @@ func (i *DataServiceProxy) Get(dataType string, dataId string) (*Record.Record, 
 		return nil, err
 	}
 	if isLocal {
+		i.Log(fmt.Sprintf("%s/%s is local data", dataType, dataId))
 		data, err := i.handler.Get(dataType, dataId)
 		if err != nil {
+			i.Log(fmt.Sprintf("local GET failed. [%s/%s]", dataType, dataId))
+			i.Log(err.Error())
 			return nil, err
 		}
 		record, ex := Record.LoadMap(data)
 		if ex != nil {
+			i.Log(fmt.Sprintf("local data load as record failed. [%s/%s]", dataType, dataId))
+			i.Log(ex.Error())
 			return nil, Http.WrapError(ex, "failed to load data as Record", http.StatusInternalServerError)
 		}
 		return record, nil
 	}
+	i.Log(fmt.Sprintf("%s/%s is not local data", dataType, dataId))
 	queryUrl, err := i.getIdUrl(dataType, dataId)
 	if err != nil {
+		i.Log(fmt.Sprintf("failed get url for [%s/%s]", dataType, dataId))
+		i.Log(err.Error())
 		return nil, err
 	}
+	i.Log(fmt.Sprintf("Request GET from [%s]", queryUrl))
 	data, code, ex := Http.GetRestData(queryUrl)
 	if ex == nil {
 		mapData, ok := data.(map[string]interface{})
 		if !ok {
-			return nil, Http.NewHttpError(fmt.Sprintf("return data is not an object. [url]=[%s]", queryUrl), http.StatusBadRequest)
+			errMsg := fmt.Sprintf("return data is not an object. [url]=[%s]", queryUrl)
+			i.Log(errMsg)
+			return nil, Http.NewHttpError(errMsg, http.StatusBadRequest)
 		}
-		record, err := Record.LoadMap(mapData)
-		if err != nil {
-			return nil, Http.WrapError(err, fmt.Sprintf("failed to load data as record. url=[%s]", queryUrl), http.StatusInternalServerError)
+		record, ex := Record.LoadMap(mapData)
+		if ex != nil {
+			errMsg := fmt.Sprintf("failed to load data as record. url=[%s]", queryUrl)
+			i.Log(errMsg)
+			i.Log(ex.Error())
+			return nil, Http.WrapError(ex, errMsg, http.StatusInternalServerError)
 		}
 		return record, nil
 	}
+	i.Log(fmt.Sprintf("Get failed. code[%d], Error: %s", code, ex.Error()))
+	i.Log(ex.Error())
 	return nil, Http.NewHttpError(ex.Error(), code)
 }
 
 func (i *DataServiceProxy) Post(record *Record.Record) *Http.HttpError {
 	isLocal, err := i.IsLocal(record.Type, record.Id)
 	if err != nil {
+		i.Log(fmt.Sprintf("failed to query local [%s/%s]", record.Type, record.Id))
+		i.Log(err.Error())
 		return err
 	}
 	if isLocal {
+		i.Log(fmt.Sprintf("[%s] is to be added locally", record.Type))
 		return i.handler.Add(record)
 	}
-	queryUrl, err := i.getIdUrl(record.Type, record.Id)
+	i.Log(fmt.Sprintf("[%s] is to be add on other Data Service", record.Type))
+	queryUrl, err := i.getDsUrl(record.Type, record.Id)
 	if err != nil {
+		i.Log(fmt.Sprintf("failed get url for [%s/%s]", record.Type, record.Id))
+		i.Log(err.Error())
 		return err
 	}
-	_, status, ex := Http.SubmitPayload(queryUrl, http.MethodPost, nil, record)
+	_, status, ex := Http.SubmitPayload(queryUrl, http.MethodPost, nil, record.Map())
 	if ex != nil {
-		return Http.WrapError(ex, fmt.Sprintf("failed to post [%s]", queryUrl), http.StatusInternalServerError)
+		errMsg := fmt.Sprintf("failed to post [%s]", queryUrl)
+		i.Log(errMsg)
+		i.Log(ex.Error())
+		return Http.WrapError(ex, errMsg, status)
 	}
 	if status != http.StatusAccepted && status != http.StatusOK {
-		return Http.NewHttpError(fmt.Sprintf("failed to post [%s]", queryUrl), status)
+		errMsg := fmt.Sprintf("failed to post [%s], [%d] is not Accepted[%d]/Ok[%d]", queryUrl, status, http.StatusAccepted, http.StatusOK)
+		i.Log(errMsg)
+		return Http.NewHttpError(errMsg, status)
 	}
 	return nil
 }
@@ -253,11 +314,11 @@ func (i *DataServiceProxy) Put(record *Record.Record) *Http.HttpError {
 	if isLocal {
 		return i.handler.Set(record)
 	}
-	queryUrl, err := i.getIdUrl(record.Type, record.Id)
+	queryUrl, err := i.getDsUrl(record.Type, record.Id)
 	if err != nil {
 		return err
 	}
-	_, status, ex := Http.SubmitPayload(queryUrl, http.MethodPut, nil, record)
+	_, status, ex := Http.SubmitPayload(queryUrl, http.MethodPut, nil, record.Map())
 	if ex != nil {
 		return Http.WrapError(ex, fmt.Sprintf("failed to put [%s]", queryUrl), http.StatusInternalServerError)
 	}
@@ -285,12 +346,27 @@ func (i *DataServiceProxy) Patch(dataType string, dataId string, dataPath string
 		return err
 	}
 	pUrl := fmt.Sprintf("%s/%s", idUrl, dataPath)
-	_, status, ex := Http.SubmitPayload(pUrl, http.MethodPatch, headers, data)
+	resp, status, ex := Http.SubmitPayload(pUrl, http.MethodPatch, headers, data)
+	respTxt := ""
+	if resp != nil {
+		respData, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			respTxt = string(respData)
+		}
+	}
 	if ex != nil {
-		return Http.WrapError(ex, fmt.Sprintf("failed to patch [%s]", pUrl), http.StatusInternalServerError)
+		err = Http.WrapError(ex, fmt.Sprintf("failed to patch [%s]", pUrl), http.StatusInternalServerError)
+		if respTxt != "" {
+			err.Context = append(err.Context, respTxt)
+		}
+		return err
 	}
 	if status != http.StatusAccepted && status != http.StatusOK {
-		return Http.NewHttpError(fmt.Sprintf("failed to create [%s]", pUrl), status)
+		err = Http.NewHttpError(fmt.Sprintf("failed to create [%s]", pUrl), status)
+		if respTxt != "" {
+			err.Context = append(err.Context, respTxt)
+		}
+		return err
 	}
 	return nil
 }

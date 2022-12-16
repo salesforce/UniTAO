@@ -216,12 +216,12 @@ func (db *dynamoDB) Create(table string, data interface{}) error {
 func (db *dynamoDB) Replace(table string, keys map[string]interface{}, data interface{}) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	currentList, err := db.Get(keys)
+	currentList, err := db.Query(table, "", keys)
 	if err != nil {
 		return err
 	}
 	if len(currentList) > 0 {
-		err = db.Delete(table, keys)
+		err = db.deleteRecord(table, keys)
 		if err != nil {
 			return err
 		}

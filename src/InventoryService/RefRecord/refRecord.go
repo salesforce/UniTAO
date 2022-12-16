@@ -93,6 +93,6 @@ func (r *ReferralData) GetSchema() *Http.HttpError {
 }
 
 func (r *ReferralData) GetRecord() *Record.Record {
-	rMap, _ := Json.StructToMap(r)
+	rMap, _ := Json.CopyToMap(r)
 	return Record.NewRecord(Referral, LatestVer, r.DataType, rMap)
 }

@@ -84,6 +84,14 @@ func IdxList(searchAry []interface{}) map[interface{}]int {
 	return hash
 }
 
+func ListDel(data []interface{}, idx int) []interface{} {
+	if idx < 0 || len(data) == 0 || idx >= len(data) {
+		return nil
+	}
+	newList := append(data[:idx], data[idx+1:]...)
+	return newList
+}
+
 func CountListIdx(itemList []interface{}) (map[interface{}]int, error) {
 	cMap := map[interface{}]int{}
 	if len(itemList) == 0 {

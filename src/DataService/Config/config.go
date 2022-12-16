@@ -54,7 +54,7 @@ type DataTableConfig struct {
 }
 
 func (t *DataTableConfig) Map() map[string]interface{} {
-	data, _ := Json.StructToMap(t)
+	data, _ := Json.CopyToMap(t)
 	return data
 }
 

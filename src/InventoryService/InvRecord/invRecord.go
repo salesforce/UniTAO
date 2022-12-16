@@ -51,7 +51,7 @@ func NewDsInfo(id string, url string) *Record.Record {
 		Id:  id,
 		URL: []string{url},
 	}
-	dsMap, _ := Json.StructToMap(dsInfo)
+	dsMap, _ := Json.CopyToMap(dsInfo)
 	record := Record.NewRecord(Schema.Inventory, LatestVer, id, dsMap)
 	return record
 }

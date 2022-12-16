@@ -30,6 +30,7 @@ import (
 	"DataService/Common"
 	"DataService/DataHandler"
 	"DataService/DataJournal/ProcessIface"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -130,6 +131,7 @@ func (s *SchemaChanges) removeCMTSubscription(schemaRec *Record.Record) *Http.Ht
 		}
 		err := s.removeIdxSubscription(schema.Id, schema.Version, idx)
 		if err != nil && err.Status != http.StatusNotModified {
+			s.Log(fmt.Sprintf("failed to remove idx, [%s/%s], template[%s]", schema.Id, schema.Version, idx.IndexTemplate))
 			return err
 		}
 	}
@@ -151,6 +153,7 @@ func (s *SchemaChanges) subscribeCMT(schemaRec *Record.Record) *Http.HttpError {
 		}
 		err := s.subscribeIndex(schema.Id, schema.Version, idx)
 		if err != nil {
+			s.Log(fmt.Sprintf("failed to add Idx, [%s/%s], template:[%s]", schema.Id, schema.Version, idx.IndexTemplate))
 			return err
 		}
 	}
@@ -199,8 +202,13 @@ func (s *SchemaChanges) createCmtIdx(idx CmtIndex.CmtIndex) *Http.HttpError {
 		if err.Status != http.StatusNotFound {
 			return Http.WrapError(err, fmt.Sprintf("failed to get %s/%s", CmtIndex.KeyCmtIdx, idx.DataType), http.StatusInternalServerError)
 		}
+		s.Log(fmt.Sprintf("inventory post record %s/%s", CmtIndex.KeyCmtIdx, idx.DataType))
+		idxRec := idx.Record()
+		idxStr, _ := json.MarshalIndent(idxRec, "", "    ")
+		s.Log(string(idxStr))
 		err = s.Data.Inventory.Post(idx.Record())
 		if err != nil {
+			s.Log(fmt.Sprintf("failed to crate cmtIdx. [%s/%s], Error:%s", CmtIndex.KeyCmtIdx, idx.DataType, err))
 			return err
 		}
 		return nil
@@ -217,7 +225,11 @@ func (s *SchemaChanges) createCmtIdx(idx CmtIndex.CmtIndex) *Http.HttpError {
 			// only 1 data type in the new subscriber
 			hasChange = true
 			data, _ := Json.Copy(subscriber)
-			return s.Data.Inventory.Patch(CmtIndex.KeyCmtIdx, idx.DataType, typePath, nil, data)
+			err = s.Data.Inventory.Patch(CmtIndex.KeyCmtIdx, idx.DataType, typePath, nil, data)
+			if err != nil {
+				s.Log(fmt.Sprintf("failed add dataType[%s] to %s/%s, \nError:%s", idx.DataType, CmtIndex.KeyCmtIdx, currentIdx.DataType, err))
+			}
+			return err
 		}
 		for version, idxTemp := range subscriber.VersionIndex {
 			versionPath := fmt.Sprintf("%s/%s[%s]", typePath, CmtIndex.KeyVersionIndex, url.QueryEscape(version))
@@ -225,7 +237,11 @@ func (s *SchemaChanges) createCmtIdx(idx CmtIndex.CmtIndex) *Http.HttpError {
 			if !ok {
 				hasChange = true
 				data, _ := Json.Copy(idxTemp)
-				return s.Data.Inventory.Patch(CmtIndex.KeyCmtIdx, idx.DataType, versionPath, nil, data)
+				err = s.Data.Inventory.Patch(CmtIndex.KeyCmtIdx, idx.DataType, versionPath, nil, data)
+				if err != nil {
+					s.Log(fmt.Sprintf("failed add version [%s/%s] to %s/%s, \nError:%s", idx.DataType, version, CmtIndex.KeyCmtIdx, currentIdx.DataType, err))
+				}
+				return err
 			}
 			cPathTempMap := Util.IdxList(cVerIdx.IndexTemplate)
 			for _, pathTemplate := range idxTemp.IndexTemplate {
@@ -234,6 +250,7 @@ func (s *SchemaChanges) createCmtIdx(idx CmtIndex.CmtIndex) *Http.HttpError {
 					hasChange = true
 					err = s.Data.Inventory.Patch(CmtIndex.KeyCmtIdx, idx.DataType, tempPath, nil, pathTemplate)
 					if err != nil {
+						s.Log(fmt.Sprintf("failed add version [%s/%s] with template[%s] to %s/%s, \nError:%s", idx.DataType, version, url.QueryEscape(pathTemplate.(string)), CmtIndex.KeyCmtIdx, currentIdx.DataType, err))
 						return err
 					}
 				}
@@ -241,6 +258,7 @@ func (s *SchemaChanges) createCmtIdx(idx CmtIndex.CmtIndex) *Http.HttpError {
 		}
 	}
 	if !hasChange {
+		s.Log("no change made")
 		return Http.NewHttpError("no change made", http.StatusNotModified)
 	}
 	return nil
@@ -320,6 +338,7 @@ func (s *SchemaChanges) fillIdx(afterRec *Record.Record, idx CmtIndex.AutoIndex)
 		hasChange = true
 		_, err = s.Data.Patch(afterRec.Type, idPatchPath, map[string]interface{}{JsonKey.Version: afterRec.Version}, id.(string))
 		if err != nil {
+			s.Log(fmt.Sprintf("failed to fill local idx. [%s/%s]=[%s],\nError:%s", afterRec.Type, idPatchPath, id.(string), err))
 			return err
 		}
 	}

@@ -47,10 +47,28 @@ type JournalWorker struct {
 	processes []ProcessIface.JournalProcess
 }
 
-func ProcessNextEntry(lib *JournalLib, processes []ProcessIface.JournalProcess, dataType string, dataId string, log *log.Logger) *Http.HttpError {
-	entry := lib.NextJournalEntry(dataType, dataId)
+func NewJournalWorker(lib *JournalLib, dataType string, dataId string, logger *log.Logger, processes []ProcessIface.JournalProcess) *JournalWorker {
+	if logger == nil {
+		logger = log.Default()
+	}
+	if processes == nil {
+		processes = []ProcessIface.JournalProcess{}
+	}
+	return &JournalWorker{
+		lib:       lib,
+		dataType:  dataType,
+		dataId:    dataId,
+		log:       logger,
+		processes: processes,
+	}
+}
+
+func (w *JournalWorker) ProcessNextEntry() *Http.HttpError {
+	entry := w.lib.NextJournalEntry(w.dataType, w.dataId)
 	if entry == nil {
-		return Http.NewHttpError(fmt.Sprintf("failed to get journal of %s/%s", dataType, dataId), http.StatusNotFound)
+		errMsg := fmt.Sprintf("no new journal")
+		w.Log(errMsg)
+		return Http.NewHttpError(errMsg, http.StatusNotFound)
 	}
 	versionList := make([]string, 0, 2)
 	if entry.Before != nil {
@@ -62,12 +80,12 @@ func ProcessNextEntry(lib *JournalLib, processes []ProcessIface.JournalProcess, 
 			versionList = append(versionList, afterVer)
 		}
 	}
-	for _, p := range processes {
+	for _, p := range w.processes {
 		canHandle := false
 		for _, ver := range versionList {
-			can, err := p.HandleType(dataType, ver)
+			can, err := p.HandleType(w.dataType, ver)
 			if err != nil {
-				return Http.WrapError(err, fmt.Sprintf("not able to determine [%s] can handle type=[%s] & ver=[%s]", p.Name(), dataType, ver), http.StatusInternalServerError)
+				return Http.WrapError(err, fmt.Sprintf("not able to determine [%s] can handle type=[%s] & ver=[%s]", p.Name(), w.dataType, ver), http.StatusInternalServerError)
 			}
 			if can {
 				canHandle = can
@@ -75,39 +93,60 @@ func ProcessNextEntry(lib *JournalLib, processes []ProcessIface.JournalProcess, 
 			}
 		}
 		if canHandle {
-			err := p.ProcessEntry(dataType, dataId, entry)
+			err := p.ProcessEntry(w.dataType, w.dataId, entry)
 			if err != nil {
 				if err.Status != http.StatusNotModified {
 					return Http.WrapError(err, fmt.Sprintf("%s: failed to process entry", p.Name()), http.StatusInternalServerError)
 				}
-				log.Printf("%s: entry processed [%d-%d] with no modification.\n Message: %s", p.Name(), entry.Page, entry.Idx, err)
+				w.Log(fmt.Sprintf("%s: entry processed [%d-%d] with no modification.\n Message: %s", p.Name(), entry.Page, entry.Idx, err))
 			}
 		}
 	}
-	err := lib.ArchiveJournalEntry(dataType, dataId, entry)
+	err := w.lib.ArchiveJournalEntry(w.dataType, w.dataId, entry)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (w *JournalWorker) Run(notify chan interface{}) {
+func (w *JournalWorker) Log(message string) {
+	w.log.Printf("JournalWorker[%s/%s]: %s", w.dataType, w.dataId, message)
+}
+
+func (w *JournalWorker) Run(notify chan interface{}) error {
+	interval := 0
 	for {
 		select {
 		case event := <-notify:
 			signal, ok := event.(os.Signal)
 			if ok && signal == syscall.SIGINT {
-				return
+				return nil
 			}
-		default:
-			err := ProcessNextEntry(w.lib, w.processes, w.dataType, w.dataId, w.log)
-			if err != nil {
-				if err.Status != http.StatusNotFound {
-					w.log.Print(err)
-				}
-				w.log.Printf("no more entry for %s/%s, sleep for 5 seconds", w.dataType, w.dataId)
-				time.Sleep(5 * time.Second)
+		case <-time.After(time.Duration(interval) * time.Second):
+			interval = w.RunAndCalcNextSleep(interval)
+			if interval > 0 {
+				w.Log(fmt.Sprintf("sleep %d seconds", interval))
 			}
 		}
 	}
+}
+
+func (w *JournalWorker) RunAndCalcNextSleep(interval int) int {
+	w.Log("process next entry")
+	err := w.ProcessNextEntry()
+	if err == nil {
+		// no error, means no sleep. keep going
+		return 0
+	}
+	if err.Status != http.StatusNotFound {
+		// error, sleep minimum time
+		w.Log(fmt.Sprintf("process error: %s", err))
+		return intervalStep
+	}
+	w.Log("no more entries")
+	if interval < maxInterval {
+		// no entry, step up interval
+		return interval + intervalStep
+	}
+	return interval
 }

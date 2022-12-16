@@ -59,6 +59,36 @@ type VersionIndex struct {
 	IndexTemplate []interface{} `json:"indexTemplate"`
 }
 
+func HasNewIdx(before map[string]interface{}, after map[string]interface{}) (bool, error) {
+	beforeIdx, err := LoadMap(before)
+	if err != nil {
+		return false, err
+	}
+	afterIdx, err := LoadMap(after)
+	if err != nil {
+		return false, err
+	}
+	for key, afterSub := range afterIdx.Subscriber {
+		beforeSub, ok := beforeIdx.Subscriber[key]
+		if !ok {
+			return true, nil
+		}
+		for ver, afterVerIdx := range afterSub.VersionIndex {
+			beforeVerIdx, ok := beforeSub.VersionIndex[ver]
+			if !ok {
+				return true, nil
+			}
+			beforeHash := Util.IdxList(beforeVerIdx.IndexTemplate)
+			for _, temp := range afterVerIdx.IndexTemplate {
+				if _, ok := beforeHash[temp]; !ok {
+					return true, nil
+				}
+			}
+		}
+	}
+	return false, nil
+}
+
 func LoadMap(data interface{}) (*CmtIndex, error) {
 	dataMap, ok := data.(map[string]interface{})
 	if !ok {

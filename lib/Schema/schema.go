@@ -121,7 +121,8 @@ func (schema *SchemaOps) ValidateRecord(record *Record.Record) error {
 				return fmt.Errorf("data type name [%s] contain illigal key [%s]", record.Type, char)
 			}
 		}
-		s, err := SchemaDoc.New(record.Data)
+		schemaData, _ := Json.CopyToMap(record.Data)
+		s, err := SchemaDoc.New(schemaData)
 		if err != nil {
 			return err
 		}
@@ -264,6 +265,9 @@ func ValidateSchemaKeys(schema *SchemaDoc.SchemaDoc, data map[string]interface{}
 func SetDataOnPath(schema *SchemaDoc.SchemaDoc, data map[string]interface{}, dataPath string, prevPath string, newData interface{}) *Http.HttpError {
 	attrPath, nextPath := Util.ParsePath(dataPath)
 	if nextPath == "" {
+		if newData == nil {
+			return delAttrData(schema, data, attrPath, prevPath)
+		}
 		return setAttrData(schema, data, attrPath, prevPath, newData)
 	}
 	attrName, key, err := Util.ParseArrayPath(attrPath)
@@ -338,7 +342,7 @@ func SetDataOnPath(schema *SchemaDoc.SchemaDoc, data map[string]interface{}, dat
 	return nil
 }
 
-func setAttrData(schema *SchemaDoc.SchemaDoc, data map[string]interface{}, attrPath string, prevPath string, newData interface{}) *Http.HttpError {
+func delAttrData(schema *SchemaDoc.SchemaDoc, data map[string]interface{}, attrPath string, prevPath string) *Http.HttpError {
 	attrName, key, err := Util.ParseArrayPath(attrPath)
 	if err != nil {
 		return Http.NewHttpError(fmt.Sprintf("invalid attrPath=[%s] @[%s]", attrPath, prevPath), http.StatusBadRequest)
@@ -348,61 +352,220 @@ func setAttrData(schema *SchemaDoc.SchemaDoc, data map[string]interface{}, attrP
 		return Http.NewHttpError(fmt.Sprintf("attr=[%s] not defined at path=[%s]", attrName, prevPath), http.StatusBadRequest)
 	}
 	if key == "" {
-		data[attrName] = newData
+		if _, ok := data[attrName]; !ok {
+			return Http.NewHttpError(fmt.Sprintf("attr[%s] already deleted @path=[%s]", attrName, prevPath), http.StatusNotModified)
+		}
+		delete(data, attrName)
 		return nil
 	}
 	switch attrDef[JsonKey.Type].(string) {
 	case JsonKey.Array:
-		itemType := attrDef[JsonKey.Items].(map[string]interface{})[JsonKey.Type].(string)
-		if itemType != JsonKey.Object {
-			isIdx := true
-			setIdx, err := strconv.Atoi(key)
-			if err != nil {
-				isIdx = false
-			}
-			if !isIdx {
-				if itemType == JsonKey.String {
-					return setStrArrayItem(data, attrName, key, newData)
-				}
-				return Http.WrapError(err, fmt.Sprintf("invalid key=[%s] to set for simple array. cannot parse to int", key), http.StatusBadRequest)
-			}
-			return setArraySimple(data, attrName, setIdx, newData)
+		ex := delAttrAry(schema, data, attrName, attrDef[JsonKey.Items].(map[string]interface{}), key)
+		if ex != nil {
+			ex.Context = append(ex.Context, fmt.Sprintf("path=[%s/%s]", prevPath, attrName))
+			return ex
 		}
-		return setArrayObject(schema, data, attrName, key, newData)
+	case JsonKey.Object:
+		mapData := data[attrName].(map[string]interface{})
+		if !SchemaDoc.IsMap(attrDef) {
+			return Http.NewHttpError(fmt.Sprintf("invalid path, attr[%s] is not a map. @path=[%s]", attrName, prevPath), http.StatusBadRequest)
+		}
+		if _, ok := mapData[key]; !ok {
+			return Http.NewHttpError(fmt.Sprintf("key[%s] does not exists to delete", key), http.StatusNotModified)
+		}
+		delete(mapData, key)
+	default:
+		return Http.NewHttpError(fmt.Sprintf("invalid path attr[%s] is a [%s] which has no key. @path=[%s]", attrName, attrDef[JsonKey.Type], prevPath), http.StatusBadRequest)
+	}
+	return nil
+}
+
+func delAttrAry(schema *SchemaDoc.SchemaDoc, data map[string]interface{}, attrName string, itemDef map[string]interface{}, key string) *Http.HttpError {
+	attrData, ok := data[attrName]
+	if !ok {
+		return nil
+	}
+	arrayData := attrData.([]interface{})
+	itemType := itemDef[JsonKey.Type].(string)
+	if itemType != JsonKey.Object {
+		isIdx := true
+		setIdx, err := strconv.Atoi(key)
+		if err != nil {
+			isIdx = false
+		}
+		if isIdx {
+			newAry := Util.ListDel(arrayData, setIdx)
+			if newAry == nil {
+				return Http.NewHttpError(fmt.Sprintf("idx[%d] does not exists", setIdx), http.StatusNotModified)
+			}
+			data[attrName] = newAry
+			return nil
+		}
+		newArray := []interface{}{}
+		foundKey := false
+		for _, item := range arrayData {
+			if item.(string) != key {
+				newArray = append(newArray, item.(string))
+				continue
+			}
+			foundKey = true
+		}
+		if !foundKey {
+			return Http.NewHttpError(fmt.Sprintf("key[%s] does not exists to delete", key), http.StatusNotModified)
+		}
+		data[attrName] = newArray
+		return nil
+	}
+	subDoc := schema.SubDocs[attrName]
+	newArray := []interface{}{}
+	foundKey := false
+	for idx, item := range arrayData {
+		itemKey, err := subDoc.BuildKey(item.(map[string]interface{}))
+		if err != nil {
+			return Http.WrapError(err, fmt.Sprintf("failed to get key @[%d]", idx), http.StatusInternalServerError)
+		}
+		if itemKey != key {
+			newArray = append(newArray, item)
+			continue
+		}
+		foundKey = true
+	}
+	if !foundKey {
+		return Http.NewHttpError(fmt.Sprintf("object of [%s] does not exists to delete", key), http.StatusNotModified)
+	}
+	data[attrName] = newArray
+	return nil
+}
+
+func setAttrData(schema *SchemaDoc.SchemaDoc, data map[string]interface{}, attrPath string, prevPath string, newData interface{}) *Http.HttpError {
+	attrName, key, err := Util.ParseArrayPath(attrPath)
+	if err != nil {
+		return Http.NewHttpError(fmt.Sprintf("invalid attrPath=[%s] @[%s]", attrPath, prevPath), http.StatusBadRequest)
+	}
+	attrDef, ok := schema.Data[JsonKey.Properties].(map[string]interface{})[attrName].(map[string]interface{})
+	if !ok {
+		return Http.NewHttpError(fmt.Sprintf("attr=[%s] not defined at path=[%s]", attrName, prevPath), http.StatusBadRequest)
+	}
+	switch attrDef[JsonKey.Type].(string) {
+	case JsonKey.Array:
+		ex := setAttrAry(schema, data, attrName, attrDef[JsonKey.Items].(map[string]interface{}), key, newData)
+		if ex != nil {
+			ex.Context = append(ex.Context, fmt.Sprintf("path @[%s/%s]", prevPath, attrName))
+			return ex
+		}
 	case JsonKey.Object:
 		if !SchemaDoc.IsMap(attrDef) {
-			return Http.NewHttpError(fmt.Sprintf("invalid path, attr=[%s], type=[%s] key=[%s] is not empty. path=[%s]", attrName, attrDef[JsonKey.Type].(string), key, prevPath), http.StatusBadRequest)
-		}
-		itemType := attrDef[JsonKey.Items].(map[string]interface{})[JsonKey.Type].(string)
-		attrData := data[attrName].(map[string]interface{})
-		switch itemType {
-		case JsonKey.Object:
-			itemDoc := schema.SubDocs[attrName]
-			newKey, err := itemDoc.BuildKey(newData.(map[string]interface{}))
-			if err != nil {
-				return Http.WrapError(err, fmt.Sprintf("failed to get key from newData, @path=[%s/%s]", prevPath, attrPath), http.StatusBadRequest)
+			if key != "" {
+				return Http.NewHttpError(fmt.Sprintf("invalid path, attr=[%s], type=[%s] key=[%s] is not supported. path=[%s]", attrName, attrDef[JsonKey.Type].(string), key, prevPath), http.StatusBadRequest)
 			}
-			if newKey != key {
-				delete(attrData, key)
+			data[attrName] = newData
+		} else {
+			itemType := attrDef[JsonKey.Items].(map[string]interface{})[JsonKey.Type].(string)
+			attrData := data[attrName].(map[string]interface{})
+			if key == "" {
+				newKey, ex := getHashKey(schema, itemType, newData, attrName)
+				if ex != nil {
+					ex.Context = append(ex.Context, fmt.Sprintf("path @[%s/%s]", prevPath, attrName))
+				}
+				key = newKey
 			}
-			attrData[newKey] = newData
-		case JsonKey.String:
-			if newData == nil {
-				delete(attrData, key)
-				return nil
-			}
-			strVal, ok := newData.(string)
-			if !ok {
-				return Http.NewHttpError(fmt.Sprintf("new Cmt Value is not a string. type=[%s] is not [string]", reflect.TypeOf(newData).Kind()), http.StatusBadRequest)
-			}
-			// for map, we don't need to check duplication, as the key is redfine its purpose even duplicated
-			attrData[key] = strVal
-		default:
 			attrData[key] = newData
 		}
-		return nil
 	default:
-		return Http.NewHttpError(fmt.Sprintf("invalid path, attr=[%s], type=[%s] key=[%s] is not empty. path=[%s]", attrName, attrDef[JsonKey.Type].(string), key, prevPath), http.StatusBadRequest)
+		if key != "" {
+			return Http.NewHttpError(fmt.Sprintf("invalid path, attr=[%s], type=[%s] key=[%s] is not empty. path=[%s]", attrName, attrDef[JsonKey.Type].(string), key, prevPath), http.StatusBadRequest)
+		}
+		data[attrName] = newData
+	}
+	return nil
+}
+
+func setAttrAry(schema *SchemaDoc.SchemaDoc, data map[string]interface{}, attrName string, itemDef map[string]interface{}, key string, newData interface{}) *Http.HttpError {
+	if reflect.TypeOf(newData).Kind() == reflect.Slice {
+		if key != "" {
+			return Http.NewHttpError(fmt.Sprintf("invalid path. key[%s] expect to be empty", key), http.StatusBadRequest)
+		}
+		data[attrName] = newData
+		return nil
+	}
+	attrData, ok := data[attrName].([]interface{})
+	if !ok {
+		data[attrName] = []interface{}{
+			newData,
+		}
+		return nil
+	}
+	itemType := itemDef[JsonKey.Type].(string)
+	if key != "" {
+		if itemType != JsonKey.Object {
+			idx, ex := strconv.Atoi(key)
+			if ex == nil {
+				switch {
+				case idx < 0:
+					data[attrName] = append([]interface{}{newData}, attrData...)
+				case idx < len(attrData):
+					attrData[idx] = newData
+				default:
+					data[attrName] = append(attrData, newData)
+				}
+				return nil
+			} else {
+				if itemType != JsonKey.String {
+					return Http.NewHttpError(fmt.Sprintf("item type=[%s] does not support idx:[%s]", itemType, key), http.StatusBadRequest)
+				}
+			}
+		}
+	}
+	newKey, ex := getHashKey(schema, itemType, newData, attrName)
+	if ex != nil {
+		return ex
+	}
+	if key == "" {
+		key = newKey
+	}
+	newArray := []interface{}{}
+	foundKey := false
+	for idx, item := range attrData {
+		var itemKey string
+		if itemType == JsonKey.Object {
+			k, err := schema.SubDocs[attrName].BuildKey(item.(map[string]interface{}))
+			if err != nil {
+				return Http.WrapError(err, fmt.Sprintf("failed to get key @idx=[%d]", idx), http.StatusInternalServerError)
+			}
+			itemKey = k
+		} else {
+			itemKey = item.(string)
+		}
+		if itemKey == key {
+			newArray = append(newArray, newData)
+			foundKey = true
+			continue
+		}
+		newArray = append(newArray, item)
+	}
+	if !foundKey {
+		if key != newKey {
+			return Http.NewHttpError(fmt.Sprintf("key=[%s] does not exists in list to modify", key), http.StatusNotFound)
+		}
+		newArray = append(newArray, newData)
+	}
+	data[attrName] = newArray
+	return nil
+}
+
+func getHashKey(schema *SchemaDoc.SchemaDoc, itemType string, newData interface{}, attrName string) (string, *Http.HttpError) {
+	switch itemType {
+	case JsonKey.Object:
+		subDoc := schema.SubDocs[attrName]
+		subKey, err := subDoc.BuildKey(newData.(map[string]interface{}))
+		if err != nil {
+			return "", Http.WrapError(err, "failed to build key from given data.", http.StatusBadRequest)
+		}
+		return subKey, nil
+	case JsonKey.String:
+		return newData.(string), nil
+	default:
+		return "", Http.NewHttpError(fmt.Sprintf("item type=[%s] does not support, only [%s, %s] support build key", itemType, JsonKey.String, JsonKey.Map), http.StatusBadRequest)
 	}
 }
 
