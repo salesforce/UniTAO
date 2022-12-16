@@ -26,56 +26,82 @@ This copyright notice and license applies to all files in this directory or sub-
 package SchemaPathTest
 
 import (
-	"net/http"
 	"reflect"
 	"testing"
 )
 
 func TestRefHappyPath(t *testing.T) {
-	schemaStr := `{
-		"CmtRef": {
-			"name": "CmtRef",
-			"description": "test for CMT ref query path",
-			"properties": {
-				"directRef": {
-					"type": "string",
-					"contentMediaType": "inventory/refObj"
-				},
-				"arrayRef": {
-					"type": "array",
-					"items": {
-						"type": "string",
-						"contentMediaType": "inventory/refObj"
+	recordStr := `{
+		"schema": {
+			"CmtRef": {
+				"__id": "CmtRef",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "CmtRef",
+					"version": "0.0.1",
+					"description": "test for CMT ref query path",
+					"properties": {
+						"directRef": {
+							"type": "string",
+							"contentMediaType": "inventory/refObj"
+						},
+						"arrayRef": {
+							"type": "array",
+							"items": {
+								"type": "string",
+								"contentMediaType": "inventory/refObj"
+							}
+						},
+						"arrayObj": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"$ref": "#/definitions/itemObj"
+							}
+						},
+						"mapRef": {
+							"type": "map",
+							"items": {
+								"type": "string",
+								"contentMediaType": "inventory/refObj"
+							}
+						},
+						"mapObj": {
+							"type": "map",
+							"items": {
+								"type": "object",
+								"$ref": "#/definitions/itemObj"
+							}
+						},
+						"noRef": {
+							"type": "string"
+						}
+					},
+					"definitions": {
+						"itemObj": {
+							"name": "itemObj",
+							"key": "{key1}_{key2}",
+							"properties": {
+								"key1": {
+									"type": "string"
+								},
+								"key2": {
+									"type": "string"
+								}
+							}
+						}
 					}
-				},
-				"arrayObj": {
-					"type": "array",
-					"items": {
-						"type": "object",
-						"$ref": "#/definitions/itemObj"
-					}
-				},
-				"mapRef": {
-					"type": "map",
-					"items": {
-						"type": "string",
-						"contentMediaType": "inventory/refObj"
-					}
-				},
-				"mapObj": {
-					"type": "map",
-					"items": {
-						"type": "object",
-						"$ref": "#/definitions/itemObj"
-					}
-				},
-				"noRef": {
-					"type": "string"
 				}
 			},
-			"definitions": {
-				"itemObj": {
-					"name": "itemObj",
+			"refObj": {
+				"__id": "refObj",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "refObj",
+					"version": "0.0.1",
+					"description": "reference object",
 					"key": "{key1}_{key2}",
 					"properties": {
 						"key1": {
@@ -88,21 +114,6 @@ func TestRefHappyPath(t *testing.T) {
 				}
 			}
 		},
-		"refObj": {
-			"name": "refObj",
-			"description": "reference object",
-			"key": "{key1}_{key2}",
-			"properties": {
-				"key1": {
-					"type": "string"
-				},
-				"key2": {
-					"type": "string"
-				}
-			}
-		}
-	}`
-	recordStr := `{
 		"CmtRef": {
 			"cmtRef1": {
 				"__id": "cmtRef1",
@@ -163,7 +174,7 @@ func TestRefHappyPath(t *testing.T) {
 			}
 		}
 	}`
-	conn := PrepareConn(schemaStr, recordStr)
+	conn := PrepareConn(recordStr)
 	path := "CmtRef/cmtRef1/directRef?ref"
 	value, err := QueryPath(conn, path)
 	if err != nil {
@@ -207,56 +218,83 @@ func TestRefHappyPath(t *testing.T) {
 }
 
 func TestInvalidPath(t *testing.T) {
-	schemaStr := `{
-		"CmtRef": {
-			"name": "CmtRef",
-			"description": "test for CMT ref query path",
-			"properties": {
-				"directRef": {
-					"type": "string",
-					"contentMediaType": "inventory/refObj"
-				},
-				"arrayRef": {
-					"type": "array",
-					"items": {
-						"type": "string",
-						"contentMediaType": "inventory/refObj"
-					}
-				},
-				"arrayObj": {
-					"type": "array",
-					"items": {
-						"type": "object",
-						"$ref": "#/definitions/itemObj"
-					}
-				},
-				"mapRef": {
-					"type": "map",
-					"items": {
-						"type": "string",
-						"contentMediaType": "inventory/refObj"
-					}
-				},
-				"mapObj": {
-					"type": "map",
-					"items": {
-						"type": "object",
-						"$ref": "#/definitions/itemObj"
-					}
-				},
-				"noRef": {
-					"type": "string"
-				},
-				"noRefArray": {
-					"type": "array",
-					"items": {
-						"type": "string"
+	recordStr := `{
+		"schema": {
+			"CmtRef": {
+				"__id": "CmtRef",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "CmtRef",
+					"version": "0.0.1",
+					"description": "test for CMT ref query path",
+					"properties": {
+						"directRef": {
+							"type": "string",
+							"contentMediaType": "inventory/refObj"
+						},
+						"arrayRef": {
+							"type": "array",
+							"items": {
+								"type": "string",
+								"contentMediaType": "inventory/refObj"
+							}
+						},
+						"arrayObj": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"$ref": "#/definitions/itemObj"
+							}
+						},
+						"mapRef": {
+							"type": "map",
+							"items": {
+								"type": "string",
+								"contentMediaType": "inventory/refObj"
+							}
+						},
+						"mapObj": {
+							"type": "map",
+							"items": {
+								"type": "object",
+								"$ref": "#/definitions/itemObj"
+							}
+						},
+						"noRef": {
+							"type": "string"
+						},
+						"noRefArray": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						}
+					},
+					"definitions": {
+						"itemObj": {
+							"name": "itemObj",
+							"key": "{key1}_{key2}",
+							"properties": {
+								"key1": {
+									"type": "string"
+								},
+								"key2": {
+									"type": "string"
+								}
+							}
+						}
 					}
 				}
 			},
-			"definitions": {
-				"itemObj": {
-					"name": "itemObj",
+			"refObj": {
+				"__id": "refObj",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "refObj",
+					"version": "0.0.1",
+					"description": "reference object",
 					"key": "{key1}_{key2}",
 					"properties": {
 						"key1": {
@@ -269,21 +307,6 @@ func TestInvalidPath(t *testing.T) {
 				}
 			}
 		},
-		"refObj": {
-			"name": "refObj",
-			"description": "reference object",
-			"key": "{key1}_{key2}",
-			"properties": {
-				"key1": {
-					"type": "string"
-				},
-				"key2": {
-					"type": "string"
-				}
-			}
-		}
-	}`
-	recordStr := `{
 		"CmtRef": {
 			"cmtRef1": {
 				"__id": "cmtRef1",
@@ -347,82 +370,94 @@ func TestInvalidPath(t *testing.T) {
 			}
 		}
 	}`
-	conn := PrepareConn(schemaStr, recordStr)
+	conn := PrepareConn(recordStr)
 	path := "CmtRef/cmtRef1/noRef?ref"
-	_, err := QueryPath(conn, path)
-	if err == nil {
-		t.Fatalf("failed to get error on path=[%s]", path)
+	value, err := QueryPath(conn, path)
+	if err != nil {
+		t.Fatalf("failed to get ref @path=[%s]", path)
 	}
-	if err.Status != http.StatusBadRequest {
-		t.Fatalf("failed to detect bad Ref request. get status=[%d]. expect code=[%d]", err.Status, http.StatusBadRequest)
+	if value != "123" {
+		t.Fatalf("failed, when ref not available, get value directly")
 	}
 	path = "CmtRef/cmtRef1/noRefArray[123]?ref"
-	_, err = QueryPath(conn, path)
-	if err == nil {
-		t.Fatalf("failed to get error on path=[%s]", path)
+	value, err = QueryPath(conn, path)
+	if err != nil {
+		t.Fatalf("failed to get ref on path=[%s]", path)
 	}
-	if err.Status != http.StatusBadRequest {
-		t.Fatalf("failed to detect bad Ref request. get status=[%d]. expect code=[%d]", err.Status, http.StatusBadRequest)
+	if value != "123" {
+		t.Fatalf("failed, when ref not available, get value directly")
 	}
 	path = "CmtRef/cmtRef1/directRef/key1?ref"
-	_, err = QueryPath(conn, path)
-	if err == nil {
+	value, err = QueryPath(conn, path)
+	if err != nil {
 		t.Fatalf("failed to get error on path=[%s]", path)
 	}
-	if err.Status != http.StatusBadRequest {
-		t.Fatalf("failed to detect bad Ref request. get status=[%d]. expect code=[%d]", err.Status, http.StatusBadRequest)
+	if value != "01" {
+		t.Fatalf("failed, when ref not available, get value directly")
 	}
 	path = "CmtRef/cmtRef1/arrayRef[01_01]/key1?ref"
-	_, err = QueryPath(conn, path)
-	if err == nil {
-		t.Fatalf("failed to get error on path=[%s]", path)
+	value, err = QueryPath(conn, path)
+	if err != nil {
+		t.Fatalf("failed to get ref on path=[%s]", path)
 	}
-	if err.Status != http.StatusBadRequest {
-		t.Fatalf("failed to detect bad Ref request. get status=[%d]. expect code=[%d]", err.Status, http.StatusBadRequest)
+	if value != "01" {
+		t.Fatalf("failed, when ref not available, get value directly")
 	}
 }
 
 func TestRefAllPath(t *testing.T) {
-	schemaStr := `{
-		"CmtRef": {
-			"name": "CmtRef",
-			"description": "test for CMT ref query path",
-			"properties": {
-				"directRef": {
-					"type": "string",
-					"contentMediaType": "inventory/refObj"
-				},
-				"arrayRef": {
-					"type": "array",
-					"items": {
-						"type": "string",
-						"contentMediaType": "inventory/refObj"
+	recordStr := `{
+		"schema": {
+			"CmtRef": {
+				"__id": "CmtRef",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "CmtRef",
+					"version": "0.0.1",
+					"description": "test for CMT ref query path",
+					"properties": {
+						"directRef": {
+							"type": "string",
+							"contentMediaType": "inventory/refObj"
+						},
+						"arrayRef": {
+							"type": "array",
+							"items": {
+								"type": "string",
+								"contentMediaType": "inventory/refObj"
+							}
+						},
+						"mapRef": {
+							"type": "map",
+							"items": {
+								"type": "string",
+								"contentMediaType": "inventory/refObj"
+							}
+						}
 					}
-				},
-				"mapRef": {
-					"type": "map",
-					"items": {
-						"type": "string",
-						"contentMediaType": "inventory/refObj"
+				}
+			},
+			"refObj": {
+				"__id": "refObj",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "refObj",
+					"version": "0.0.1",
+					"description": "reference object",
+					"key": "{key1}_{key2}",
+					"properties": {
+						"key1": {
+							"type": "string"
+						},
+						"key2": {
+							"type": "string"
+						}
 					}
 				}
 			}
 		},
-		"refObj": {
-			"name": "refObj",
-			"description": "reference object",
-			"key": "{key1}_{key2}",
-			"properties": {
-				"key1": {
-					"type": "string"
-				},
-				"key2": {
-					"type": "string"
-				}
-			}
-		}
-	}`
-	recordStr := `{
 		"CmtRef": {
 			"cmtRef1": {
 				"__id": "cmtRef1",
@@ -460,7 +495,7 @@ func TestRefAllPath(t *testing.T) {
 			}
 		}
 	}`
-	conn := PrepareConn(schemaStr, recordStr)
+	conn := PrepareConn(recordStr)
 	path := "CmtRef/cmtRef1/arrayRef[*]?ref"
 	value, err := QueryPath(conn, path)
 	if err != nil {

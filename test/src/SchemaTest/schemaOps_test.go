@@ -36,6 +36,7 @@ import (
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Util"
+	"github.com/salesforce/UniTAO/lib/Util/Json"
 )
 
 func TestSchemaValidate(t *testing.T) {
@@ -44,9 +45,10 @@ func TestSchemaValidate(t *testing.T) {
 		"schema": {
 			"__id": "infrastructure",
 			"__type": "schema",
-			"__ver": "1_01_01",
+			"__ver": "0.0.1",
 			"data": {
 				"name": "infrastructure",
+				"version": "0.0.1",
 				"description": "Infrastructure (root or all data)",
 				"properties": {
 					"id": {
@@ -66,7 +68,7 @@ func TestSchemaValidate(t *testing.T) {
 		"data": {   
 			"__id":         "global",
 			"__type":       "infrastructure",
-			"__ver":        "1_01_01",
+			"__ver":        "0.0.1",
 			"data": {
 				"id": "global", 
 				"description": "Global Root of all infrastructure",
@@ -77,7 +79,7 @@ func TestSchemaValidate(t *testing.T) {
 			{
 				"__id":         "global",
 				"__type":       "infrastructure",
-				"__ver":        "1_01_01",
+				"__ver":        "0.0.1",
 				"data": {
 					"Id": "global", 
 					"description": "Global Root of all infrastructure",
@@ -125,6 +127,7 @@ func TestSchemaSimpleMap(t *testing.T) {
 	log.Print("test simple map definitions")
 	simpleMapSchemaStr := `{
 		"name": "mapDefintions",
+		"version": "0.0.1",
 		"description": "map data schema defintions",
 		"properties": {
 			"simpleMap": {
@@ -163,6 +166,7 @@ func TestSchemaHashObj(t *testing.T) {
 	log.Print("test simple map definitions")
 	hashObjSchemaStr := `{
 		"name": "hashObjectMap",
+		"version": "0.0.1",
 		"description": "map data schema defintions",
 		"properties": {
 			"hashObjMap": {
@@ -221,6 +225,7 @@ func TestSchemaHashObj(t *testing.T) {
 func TestSchemaCustomTypeMap(t *testing.T) {
 	hashObjSchemaStr := `{
 		"name": "hashObjectMap",
+		"version": "0.0.1",
 		"description": "map data schema defintions",
 		"properties": {
 			"hashObjMap": {
@@ -277,15 +282,15 @@ func TestSchemaCustomTypeMap(t *testing.T) {
 }
 
 func getSchemaOfSchema() (*Schema.SchemaOps, error) {
-	currentDir, err := Util.RunningDir()
+	rootDir, err := Util.RootDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get running dir")
 	}
-	schemaFile, err := filepath.Abs(filepath.Join(currentDir, "../../../lib/Schema/data/schema.json"))
+	schemaFile, err := filepath.Abs(filepath.Join(rootDir, "lib/Schema/data/schema.json"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ABS path of schema.json")
 	}
-	schemaData, err := Util.LoadJsonFile(schemaFile)
+	schemaData, err := Json.LoadJsonFile(schemaFile)
 	if err != nil {
 		return nil, err
 	}
@@ -310,6 +315,7 @@ func TestSchema(t *testing.T) {
 	correctSchema := `
 	{
 		"name": "testSchema01",
+		"version": "0.0.1",
 		"properties": {
 			"testAttr": {
 				"type": "string"
@@ -335,6 +341,7 @@ func TestSchema(t *testing.T) {
 	badSchma := `
 	{
 		"name": "testSchema01",
+		"version": "0.0.1",
 		"properties": {
 			"testAttr": {
 				"type": "string"
@@ -374,6 +381,7 @@ func TestSchema(t *testing.T) {
 func TestValidateRecordId(t *testing.T) {
 	schemaStr := `{
 		"name": "test",
+		"version": "0.0.1",
 		"key": "{testAttr}",
 		"properties": {
 			"testAttr": {
@@ -406,6 +414,7 @@ func TestValidateRecordId(t *testing.T) {
 func TestValidateArrayCheckDup(t *testing.T) {
 	schemaStr := `{
 		"name": "test",
+		"version": "0.0.1",
 		"properties": {
 			"arrayOfCmt": {
 				"type": "array",
@@ -571,6 +580,7 @@ func TestValidateArrayCheckDup(t *testing.T) {
 func TestValidateHashCheckKey(t *testing.T) {
 	schemaStr := `{
 		"name": "test",
+		"version": "0.0.1",
 		"properties": {
 			"hashStr": {
 				"type": "map",

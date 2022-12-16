@@ -30,11 +30,12 @@ services:
     tty: true
     volumes:
       -  ./DataService01:/opt/UniTAO/config
+      -  ./logs:/opt/UniTAO/log
     ports:
       - "8001:80"
     depends_on:
       - dynamodb
-    command: "DataService -config /opt/UniTAO/config/config.json"
+    command: "DataService -id DataService01 -config /opt/UniTAO/config/config.json -log /opt/UniTAO/log"
 
   unitao-data-service01-admin:
     image: unitao/dataservice:localbuild
@@ -54,11 +55,12 @@ services:
     tty: true
     volumes:
       -  ./DataService02:/opt/UniTAO/config
+      -  ./logs:/opt/UniTAO/log
     ports:
       - "8002:80"
     depends_on:
       - dynamodb
-    command: "DataService -config /opt/UniTAO/config/config.json"
+    command: "DataService -id DataService02 -config /opt/UniTAO/config/config.json -log /opt/UniTAO/log"
 
   unitao-data-service02-admin:
     image: unitao/dataservice:localbuild

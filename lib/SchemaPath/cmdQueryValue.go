@@ -26,10 +26,6 @@ This copyright notice and license applies to all files in this directory or sub-
 package SchemaPath
 
 import (
-	"fmt"
-	"net/http"
-
-	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/Data"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/Node"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/PathCmd"
@@ -38,20 +34,18 @@ import (
 
 type CmdQueryValue struct {
 	p    *Node.PathNode
+	Path string
 	Data interface{}
 }
 
 func NewValueQuery(conn *Data.Connection, dataType string, dataId string, path string) (*CmdQueryValue, *Http.HttpError) {
-	node, err := Node.New(conn, dataType, dataId, path, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	err = node.BuildPath()
+	node, err := BuildNodePath(conn, dataType, dataId, path)
 	if err != nil {
 		return nil, err
 	}
 	return &CmdQueryValue{
-		p: node,
+		p:    node,
+		Path: path,
 	}, nil
 }
 
@@ -66,65 +60,29 @@ func (c *CmdQueryValue) WalkValue() (interface{}, *Http.HttpError) {
 			a, array or map, if CMT, return CMT referenced value
 			b, CMT, return CMT referenced value
 	*/
-	return c.GetNodeValue(c.p, nil)
+	dataList := c.GetNodeValue(c.p)
+	if len(dataList) == 1 {
+		return dataList[0], nil
+	}
+	return dataList, nil
+
 }
 
-func (c *CmdQueryValue) GetNodeValue(node *Node.PathNode, parentData interface{}) (interface{}, *Http.HttpError) {
-	nodeValue, err := Node.GetNodeValue(node, parentData)
-	if err != nil {
-		return nil, err
+func (c *CmdQueryValue) GetNodeValue(node *Node.PathNode) []interface{} {
+	if len(node.Next) == 0 {
+		return []interface{}{node.Data}
 	}
-	if node.Next == nil {
-		return nodeValue, nil
-	}
-	if node.Idx == PathCmd.ALL {
-		valueType := node.AttrDef[JsonKey.Type].(string)
-		if valueType == JsonKey.Array {
-			return c.GetNodeArrayAll(node, nodeValue)
-		}
-		return c.GetNodeMapAll(node, nodeValue)
-	}
-	nodeValue, err = c.GetNodeValue(node.Next, nodeValue)
-	if err != nil {
-		return nil, err
-	}
-	return nodeValue, nil
-}
-
-func (c *CmdQueryValue) GetNodeArrayAll(node *Node.PathNode, nodeValue interface{}) (interface{}, *Http.HttpError) {
-	parentValues, ok := nodeValue.([]interface{})
-	if !ok {
-		return nil, Http.NewHttpError(fmt.Sprintf("idx=[%s] didn't return array on function[Node.GetNodeValue], @path=[%s]", PathCmd.ALL, node.FullPath()), http.StatusInternalServerError)
-	}
-	result := make([]interface{}, 0, len(parentValues))
-	for idx, item := range parentValues {
-		itemValue, err := c.GetNodeValue(node.Next, item)
-		if err != nil {
-			if err.Status == http.StatusNotFound {
-				continue
+	dataList := []interface{}{}
+	for _, next := range node.Next {
+		result := c.GetNodeValue(next)
+		if len(result) > 0 {
+			// we want to keep the array embeded structure
+			if len(result) == 1 {
+				dataList = append(dataList, result[0])
+			} else {
+				dataList = append(dataList, result)
 			}
-			return nil, Http.WrapError(err, fmt.Sprintf("failed to get %s[%d] @path=[%s]", node.AttrName, idx, node.FullPath()), err.Status)
 		}
-		result = append(result, itemValue)
 	}
-	return result, nil
-}
-
-func (c *CmdQueryValue) GetNodeMapAll(node *Node.PathNode, nodeValue interface{}) (interface{}, *Http.HttpError) {
-	parentValues, ok := nodeValue.(map[string]interface{})
-	if !ok {
-		return nil, Http.NewHttpError(fmt.Sprintf("idx=[%s] didn't return map on function[Node.GetNodeValue], @path=[%s]", PathCmd.ALL, node.FullPath()), http.StatusInternalServerError)
-	}
-	result := make([]interface{}, 0, len(parentValues))
-	for key, item := range parentValues {
-		itemValue, err := c.GetNodeValue(node.Next, item)
-		if err != nil {
-			if err.Status == http.StatusNotFound {
-				continue
-			}
-			return nil, Http.WrapError(err, fmt.Sprintf("failed to get %s[%s] @path=[%s]", node.AttrName, key, node.FullPath()), err.Status)
-		}
-		result = append(result, itemValue)
-	}
-	return result, nil
+	return dataList
 }

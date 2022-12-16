@@ -131,6 +131,15 @@ func (t *StrTemp) BuildVarMap(data map[string]interface{}) (map[string]interface
 	return varMap, nil
 }
 
+func (t *StrTemp) TestValue() string {
+	testMap := map[string]interface{}{}
+	for _, attr := range t.Vars {
+		testMap[attr] = fmt.Sprintf("Test%sValue", attr)
+	}
+	testStr, _ := t.BuildValue(testMap)
+	return testStr
+}
+
 func (t *StrTemp) BuildValue(data map[string]interface{}) (string, error) {
 	varMap, err := t.BuildVarMap(data)
 	if err != nil {

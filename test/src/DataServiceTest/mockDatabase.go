@@ -83,19 +83,27 @@ func (db MockDatabase) Get(queryArgs map[string]interface{}) ([]map[string]inter
 	if !ok {
 		return nil, fmt.Errorf("invalid queryArgs. missing=[%s]", Record.DataType)
 	}
-	dataId, ok := queryArgs[Record.DataId].(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid queryArgs. missing=[%s]", Record.DataId)
-	}
 	typeMap, ok := db.Data[dataType].(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("type=[%s] not found", dataType)
+		return []map[string]interface{}{}, nil
 	}
-	data, ok := typeMap[dataId].(map[string]interface{})
+	result := make([]map[string]interface{}, 0, len(typeMap))
+	dataId, ok := queryArgs[Record.DataId].(string)
 	if !ok {
-		return nil, fmt.Errorf("type=[%s] id=[%s] not found", dataType, dataId)
+		for _, data := range typeMap {
+			result = append(result, data.(map[string]interface{}))
+		}
+	} else {
+		data, ok := typeMap[dataId]
+		if ok {
+			dataMap, ok := data.(map[string]interface{})
+			if !ok {
+				return nil, fmt.Errorf("data [%s/%s] failed to convert to map", dataType, dataId)
+			}
+			result = append(result, dataMap)
+		}
 	}
-	return []map[string]interface{}{data}, nil
+	return result, nil
 }
 
 func (db MockDatabase) Update(table string, keys map[string]interface{}, data interface{}) (map[string]interface{}, error) {
@@ -110,14 +118,26 @@ func (db MockDatabase) Replace(table string, keys map[string]interface{}, data i
 	if !ok {
 		return fmt.Errorf("invalid queryArgs. missing=[%s]", Record.DataId)
 	}
-	typeMap, ok := db.Data[dataType].(map[string]interface{})
+	dataObj, ok := data.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("given data failed to convert to map")
+	}
+	record, err := Record.LoadMap(dataObj)
+	if err != nil {
+		return fmt.Errorf("invalid data format, failed to convert to record")
+	}
+	if dataType != record.Type || dataId != record.Id {
+		db.Delete(table, keys)
+	}
+	typeMap, ok := db.Data[record.Type].(map[string]interface{})
 	if !ok {
 		typeMap = map[string]interface{}{}
 		db.Data[dataType] = typeMap
 	}
-	typeMap[dataId] = data
+	typeMap[record.Id] = data
 	return nil
 }
+
 func (db MockDatabase) Delete(table string, keys map[string]interface{}) error {
 	dataType, ok := keys[Record.DataType].(string)
 	if !ok {

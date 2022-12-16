@@ -13,12 +13,20 @@
             "args": ["-config", "${workspaceFolder}/docker-compose/2data1inv/InventoryService/extConfig/config.json"],
         },
         {
-            "name": "Debug Data Service",
+            "name": "Debug Data Service 01",
             "type": "go",
             "request": "launch",
             "mode": "debug",
             "program": "${workspaceFolder}/app/DataService/main.go",
-            "args": ["-config", "${workspaceFolder}/docker-compose/2data1inv/DataService01/extConfig.json"],
+            "args": ["-id", "DataService01" ,"-config", "${workspaceFolder}/docker-compose/2data1inv/DataService01/extConfig.json"],
+        },
+        {
+            "name": "Debug Data Service 02",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/app/DataService/main.go",
+            "args": ["-id", "DataService01" ,"-config", "${workspaceFolder}/docker-compose/2data1inv/DataService02/extConfig.json"],
         },
         {
             "name": "Debug Inv Admin",

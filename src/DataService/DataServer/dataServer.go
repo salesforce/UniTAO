@@ -29,15 +29,21 @@ import (
 	"Data"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
+	"path"
 
+	"DataService/Common"
 	"DataService/Config"
 	"DataService/DataHandler"
+	"DataService/DataJournal"
 
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Util"
 	"github.com/salesforce/UniTAO/lib/Util/Http"
+	"github.com/salesforce/UniTAO/lib/Util/Thread"
 )
 
 const (
@@ -47,17 +53,24 @@ const (
 )
 
 type Server struct {
-	Port   string
-	args   map[string]string
-	config Config.Confuguration
-	data   *DataHandler.Handler
+	Id             string
+	Port           string
+	args           map[string]string
+	config         Config.Confuguration
+	data           *DataHandler.Handler
+	journal        *DataJournal.JournalLib
+	journalHandler *DataJournal.JournalHandler
+	BackendCtl     *Thread.ThreadCtrl
+	logPath        string
+	log            *log.Logger
 }
 
 func New() (Server, error) {
 	srv := Server{
-		Port:   PORT_DEFAULT,
-		args:   make(map[string]string),
-		config: Config.Confuguration{},
+		Port:    PORT_DEFAULT,
+		args:    make(map[string]string),
+		config:  Config.Confuguration{},
+		logPath: "",
 	}
 	err := srv.init()
 	if err != nil {
@@ -67,26 +80,80 @@ func New() (Server, error) {
 }
 
 func (srv *Server) Run() {
-	handler, err := DataHandler.New(srv.config, Data.ConnectDb)
+	srv.log = log.Default()
+	if srv.logPath != "" {
+		logPath := path.Join(srv.logPath, fmt.Sprintf("%s.log", srv.Id))
+		log.Printf("log file: %s", logPath)
+		logFile, err := os.OpenFile(logPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+		if err != nil {
+			log.Fatalf("error opening file: %v", err)
+		}
+		defer logFile.Close()
+		mw := io.MultiWriter(os.Stdout, logFile)
+		logger := log.New(mw, fmt.Sprintf("%s: ", srv.Id), log.Ldate|log.Ltime|log.Lshortfile)
+		srv.log = logger
+	}
+	srv.BackendCtl = Thread.NewThreadController(srv.log)
+	handler, err := DataHandler.New(srv.config, srv.log, Data.ConnectDb)
 	if err != nil {
-		log.Fatalf("failed to initialize data layer, Err:%s", err)
+		srv.log.Fatalf("failed to initialize data layer, Err:%s", err)
 	}
 	srv.data = handler
+	journal, err := DataJournal.NewJournalLib(handler.DB, srv.config.DataTable.Data, srv.log)
+	if err != nil {
+		srv.log.Fatalf("failed to create Journal Library. Error: %s", err)
+	}
+	srv.journal = journal
+	srv.data.AddJournal = srv.journal.AddJournal
+	srv.RunJournalHandler()
+	srv.RunHttp()
+}
+
+func (srv *Server) RunHttp() {
 	http.HandleFunc("/", srv.handler)
-	log.Printf("Data Server Listen @%s://%s:%s", srv.config.Http.HttpType, srv.config.Http.DnsName, srv.Port)
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", srv.Port), nil))
+	srv.log.Printf("Data Server Listen @%s://%s:%s", srv.config.Http.HttpType, srv.config.Http.DnsName, srv.Port)
+	srv.log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", srv.Port), nil))
+}
+
+func (srv *Server) RunJournalHandler() {
+	journal, err := DataJournal.NewJournalHandler(srv.data, srv.journal, srv.log)
+	if err != nil {
+		srv.log.Fatalf("failed to load Journal Handler. Error:%s", err)
+	}
+	srv.journalHandler = journal
+	worker, err := srv.BackendCtl.AddWorker("journalHandler", srv.journalHandler.Run)
+	if err != nil {
+		srv.log.Fatalf("failed to create Journal Handler as backend process.")
+	}
+	worker.Run()
 }
 
 func (srv *Server) init() error {
 	var port string
 	var configPath string
+	var serverId string
+	var logPath string
+	flag.StringVar(&serverId, "id", "", "Data Server Id")
 	flag.StringVar(&port, "port", "", "Data Server Listen Port")
 	flag.StringVar(&configPath, "config", "", "Data Server Configuration JSON path")
+	flag.StringVar(&logPath, "log", "", "path that hold log")
 	flag.Parse()
 	srv.args[PORT] = port
+	if serverId == "" {
+		flag.Usage()
+		return fmt.Errorf("missing parameter id")
+	}
+	srv.Id = serverId
 	if configPath == "" {
 		flag.Usage()
 		return fmt.Errorf("missing parameter config")
+	}
+	if logPath != "" {
+		err := os.MkdirAll(logPath, os.ModePerm)
+		if err != nil {
+			return fmt.Errorf("failed to create log path: %s", logPath)
+		}
+		srv.logPath = logPath
 	}
 	srv.args[CONFIG] = configPath
 	err := Config.Read(srv.args[CONFIG], &srv.config)
@@ -113,16 +180,25 @@ func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 		}, http.StatusBadRequest, srv.config.Http)
 		return
 	}
+	if _, ok := Common.ReadOnlyTypes[dataType]; ok && r.Method != http.MethodGet {
+		Http.ResponseJson(w, Http.HttpError{
+			Status: http.StatusBadRequest,
+			Message: []string{
+				fmt.Sprintf("update on data type=[%s] is not supported", dataType),
+			},
+		}, http.StatusBadRequest, srv.config.Http)
+		return
+	}
 	switch r.Method {
-	case Http.GET:
+	case http.MethodGet:
 		srv.handleGet(w, dataType, idPath)
-	case Http.POST:
+	case http.MethodPost:
 		srv.handlePost(w, r, dataType, idPath)
-	case Http.DELETE:
+	case http.MethodDelete:
 		srv.handleDelete(w, dataType, idPath)
-	case Http.PUT:
+	case http.MethodPut:
 		srv.handlePut(w, r, dataType, idPath)
-	case Http.PATCH:
+	case http.MethodPatch:
 		srv.handlePatch(w, r, dataType, idPath)
 	default:
 		Http.ResponseJson(w, Http.HttpError{
@@ -144,7 +220,14 @@ func (srv *Server) handleGet(w http.ResponseWriter, dataType string, dataId stri
 		Http.ResponseJson(w, idList, http.StatusOK, srv.config.Http)
 		return
 	}
-	result, err := srv.data.Get(dataType, dataId)
+	var result interface{}
+	var err *Http.HttpError
+	switch dataType {
+	case Common.KeyJournal:
+		result, err = srv.journal.GetJournal(dataId)
+	default:
+		result, err = srv.data.Get(dataType, dataId)
+	}
 	if err != nil {
 		Http.ResponseJson(w, err, err.Status, srv.config.Http)
 		return
@@ -177,11 +260,14 @@ func ParseRecord(noRecordList []string, payload map[string]interface{}, dataType
 }
 
 func (srv *Server) handlePost(w http.ResponseWriter, r *http.Request, dataType string, dataId string) {
-	payload := make(map[string]interface{})
-	err := Http.LoadRequest(r, &payload)
+	reqBody, err := Http.LoadRequest(r)
 	if err != nil {
 		Http.ResponseJson(w, err, err.Status, srv.config.Http)
 		return
+	}
+	payload, ok := reqBody.(map[string]interface{})
+	if !ok {
+		Http.ResponseJson(w, "failed to parse request into JSON object", http.StatusBadRequest, srv.config.Http)
 	}
 	record, e := ParseRecord(r.Header.Values(Record.NotRecord), payload, dataType, dataId)
 	if e != nil {
@@ -197,11 +283,14 @@ func (srv *Server) handlePost(w http.ResponseWriter, r *http.Request, dataType s
 }
 
 func (srv *Server) handlePut(w http.ResponseWriter, r *http.Request, dataType string, dataId string) {
-	payload := make(map[string]interface{})
-	e := Http.LoadRequest(r, &payload)
+	reqBody, e := Http.LoadRequest(r)
 	if e != nil {
 		Http.ResponseJson(w, e, e.Status, srv.config.Http)
 		return
+	}
+	payload, ok := reqBody.(map[string]interface{})
+	if !ok {
+		Http.ResponseJson(w, "failed to parse request into JSON object", http.StatusBadRequest, srv.config.Http)
 	}
 	record, e := ParseRecord(r.Header.Values(Record.NotRecord), payload, dataType, dataId)
 	if e != nil {
@@ -228,13 +317,13 @@ func (srv *Server) handleDelete(w http.ResponseWriter, dataType string, dataId s
 }
 
 func (srv *Server) handlePatch(w http.ResponseWriter, r *http.Request, dataType string, idPath string) {
-	payload := make(map[string]interface{})
-	e := Http.LoadRequest(r, &payload)
+	payload, e := Http.LoadRequest(r)
 	if e != nil {
 		Http.ResponseJson(w, e, e.Status, srv.config.Http)
 		return
 	}
-	response, e := srv.data.Patch(dataType, idPath, payload)
+	headers := Http.ParseHeaders(r)
+	response, e := srv.data.Patch(dataType, idPath, headers, payload)
 	if e != nil {
 		Http.ResponseJson(w, e, e.Status, srv.config.Http)
 		return

@@ -26,73 +26,148 @@ This copyright notice and license applies to all files in this directory or sub-
 package SchemaPathTest
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 
-	"github.com/salesforce/UniTAO/lib/SchemaPath"
+	"github.com/salesforce/UniTAO/lib/Util"
 )
 
-func TestFlatRecord(t *testing.T) {
-	schemaStr := `{
-		"FlatTest": {
-			"name": "FlatTest",
-			"description": "test for retrieve flat",
-			"properties": {
-				"simpleAttr": {
-					"type": "string"
-				},
-				"directRef": {
-					"type": "string",
-					"contentMediaType": "inventory/refObj"
-				},
-				"directObj": {
-					"type": "object",
-					"$ref": "#/definitions/itemObj"
-				},
-				"arraySimple": {
-					"type": "array",
-					"items": {
-						"type": "string"
-					}
-				},
-				"mapSimple": {
-					"type": "map",
-					"items": {
-						"type": "string"
-					}
-				},
-				"arrayObj": {
-					"type": "array",
-					"items": {
-						"type": "object",
-						"$ref": "#/definitions/itemObj"
-					}
-				},
-				"mapObj": {
-					"type": "map",
-					"items": {
-						"type": "object",
-						"$ref": "#/definitions/itemObj"
-					}
-				},
-				"arrayRef": {
-					"type": "array",
-					"items": {
-						"type": "string",
-						"contentMediaType": "inventory/refObj"
-					}
-				},
-				"mapRef": {
-					"type": "map",
-					"items": {
-						"type": "string",
-						"contentMediaType": "inventory/refObj"
-					}
+func validateFlatValue(value interface{}) error {
+	valueType := reflect.TypeOf(value).Kind()
+	switch valueType {
+	case reflect.Slice:
+		return validateFlatArray(value.([]interface{}))
+	case reflect.Map:
+		for key, item := range value.(map[string]interface{}) {
+			itemType := reflect.TypeOf(item).Kind()
+			switch itemType {
+			case reflect.Slice:
+				err := validateFlatArray(item.([]interface{}))
+				if err != nil {
+					return fmt.Errorf("value of [%s] is not a flat array, Error: %s", key, err)
 				}
+			case reflect.Map:
+				return fmt.Errorf("value of [%s] is a map", key)
+			}
+		}
+	}
+	return nil
+}
+
+func validateFlatArray(ary []interface{}) error {
+	for idx, item := range ary {
+		err := validateSimple(item)
+		if err != nil {
+			return fmt.Errorf("item[%d] is not a simple value, Error:%s", idx, err)
+		}
+	}
+	return nil
+}
+
+func validateSimple(value interface{}) error {
+	valueType := reflect.TypeOf(value).Kind()
+	switch valueType {
+	case reflect.Slice:
+		return fmt.Errorf("value is an array")
+	case reflect.Map:
+		return fmt.Errorf("value is a map")
+	default:
+		return nil
+	}
+}
+
+func TestFlatRecord(t *testing.T) {
+	recordStr := `{
+		"schema": {
+			"FlatTest": {
+				"__id": "FlatTest",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "FlatTest",
+					"version": "0.0.1",
+					"description": "test for retrieve flat",
+					"properties": {
+						"simpleAttr": {
+							"type": "string"
+						},
+						"directRef": {
+							"type": "string",
+							"contentMediaType": "inventory/refObj"
+						},
+						"directObj": {
+							"type": "object",
+							"$ref": "#/definitions/itemObj"
+						},
+						"arraySimple": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						},
+						"mapSimple": {
+							"type": "map",
+							"items": {
+								"type": "string"
+							}
+						},
+						"arrayObj": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"$ref": "#/definitions/itemObj"
+							}
+						},
+						"mapObj": {
+							"type": "map",
+							"items": {
+								"type": "object",
+								"$ref": "#/definitions/itemObj"
+							}
+						},
+						"arrayRef": {
+							"type": "array",
+							"items": {
+								"type": "string",
+								"contentMediaType": "inventory/refObj"
+							}
+						},
+						"mapRef": {
+							"type": "map",
+							"items": {
+								"type": "string",
+								"contentMediaType": "inventory/refObj"
+							}
+						}
+					},
+					"definitions": {
+						"itemObj": {
+							"name": "itemObj",
+							"key": "{key1}_{key2}",
+							"properties": {
+								"key1": {
+									"type": "string"
+								},
+								"key2": {
+									"type": "string"
+								},
+								"key3": {
+									"type": "striing",
+									"required": false
+								}
+							}
+						}
+					}
+				}				
 			},
-			"definitions": {
-				"itemObj": {
-					"name": "itemObj",
+			"refObj": {
+				"__id": "refObj",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "refObj",
+					"version": "0.0.1",
 					"key": "{key1}_{key2}",
 					"properties": {
 						"key1": {
@@ -109,24 +184,6 @@ func TestFlatRecord(t *testing.T) {
 				}
 			}
 		},
-		"refObj": {
-			"name": "refObj",
-			"key": "{key1}_{key2}",
-					"properties": {
-						"key1": {
-							"type": "string"
-						},
-						"key2": {
-							"type": "string"
-						},
-						"key3": {
-							"type": "striing",
-							"required": false
-						}
-					}
-		}
-	}`
-	recordStr := `{
 		"FlatTest": {
 			"test01": {
 				"__id": "test01",
@@ -225,7 +282,7 @@ func TestFlatRecord(t *testing.T) {
 			}
 		}
 	}`
-	conn := PrepareConn(schemaStr, recordStr)
+	conn := PrepareConn(recordStr)
 	queryPath := "FlatTest/test01?flat"
 	value, err := QueryPath(conn, queryPath)
 	if err != nil {
@@ -234,73 +291,99 @@ func TestFlatRecord(t *testing.T) {
 	if reflect.TypeOf(value).Kind() != reflect.Map {
 		t.Fatalf("invalid parse record. type=[%s], expect=[%s]", reflect.TypeOf(value).Kind(), reflect.Map)
 	}
-	pathErr := SchemaPath.ValidateFlatValue(value)
-	if pathErr != nil {
-		t.Fatalf(pathErr.Error())
-	}
 }
 
 func TestFlatSimple(t *testing.T) {
-	schemaStr := `{
-		"FlatTest": {
-			"name": "FlatTest",
-			"description": "test for retrieve flat",
-			"properties": {
-				"simpleAttr": {
-					"type": "string"
-				},
-				"directRef": {
-					"type": "string",
-					"contentMediaType": "inventory/refObj"
-				},
-				"directObj": {
-					"type": "object",
-					"$ref": "#/definitions/itemObj"
-				},
-				"arraySimple": {
-					"type": "array",
-					"items": {
-						"type": "string"
-					}
-				},
-				"mapSimple": {
-					"type": "map",
-					"items": {
-						"type": "string"
-					}
-				},
-				"arrayObj": {
-					"type": "array",
-					"items": {
-						"type": "object",
-						"$ref": "#/definitions/itemObj"
-					}
-				},
-				"mapObj": {
-					"type": "map",
-					"items": {
-						"type": "object",
-						"$ref": "#/definitions/itemObj"
-					}
-				},
-				"arrayRef": {
-					"type": "array",
-					"items": {
-						"type": "string",
-						"contentMediaType": "inventory/refObj"
-					}
-				},
-				"mapRef": {
-					"type": "map",
-					"items": {
-						"type": "string",
-						"contentMediaType": "inventory/refObj"
+	recordStr := `{
+		"schema": {
+			"FlatTest": {
+				"__id": "FlatTest",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "FlatTest",
+					"version": "0.0.1",
+					"description": "test for retrieve flat",
+					"properties": {
+						"simpleAttr": {
+							"type": "string"
+						},
+						"directRef": {
+							"type": "string",
+							"contentMediaType": "inventory/refObj"
+						},
+						"directObj": {
+							"type": "object",
+							"$ref": "#/definitions/itemObj"
+						},
+						"arraySimple": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						},
+						"mapSimple": {
+							"type": "map",
+							"items": {
+								"type": "string"
+							}
+						},
+						"arrayObj": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"$ref": "#/definitions/itemObj"
+							}
+						},
+						"mapObj": {
+							"type": "map",
+							"items": {
+								"type": "object",
+								"$ref": "#/definitions/itemObj"
+							}
+						},
+						"arrayRef": {
+							"type": "array",
+							"items": {
+								"type": "string",
+								"contentMediaType": "inventory/refObj"
+							}
+						},
+						"mapRef": {
+							"type": "map",
+							"items": {
+								"type": "string",
+								"contentMediaType": "inventory/refObj"
+							}
+						}
+					},
+					"definitions": {
+						"itemObj": {
+							"name": "itemObj",
+							"key": "{key1}_{key2}",
+							"properties": {
+								"key1": {
+									"type": "string"
+								},
+								"key2": {
+									"type": "string"
+								},
+								"key3": {
+									"type": "striing",
+									"required": false
+								}
+							}
+						}
 					}
 				}
 			},
-			"definitions": {
-				"itemObj": {
-					"name": "itemObj",
+			"refObj": {
+				"__id": "refObj",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "refObj",
+					"version": "0.0.1",
 					"key": "{key1}_{key2}",
 					"properties": {
 						"key1": {
@@ -317,24 +400,6 @@ func TestFlatSimple(t *testing.T) {
 				}
 			}
 		},
-		"refObj": {
-			"name": "refObj",
-			"key": "{key1}_{key2}",
-					"properties": {
-						"key1": {
-							"type": "string"
-						},
-						"key2": {
-							"type": "string"
-						},
-						"key3": {
-							"type": "striing",
-							"required": false
-						}
-					}
-		}
-	}`
-	recordStr := `{
 		"FlatTest": {
 			"test01": {
 				"__id": "test01",
@@ -433,88 +498,121 @@ func TestFlatSimple(t *testing.T) {
 			}
 		}
 	}`
-	conn := PrepareConn(schemaStr, recordStr)
+	conn := PrepareConn(recordStr)
 	queryPath := "FlatTest/test01/arraySimple?flat"
 	value, err := QueryPath(conn, queryPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pathErr := SchemaPath.ValidateFlatValue(value)
-	if pathErr != nil {
-		t.Fatalf(pathErr.Error())
+	ex := validateFlatValue(value)
+	if ex != nil {
+		t.Fatalf(ex.Error())
 	}
 	queryPath = "FlatTest/test01/mapSimple?flat"
 	value, err = QueryPath(conn, queryPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pathErr = SchemaPath.ValidateFlatValue(value)
-	if pathErr != nil {
-		t.Fatalf(pathErr.Error())
+	if val1, ok := value.(map[string]interface{})["01"]; !ok || val1 != "simple01" {
+		t.Fatal("failed to retrieve simeple value as flat")
+	}
+	ex = validateFlatValue(value)
+	if ex != nil {
+		t.Fatalf(ex.Error())
 	}
 }
 
 func TestFlatObj(t *testing.T) {
-	schemaStr := `{
-		"FlatTest": {
-			"name": "FlatTest",
-			"description": "test for retrieve flat",
-			"properties": {
-				"simpleAttr": {
-					"type": "string"
-				},
-				"directRef": {
-					"type": "string",
-					"contentMediaType": "inventory/refObj"
-				},
-				"directObj": {
-					"type": "object",
-					"$ref": "#/definitions/itemObj"
-				},
-				"arraySimple": {
-					"type": "array",
-					"items": {
-						"type": "string"
-					}
-				},
-				"mapSimple": {
-					"type": "map",
-					"items": {
-						"type": "string"
-					}
-				},
-				"arrayObj": {
-					"type": "array",
-					"items": {
-						"type": "object",
-						"$ref": "#/definitions/itemObj"
-					}
-				},
-				"mapObj": {
-					"type": "map",
-					"items": {
-						"type": "object",
-						"$ref": "#/definitions/itemObj"
-					}
-				},
-				"arrayRef": {
-					"type": "array",
-					"items": {
-						"type": "string",
-						"contentMediaType": "inventory/refObj"
-					}
-				},
-				"mapRef": {
-					"type": "map",
-					"items": {
-						"type": "string",
-						"contentMediaType": "inventory/refObj"
+	recordStr := `{
+		"schema": {
+			"FlatTest": {
+				"__id": "FlatTest",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "FlatTest",
+					"version": "0.0.1",
+					"description": "test for retrieve flat",
+					"properties": {
+						"simpleAttr": {
+							"type": "string"
+						},
+						"directRef": {
+							"type": "string",
+							"contentMediaType": "inventory/refObj"
+						},
+						"directObj": {
+							"type": "object",
+							"$ref": "#/definitions/itemObj"
+						},
+						"arraySimple": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						},
+						"mapSimple": {
+							"type": "map",
+							"items": {
+								"type": "string"
+							}
+						},
+						"arrayObj": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"$ref": "#/definitions/itemObj"
+							}
+						},
+						"mapObj": {
+							"type": "map",
+							"items": {
+								"type": "object",
+								"$ref": "#/definitions/itemObj"
+							}
+						},
+						"arrayRef": {
+							"type": "array",
+							"items": {
+								"type": "string",
+								"contentMediaType": "inventory/refObj"
+							}
+						},
+						"mapRef": {
+							"type": "map",
+							"items": {
+								"type": "string",
+								"contentMediaType": "inventory/refObj"
+							}
+						}
+					},
+					"definitions": {
+						"itemObj": {
+							"name": "itemObj",
+							"key": "{key1}_{key2}",
+							"properties": {
+								"key1": {
+									"type": "string"
+								},
+								"key2": {
+									"type": "string"
+								},
+								"key3": {
+									"type": "striing",
+									"required": false
+								}
+							}
+						}
 					}
 				}
 			},
-			"definitions": {
-				"itemObj": {
-					"name": "itemObj",
+			"refObj": {
+				"__id": "refObj",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "refObj",
+					"version": "0.0.1",
 					"key": "{key1}_{key2}",
 					"properties": {
 						"key1": {
@@ -531,24 +629,6 @@ func TestFlatObj(t *testing.T) {
 				}
 			}
 		},
-		"refObj": {
-			"name": "refObj",
-			"key": "{key1}_{key2}",
-					"properties": {
-						"key1": {
-							"type": "string"
-						},
-						"key2": {
-							"type": "string"
-						},
-						"key3": {
-							"type": "striing",
-							"required": false
-						}
-					}
-		}
-	}`
-	recordStr := `{
 		"FlatTest": {
 			"test01": {
 				"__id": "test01",
@@ -647,13 +727,13 @@ func TestFlatObj(t *testing.T) {
 			}
 		}
 	}`
-	conn := PrepareConn(schemaStr, recordStr)
+	conn := PrepareConn(recordStr)
 	queryPath := "FlatTest/test01/directObj?flat"
 	value, err := QueryPath(conn, queryPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pathErr := SchemaPath.ValidateFlatValue(value)
+	pathErr := validateFlatValue(value)
 	if pathErr != nil {
 		t.Fatalf(pathErr.Error())
 	}
@@ -662,7 +742,7 @@ func TestFlatObj(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pathErr = SchemaPath.ValidateFlatValue(value)
+	pathErr = validateFlatValue(value)
 	if pathErr != nil {
 		t.Fatalf(pathErr.Error())
 	}
@@ -671,73 +751,103 @@ func TestFlatObj(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pathErr = SchemaPath.ValidateFlatValue(value)
+	pathErr = validateFlatValue(value)
 	if pathErr != nil {
 		t.Fatalf(pathErr.Error())
 	}
 }
 
 func TestFlatRef(t *testing.T) {
-	schemaStr := `{
-		"FlatTest": {
-			"name": "FlatTest",
-			"description": "test for retrieve flat",
-			"properties": {
-				"simpleAttr": {
-					"type": "string"
-				},
-				"directRef": {
-					"type": "string",
-					"contentMediaType": "inventory/refObj"
-				},
-				"directObj": {
-					"type": "object",
-					"$ref": "#/definitions/itemObj"
-				},
-				"arraySimple": {
-					"type": "array",
-					"items": {
-						"type": "string"
-					}
-				},
-				"mapSimple": {
-					"type": "map",
-					"items": {
-						"type": "string"
-					}
-				},
-				"arrayObj": {
-					"type": "array",
-					"items": {
-						"type": "object",
-						"$ref": "#/definitions/itemObj"
-					}
-				},
-				"mapObj": {
-					"type": "map",
-					"items": {
-						"type": "object",
-						"$ref": "#/definitions/itemObj"
-					}
-				},
-				"arrayRef": {
-					"type": "array",
-					"items": {
-						"type": "string",
-						"contentMediaType": "inventory/refObj"
-					}
-				},
-				"mapRef": {
-					"type": "map",
-					"items": {
-						"type": "string",
-						"contentMediaType": "inventory/refObj"
+	recordStr := `{
+		"schema": {
+			"FlatTest": {
+				"__id": "FlatTest",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "FlatTest",
+					"version": "0.0.1",
+					"description": "test for retrieve flat",
+					"properties": {
+						"simpleAttr": {
+							"type": "string"
+						},
+						"directRef": {
+							"type": "string",
+							"contentMediaType": "inventory/refObj"
+						},
+						"directObj": {
+							"type": "object",
+							"$ref": "#/definitions/itemObj"
+						},
+						"arraySimple": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						},
+						"mapSimple": {
+							"type": "map",
+							"items": {
+								"type": "string"
+							}
+						},
+						"arrayObj": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"$ref": "#/definitions/itemObj"
+							}
+						},
+						"mapObj": {
+							"type": "map",
+							"items": {
+								"type": "object",
+								"$ref": "#/definitions/itemObj"
+							}
+						},
+						"arrayRef": {
+							"type": "array",
+							"items": {
+								"type": "string",
+								"contentMediaType": "inventory/refObj"
+							}
+						},
+						"mapRef": {
+							"type": "map",
+							"items": {
+								"type": "string",
+								"contentMediaType": "inventory/refObj"
+							}
+						}
+					},
+					"definitions": {
+						"itemObj": {
+							"name": "itemObj",
+							"key": "{key1}_{key2}",
+							"properties": {
+								"key1": {
+									"type": "string"
+								},
+								"key2": {
+									"type": "string"
+								},
+								"key3": {
+									"type": "striing",
+									"required": false
+								}
+							}
+						}
 					}
 				}
 			},
-			"definitions": {
-				"itemObj": {
-					"name": "itemObj",
+			"refObj": {
+				"__id": "refObj",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "refObj",
+					"version": "0.0.1",
 					"key": "{key1}_{key2}",
 					"properties": {
 						"key1": {
@@ -754,24 +864,6 @@ func TestFlatRef(t *testing.T) {
 				}
 			}
 		},
-		"refObj": {
-			"name": "refObj",
-			"key": "{key1}_{key2}",
-					"properties": {
-						"key1": {
-							"type": "string"
-						},
-						"key2": {
-							"type": "string"
-						},
-						"key3": {
-							"type": "striing",
-							"required": false
-						}
-					}
-		}
-	}`
-	recordStr := `{
 		"FlatTest": {
 			"test01": {
 				"__id": "test01",
@@ -870,13 +962,13 @@ func TestFlatRef(t *testing.T) {
 			}
 		}
 	}`
-	conn := PrepareConn(schemaStr, recordStr)
+	conn := PrepareConn(recordStr)
 	queryPath := "FlatTest/test01/directRef?flat"
 	value, err := QueryPath(conn, queryPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pathErr := SchemaPath.ValidateFlatValue(value)
+	pathErr := validateFlatValue(value)
 	if pathErr != nil {
 		t.Fatalf(pathErr.Error())
 	}
@@ -885,7 +977,7 @@ func TestFlatRef(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pathErr = SchemaPath.ValidateFlatValue(value)
+	pathErr = validateFlatValue(value)
 	if pathErr != nil {
 		t.Fatalf(pathErr.Error())
 	}
@@ -897,7 +989,7 @@ func TestFlatRef(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pathErr = SchemaPath.ValidateFlatValue(value)
+	pathErr = validateFlatValue(value)
 	if pathErr != nil {
 		t.Fatalf(pathErr.Error())
 	}
@@ -909,7 +1001,7 @@ func TestFlatRef(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pathErr = SchemaPath.ValidateFlatValue(value)
+	pathErr = validateFlatValue(value)
 	if pathErr != nil {
 		t.Fatalf(pathErr.Error())
 	}
@@ -921,7 +1013,7 @@ func TestFlatRef(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pathErr = SchemaPath.ValidateFlatValue(value)
+	pathErr = validateFlatValue(value)
 	if pathErr != nil {
 		t.Fatalf(pathErr.Error())
 	}
@@ -933,7 +1025,7 @@ func TestFlatRef(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pathErr = SchemaPath.ValidateFlatValue(value)
+	pathErr = validateFlatValue(value)
 	if pathErr != nil {
 		t.Fatalf(pathErr.Error())
 	}
@@ -943,64 +1035,70 @@ func TestFlatRef(t *testing.T) {
 }
 
 func TestFlat2LayerArrayAll(t *testing.T) {
-	schemaStr := `{
-		"entry": {
-			"name": "entry",
-			"properties": {
-				"arrayObj": {
-					"type": "array",
-					"items": {
-						"type": "object",
-						"$ref": "#/definitions/firstLayer"
-					}
-				}
-			},
-			"definitions": {
-				"firstLayer": {
-					"name": "firstLayer",
-					"key": "layer1-{key}",
+	recordStr := `{
+		"schema": {
+			"entry": {
+				"__id": "entry",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "entry",
+					"version": "0.0.1",
 					"properties": {
-						"key": {
-							"type": "string"
-						},
 						"arrayObj": {
 							"type": "array",
 							"items": {
 								"type": "object",
-								"$ref": "#/definitions/secondLayer"
-							}							
-						}
-					}
-				},
-				"secondLayer": {
-					"name": "secondLayer",
-					"key": "layer2-{key}",
-					"properties": {
-						"key": {
-							"type": "string"
-						},
-						"arrayObj": {
-							"type": "array",
-							"items": {
-								"type": "object",
-								"$ref": "#/definitions/itemObj"
+								"$ref": "#/definitions/firstLayer"
 							}
 						}
-					}
-				},
-				"itemObj": {
-					"name": "itemObj",
-					"key": "item-{key}",
-					"properties": {
-						"key": {
-							"type": "string"
+					},
+					"definitions": {
+						"firstLayer": {
+							"name": "firstLayer",
+							"key": "layer1-{key}",
+							"properties": {
+								"key": {
+									"type": "string"
+								},
+								"arrayObj": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"$ref": "#/definitions/secondLayer"
+									}							
+								}
+							}
+						},
+						"secondLayer": {
+							"name": "secondLayer",
+							"key": "layer2-{key}",
+							"properties": {
+								"key": {
+									"type": "string"
+								},
+								"arrayObj": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"$ref": "#/definitions/itemObj"
+									}
+								}
+							}
+						},
+						"itemObj": {
+							"name": "itemObj",
+							"key": "item-{key}",
+							"properties": {
+								"key": {
+									"type": "string"
+								}
+							}
 						}
 					}
 				}
 			}
-		}
-	}`
-	recordStr := `{
+		},
 		"entry": {
 			"01": {
 				"__id": "01",
@@ -1112,13 +1210,17 @@ func TestFlat2LayerArrayAll(t *testing.T) {
 			}			
 		}
 	}`
-	conn := PrepareConn(schemaStr, recordStr)
+	conn := PrepareConn(recordStr)
 	queryPath := "entry/01/arrayObj[*]?flat"
 	value, err := QueryPath(conn, queryPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pathErr := SchemaPath.ValidateFlatValue(value)
+	idxMap := Util.IdxList(value.([]interface{}))
+	if _, ok := idxMap["layer1-01"]; !ok {
+		t.Fatal("failed to get correct key of obj, missing layer1-01")
+	}
+	pathErr := validateFlatValue(value)
 	if pathErr != nil {
 		t.Fatalf(pathErr.Error())
 	}
@@ -1127,49 +1229,85 @@ func TestFlat2LayerArrayAll(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pathErr = SchemaPath.ValidateFlatValue(value)
+	pathErr = validateFlatValue(value)
 	if pathErr != nil {
 		t.Fatalf(pathErr.Error())
+	}
+	idxMap = Util.IdxList(value.([]interface{}))
+	if _, ok := idxMap["layer2-01"]; !ok {
+		t.Fatal("failed to get correct key of obj, missing layer2-01")
 	}
 }
 
 func TestFlatDeDupe(t *testing.T) {
-	schemaStr := `{
-		"entry": {
-			"name": "entry",
-			"properties": {
-				"simpleAry": {
-					"type": "array",
-					"items": {
-						"type": "string"						
-					}
-				},
-				"refAry": {
-					"type": "array",
-					"items": {
-						"type": "string",
-						"contentMediaType": "inventory/refObj"
-					}
-				},
-				"objMap": {
-					"type": "map",
-					"items": {
-						"type": "object",
-						"$ref": "#/definitions/itemObj"
+	recordStr := `{
+		"schema": {
+			"entry": {
+				"__id": "entry",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "entry",
+					"version": "0.0.1",
+					"properties": {
+						"simpleAry": {
+							"type": "array",
+							"items": {
+								"type": "string"						
+							}
+						},
+						"refAry": {
+							"type": "array",
+							"items": {
+								"type": "string",
+								"contentMediaType": "inventory/refObj"
+							}
+						},
+						"objMap": {
+							"type": "map",
+							"items": {
+								"type": "object",
+								"$ref": "#/definitions/itemObj"
+							}
+						}
+					},
+					"definitions": {
+						"itemObj": {
+							"name": "itemObj",
+							"key": "obj-{key}",
+							"properties": {
+								"key": {
+									"type": "string"
+								},
+								"refVal": {
+									"type": "string",
+									"contentMediaType": "inventory/refObj"
+								},
+								"simpleAry": {
+									"type": "array",
+									"items": {
+										"type": "string"
+									}
+								}
+							}
+						}
 					}
 				}
 			},
-			"definitions": {
-				"itemObj": {
-					"name": "itemObj",
-					"key": "obj-{key}",
+			"refObj": {
+				"__id": "refObj",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "refObj",
+					"version": "0.0.1",
+					"key": "ref-{key}",
 					"properties": {
 						"key": {
 							"type": "string"
 						},
-						"refVal": {
-							"type": "string",
-							"contentMediaType": "inventory/refObj"
+						"value": {
+							"type": "string"
 						},
 						"simpleAry": {
 							"type": "array",
@@ -1181,26 +1319,6 @@ func TestFlatDeDupe(t *testing.T) {
 				}
 			}
 		},
-		"refObj": {
-			"name": "refObj",
-			"key": "ref-{key}",
-			"properties": {
-				"key": {
-					"type": "string"
-				},
-				"value": {
-					"type": "string"
-				},
-				"simpleAry": {
-					"type": "array",
-					"items": {
-						"type": "string"
-					}
-				}
-			}
-		}
-	}`
-	recordStr := `{
 		"entry": {
 			"01": {
 				"__id": "01",
@@ -1297,7 +1415,7 @@ func TestFlatDeDupe(t *testing.T) {
 			}
 		}
 	}`
-	conn := PrepareConn(schemaStr, recordStr)
+	conn := PrepareConn(recordStr)
 	queryPath := "entry/01/simpleAry?flat"
 	value, err := QueryPath(conn, queryPath)
 	if err != nil {

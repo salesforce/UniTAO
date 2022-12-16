@@ -34,7 +34,6 @@ import (
 )
 
 func main() {
-	log.Printf("data service started")
 	server, err := DataServer.New()
 	if err != nil {
 		newErr := fmt.Errorf("failed to create instance of DataServer. Err:%s", err.Error())

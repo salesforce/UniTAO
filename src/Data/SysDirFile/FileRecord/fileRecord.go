@@ -34,7 +34,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/salesforce/UniTAO/lib/Util"
+	"github.com/salesforce/UniTAO/lib/Util/Json"
 )
 
 type Record struct {
@@ -58,7 +58,7 @@ func (rec *Record) Refresh() error {
 	}
 	fileTime := fileInfo.ModTime()
 	if rec.lastUpdateTime.Before(fileTime) {
-		data, err := Util.LoadJSONMap(rec.FullPath)
+		data, err := Json.LoadJSONMap(rec.FullPath)
 		if err != nil {
 			err = fmt.Errorf("failed to parse data from record id=[%s], path=[%s]. Err:%s", rec.Id, rec.FullPath, err)
 			log.Print(err)
@@ -96,7 +96,10 @@ func New(dirPath string, fileName string) (*Record, error) {
 		return nil, fmt.Errorf("%s is not a file. \n Error:%s", fullPath, err)
 	}
 	record.lastUpdateTime = fileInfo.ModTime()
-	record.Data, err = Util.LoadJSONMap(fullPath)
+	record.Data, err = Json.LoadJSONMap(fullPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load file=[%s]. \n Error:%s", fullPath, err)
+	}
 	return &record, nil
 }
 

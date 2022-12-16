@@ -27,15 +27,18 @@ package SchemaTest
 
 import (
 	"fmt"
+	"net/http"
 	"testing"
 
 	"github.com/salesforce/UniTAO/lib/Schema"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
+	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
 
 func TestPatchSimpePath(t *testing.T) {
 	schemaStr := `{
 		"name": "testRoot",
+		"version": "0.0.1",
 		"properties": {
 			"attr1": {
 				"type": "string"
@@ -63,6 +66,7 @@ func TestPatchSimpePath(t *testing.T) {
 func TestPatchArrayStr(t *testing.T) {
 	schemaStr := `{
 		"name": "testRoot",
+		"version": "0.0.1",
 		"properties": {
 			"attr1": {
 				"type": "array",
@@ -108,7 +112,10 @@ func TestPatchArrayStr(t *testing.T) {
 	}
 	e = patchData(schemaStr, record, "attr1[test]", "ok")
 	if e == nil {
-		t.Fatal("failed to catch: 'simple array patch should use index failure'")
+		t.Fatal("failed to patch: 'test is gone, there should be no test to modify'")
+	}
+	if !Http.IsHttpError(e) || e.(*Http.HttpError).Status != http.StatusNotFound {
+		t.Fatalf("key does not exists, should return StatusNotFound[%d]", http.StatusNotFound)
 	}
 	e = patchData(schemaStr, record, "attrCmt[cmt01]", "ok")
 	if e != nil {
@@ -122,6 +129,7 @@ func TestPatchArrayStr(t *testing.T) {
 func TestPatchArrayObj(t *testing.T) {
 	schemaStr := `{
 		"name": "testRoot",
+		"version": "0.0.1",
 		"properties": {
 			"attr1": {
 				"type": "array",
@@ -191,6 +199,7 @@ func TestPatchArrayObj(t *testing.T) {
 func TestPatchMapStr(t *testing.T) {
 	schemaStr := `{
 		"name": "testRoot",
+		"version": "0.0.1",
 		"properties": {
 			"attr1": {
 				"type": "map",
@@ -237,24 +246,15 @@ func TestPatchMapStr(t *testing.T) {
 	if e != nil {
 		t.Fatal("failed to update Cmt to ok")
 	}
-	if _, ok := record.Data["attrCmt"].(map[string]interface{})["ok"]; !ok {
+	if record.Data["attrCmt"].(map[string]interface{})["test01"] != "ok" {
 		t.Fatal("failed to change test_01 to ok")
-	}
-	e = patchData(schemaStr, record, "attrCmt[ok]", "test02")
-	if e != nil {
-		t.Fatal("failed to update Cmt to ok")
-	}
-	if _, ok := record.Data["attrCmt"].(map[string]interface{})["ok"]; ok {
-		t.Fatal("failed to change ok to test02")
-	}
-	if len(record.Data["attrCmt"].(map[string]interface{})) != 1 {
-		t.Fatal("failed to remove the renamed ok")
 	}
 }
 
 func TestPatchMapObj(t *testing.T) {
 	schemaStr := `{
 		"name": "testRoot",
+		"version": "0.0.1",
 		"properties": {
 			"attr1": {
 				"type": "map",

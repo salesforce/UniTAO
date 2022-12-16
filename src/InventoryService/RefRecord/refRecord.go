@@ -34,8 +34,8 @@ import (
 
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
-	"github.com/salesforce/UniTAO/lib/Util"
 	"github.com/salesforce/UniTAO/lib/Util/Http"
+	"github.com/salesforce/UniTAO/lib/Util/Json"
 )
 
 const (
@@ -93,6 +93,6 @@ func (r *ReferralData) GetSchema() *Http.HttpError {
 }
 
 func (r *ReferralData) GetRecord() *Record.Record {
-	rMap, _ := Util.StructToMap(r)
+	rMap, _ := Json.CopyToMap(r)
 	return Record.NewRecord(Referral, LatestVer, r.DataType, rMap)
 }

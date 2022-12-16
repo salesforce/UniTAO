@@ -6,6 +6,7 @@
             "__ver": "0.0.1",
             "data": {
                 "name": "record",
+                "version": "0.0.1",
                 "description": "schema of data record",
                 "properties": {
                     "__id": {
@@ -29,11 +30,16 @@
             "__ver": "0.0.1",
             "data": {
                 "name": "schema",
+                "version": "0.0.1",
                 "description": "schema of schema",
                 "additionalProperties": false,
                 "properties": {
                     "name": {
                         "type": "string"
+                    },
+                    "version": {
+                        "type": "string",
+                        "required": false
                     },
                     "description": {
                         "type": "string",
@@ -45,6 +51,13 @@
                     },
                     "additionalProperties": {
                         "type": "boolean",
+                        "required": false
+                    },
+                    "required": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
                         "required": false
                     },
                     "properties": {
@@ -75,6 +88,11 @@
                                 "$ref": "#/definitions/prop",
                                 "required": false
                             },
+                            "additionalProperties": {
+                                "type": "object",
+                                "$ref": "#/definitions/prop",
+                                "required": false
+                            },
                             "$ref": {
                                 "type": "string",
                                 "required": false
@@ -83,9 +101,126 @@
                                 "type": "string",
                                 "required": false
                             },
+                            "indexTemplate": {
+                                "type": "string",
+                                "required": false
+                            },
                             "required": {
                                 "type": "boolean",
                                 "required": false
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "__id": "journal",
+            "__type": "schema",
+            "__ver": "0.0.1",
+            "data": {
+                "name": "journal",
+                "version": "0.0.1",
+                "key": "dataType:{dataType}_dataId:{dataId}_page:{idx}",
+                "properties": {
+                    "dataType": {
+                        "type": "string"
+                    },
+                    "dataId": {
+                        "type": "string"
+                    },
+                    "idx": {
+                        "type": "integer"
+                    },
+                    "active": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/definitions/entry"
+                        }
+                    },
+                    "archived": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/definitions/entry"
+                        }
+                    }
+                },
+                "definitions": {
+                    "entry": {
+                        "name": "entry",
+                        "key": "{page}_{idx}",
+                        "properties": {
+                            "page": {
+                                "type": "integer"
+                            },
+                            "idx": {
+                                "type": "integer"
+                            },
+                            "time": {
+                                "type": "string"
+                            },
+                            "before": {
+                                "type": "object",
+                                "required": false
+                            },
+                            "after": {
+                                "type": "object",
+                                "required": false
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "__id": "cmtIdx",
+            "__type": "schema",
+            "__ver": "0.0.1",
+            "data": {
+                "name": "cmtIdx",
+                "version": "0.0.1",
+                "key": "{dataType}",
+                "properties": {
+                    "dataType": {
+                        "type": "string"
+                    },
+                    "cmtSubscriber": {
+                        "type": "map",
+                        "items": {
+                            "type": "object",
+                            "$ref": "#/definitions/cmtSubscriber"
+                        }
+                    }
+                },
+                "definitions": {
+                    "cmtSubscriber": {
+                        "name": "cmtSubscriber",
+                        "key": "{dataType}",
+                        "properties": {
+                            "dataType": {
+                                "type": "string"
+                            },
+                            "versionIndex": {
+                                "type": "map",
+                                "items": {
+                                    "type": "object",
+                                    "$ref": "#/definitions/versionIndex"
+                                }                                
+                            }
+                        }
+                    },
+                    "versionIndex": {
+                        "name": "versionIndex",
+                        "key": "{version}",
+                        "properties": {
+                            "version": {
+                                "type": "string"
+                            },
+                            "indexTemplate": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
                             }
                         }
                     }

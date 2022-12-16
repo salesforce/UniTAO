@@ -44,11 +44,7 @@ type CmdQueryFlat struct {
 }
 
 func NewFlatQuery(conn *Data.Connection, dataType string, dataId string, path string) (*CmdQueryFlat, *Http.HttpError) {
-	node, err := Node.New(conn, dataType, dataId, path, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	err = node.BuildPath()
+	node, err := BuildNodePath(conn, dataType, dataId, path)
 	if err != nil {
 		return nil, err
 	}
@@ -62,216 +58,158 @@ func (c *CmdQueryFlat) Name() string {
 }
 
 func (c *CmdQueryFlat) WalkValue() (interface{}, *Http.HttpError) {
-	/*
-		TODO:
-		1, get schema of current path.
-		2, get value of current path
-		3, base on current schema to define how to get flat value of current
-	*/
-	cmdValue := CmdQueryValue{
-		p: c.p,
-	}
-	nodeValue, err := cmdValue.WalkValue()
+	valueList, err := c.GetNodeValue(c.p)
 	if err != nil {
 		return nil, err
 	}
-	validateErr := ValidateFlatValue(nodeValue)
-	if validateErr == nil {
-		// the return value is already a flat value
-		if reflect.TypeOf(nodeValue).Kind() == reflect.Slice {
-			dedupeList, nErr := Util.DeDupeList(nodeValue.([]interface{}))
-			if nErr != nil {
-				return nil, Http.WrapError(nErr, "failed to dedupe result.", http.StatusInternalServerError)
-			}
-			return dedupeList, nil
-		}
-		return nodeValue, nil
+	if len(valueList) == 1 {
+		return valueList[0], nil
 	}
-	if reflect.TypeOf(nodeValue).Kind() == reflect.Slice {
-		valueList, err := FlatNodeArray(c.p, nodeValue.([]interface{}))
+	return valueList, nil
+}
+
+func (c *CmdQueryFlat) GetNodeValue(node *Node.PathNode) ([]interface{}, *Http.HttpError) {
+	nodeList := c.getNodeList([]*Node.PathNode{node})
+	result := []interface{}{}
+	for _, node := range nodeList {
+		valueList, err := c.getSingleNodeValue(node)
 		if err != nil {
 			return nil, err
 		}
-		dedupeList, nErr := Util.DeDupeList(valueList.([]interface{}))
-		if nErr != nil {
-			return nil, Http.WrapError(nErr, "failed to dedupe result.", http.StatusInternalServerError)
+		result = append(result, valueList...)
+	}
+	if len(result) > 0 && reflect.TypeOf(result[0]).Kind() == reflect.String {
+		dedupeList, ex := Util.DeDupeList(result)
+		if ex != nil {
+			return nil, Http.WrapError(ex, fmt.Sprintf("failed to merge dup result @path=[%s]", node.FullPath()), http.StatusInternalServerError)
 		}
 		return dedupeList, nil
-	}
-	return FlatNodeMap(c.p, nodeValue.(map[string]interface{}))
-}
-
-func FlatMergeEmbedArray(arrayValue []interface{}) ([]interface{}, error) {
-	if reflect.TypeOf(arrayValue[0]).Kind() != reflect.Slice {
-		return arrayValue, nil
-	}
-	resultAry := []interface{}{}
-	for idx, item := range arrayValue {
-		itemAry, ok := item.([]interface{})
-		if !ok {
-			return nil, fmt.Errorf("failed to convert item @[%d] to []interface{}", idx)
-		}
-		embedAry, err := FlatMergeEmbedArray(itemAry)
-		if err != nil {
-			return nil, fmt.Errorf("failed to Merge Embeded Array @[%d], Error:%s", idx, err)
-		}
-		resultAry = append(resultAry, embedAry...)
-	}
-	return resultAry, nil
-}
-
-func FlatNodeArray(node *Node.PathNode, nodeValue []interface{}) (interface{}, *Http.HttpError) {
-	valueAry, err := FlatMergeEmbedArray(nodeValue)
-	if err != nil {
-		return nil, Http.NewHttpError(err.Error(), http.StatusInternalServerError)
-	}
-	err = ValidateFlatArray(valueAry)
-	if err == nil {
-		return valueAry, nil
-	}
-	// array is not simple, item is map
-	for node.Next != nil {
-		node = node.Next
-	}
-	if node.AttrName == "" {
-		resultAry, err := FlatSchemaArray(node.Schema, valueAry)
-		if err != nil {
-			return nil, Http.NewHttpError(err.Error(), http.StatusInternalServerError)
-		}
-		return resultAry, nil
-	}
-	itemSchema, ok := node.Schema.SubDocs[node.AttrName]
-	if !ok {
-		return nil, Http.NewHttpError(fmt.Sprintf("missing subDoc for attr=[%s] @path=[%s]", node.AttrName, node.FullPath()), http.StatusInternalServerError)
-	}
-	resultAry, err := FlatSchemaArray(itemSchema, valueAry)
-	if err != nil {
-		return nil, Http.NewHttpError(err.Error(), http.StatusInternalServerError)
-	}
-	return resultAry, nil
-}
-
-func FlatNodeMap(node *Node.PathNode, nodeValue map[string]interface{}) (interface{}, *Http.HttpError) {
-	for node.Next != nil {
-		node = node.Next
-	}
-	result := map[string]interface{}{}
-	for attr, attrValue := range nodeValue {
-		attrDef, ok := node.Schema.Data[JsonKey.Properties].(map[string]interface{})[attr]
-		if !ok {
-			simpleValue, err := FlatSimpleValue(attrValue)
-			if err != nil {
-				return nil, Http.WrapError(err, fmt.Sprintf("attr=[%s] not defined in schema, cannot convert its value to simple value.", attr), http.StatusBadRequest)
-			}
-			result[attr] = simpleValue
-			continue
-		}
-		switch attrDef.(map[string]interface{})[JsonKey.Type].(string) {
-		case JsonKey.Array:
-			itemDef := attrDef.(map[string]interface{})[JsonKey.Items].(map[string]interface{})
-			if itemDef[JsonKey.Type].(string) == JsonKey.Object {
-				itemSchema, ok := node.Schema.SubDocs[attr]
-				if !ok {
-					return nil, Http.NewHttpError(fmt.Sprintf("missing subDoc for attr=[%s] @path=[%s]", attr, node.FullPath()), http.StatusInternalServerError)
-				}
-				attrAryValue, err := FlatSchemaArray(itemSchema, attrValue.([]interface{}))
-				if err != nil {
-					return nil, Http.WrapError(err, fmt.Sprintf("failed to flat array with schema, attr=[%s], path=[%s]", attr, node.FullPath()), http.StatusInternalServerError)
-				}
-				result[attr] = attrAryValue
-			} else {
-				result[attr] = attrValue.([]interface{})
-			}
-		case JsonKey.Object:
-			attrMapValue := attrValue.(map[string]interface{})
-			attrAryValue := make([]interface{}, 0, len(attrMapValue))
-			for key := range attrMapValue {
-				attrAryValue = append(attrAryValue, key)
-			}
-			result[attr] = attrAryValue
-		default:
-			result[attr] = attrValue
-		}
 	}
 	return result, nil
 }
 
-func FlatSchemaArray(schema *SchemaDoc.SchemaDoc, valueAry []interface{}) ([]interface{}, error) {
-	resultAry := make([]interface{}, 0, len(valueAry))
-	for _, item := range valueAry {
-		// the leaf is an object.
-		itemMap := item.(map[string]interface{})
-		itemKey, err := schema.BuildKey(itemMap)
+func (c *CmdQueryFlat) getSingleNodeValue(node *Node.PathNode) ([]interface{}, *Http.HttpError) {
+	if node.IsRecord() {
+		flatObj, err := c.FlatObject(node)
 		if err != nil {
 			return nil, err
 		}
-		resultAry = append(resultAry, itemKey)
+		return []interface{}{flatObj}, nil
 	}
-	return resultAry, nil
-}
-
-func FlatSimpleValue(value interface{}) (interface{}, error) {
-	switch reflect.TypeOf(value).Kind() {
-	case reflect.Slice:
-		err := ValidateFlatArray(value.([]interface{}))
+	if node.AttrDef[JsonKey.Type].(string) == JsonKey.Object && !SchemaDoc.IsMap(node.AttrDef) {
+		if node.Prev.Idx == Node.All {
+			return []interface{}{node.Idx}, nil
+		}
+		flatObj, err := c.FlatObject(node)
 		if err != nil {
-			return nil, fmt.Errorf("is not an array of simple value")
+			return nil, err
 		}
-		return value, nil
-	case reflect.Map:
-		valueMap, ok := value.(map[string]interface{})
-		if !ok {
-			return nil, fmt.Errorf("is not an map[string]interface{}")
-		}
-		result := make([]interface{}, 0, len(valueMap))
-		for key, _ := range valueMap {
-			result = append(result, key)
-		}
-		return result, nil
-	default:
-		return value, nil
+		return []interface{}{flatObj}, nil
 	}
+
+	dataType := node.AttrDef[JsonKey.Type].(string)
+	if dataType == JsonKey.Array || dataType == JsonKey.Object {
+		err := node.BuildIdx(Node.All)
+		if err != nil {
+			return nil, err
+		}
+		if dataType == JsonKey.Array {
+			return c.FlatArray(node)
+		}
+		flatMap, err := c.FlatMap(node)
+		if err != nil {
+			return nil, err
+		}
+		return []interface{}{flatMap}, nil
+	}
+	return []interface{}{node.Data}, nil
 }
 
-func ValidateFlatValue(value interface{}) error {
-	switch reflect.TypeOf(value).Kind() {
-	case reflect.Slice:
-		return ValidateFlatArray(value.([]interface{}))
-	case reflect.Map:
-		return ValidateFlatMap(value.(map[string]interface{}))
-	default:
-		return nil
+func (c *CmdQueryFlat) getNodeList(nodeList []*Node.PathNode) []*Node.PathNode {
+	if len(nodeList[0].Next) == 0 {
+		return nodeList
 	}
-}
-
-func ValidateFlatArray(value []interface{}) error {
-	for idx, item := range value {
-		if item == nil {
-			continue
-		}
-		valueType := reflect.TypeOf(item).Kind()
-		if valueType == reflect.Slice || valueType == reflect.Map {
-			return fmt.Errorf("invalid flat array item @idx=[%d]. item type=[%s] should only ne simple type", idx, valueType)
-		}
-	}
-	return nil
-}
-
-func ValidateFlatMap(value map[string]interface{}) error {
-	for key, item := range value {
-		if item == nil {
-			continue
-		}
-		switch reflect.TypeOf(item).Kind() {
-		case reflect.Map:
-			return fmt.Errorf("invalid get flat value on attr=[%s], type=[%s], expected=[%s]", key, reflect.Map, reflect.Slice)
-		case reflect.Slice:
-			ifaceAry := item.([]interface{})
-			err := ValidateFlatArray(ifaceAry)
-			if err != nil {
-				return fmt.Errorf("attr=[%s] is not a simple array. Error:%s", key, err)
+	newList := []*Node.PathNode{}
+	strMap := map[string]int{}
+	canDeDupe := false
+	for _, node := range nodeList {
+		for _, next := range node.Next {
+			if !canDeDupe {
+				if !next.IsRecord() && next.AttrDef[JsonKey.Type].(string) == JsonKey.String {
+					canDeDupe = true
+				}
 			}
+			if canDeDupe {
+				if _, ok := strMap[next.Data.(string)]; ok {
+					continue
+				}
+				strMap[next.Data.(string)] = 1
+			}
+			newList = append(newList, next)
 		}
 	}
-	return nil
+	return c.getNodeList(newList)
+}
+
+func (c CmdQueryFlat) FlatArray(node *Node.PathNode) ([]interface{}, *Http.HttpError) {
+	ary := make([]interface{}, 0, len(node.Next))
+	for _, next := range node.Next {
+		itemType := next.AttrDef[JsonKey.Type].(string)
+		if itemType == JsonKey.Object {
+			ary = append(ary, next.Idx)
+		} else {
+			ary = append(ary, next.Data)
+		}
+	}
+	return ary, nil
+}
+
+func (c CmdQueryFlat) FlatMap(node *Node.PathNode) (map[string]interface{}, *Http.HttpError) {
+	flatMap := map[string]interface{}{}
+	for _, next := range node.Next {
+		itemType := next.AttrDef[JsonKey.Type].(string)
+		if itemType == JsonKey.Object {
+			itemKey, ex := next.Schema.BuildKey(next.Data.(map[string]interface{}))
+			if ex != nil {
+				return nil, Http.WrapError(ex, fmt.Sprintf("failed to get key @path=[%s]", next.FullPath()), http.StatusInternalServerError)
+			}
+			flatMap[next.Idx] = itemKey
+		} else {
+			flatMap[next.Idx] = next.Data
+		}
+	}
+	return flatMap, nil
+}
+
+func (c *CmdQueryFlat) FlatObject(node *Node.PathNode) (map[string]interface{}, *Http.HttpError) {
+	flatObj := map[string]interface{}{}
+	for attrName, attrDef := range node.Schema.Data[JsonKey.Properties].(map[string]interface{}) {
+		attrData, ok := node.Data.(map[string]interface{})[attrName]
+		if !ok {
+			continue
+		}
+		attrType := attrDef.(map[string]interface{})[JsonKey.Type].(string)
+		switch attrType {
+		case JsonKey.Object:
+			attrList := []interface{}{}
+			for key := range attrData.(map[string]interface{}) {
+				attrList = append(attrList, key)
+			}
+			flatObj[attrName] = attrList
+		case JsonKey.Array:
+			err := node.BuildPath(fmt.Sprintf("%s[%s]", attrName, Node.All))
+			if err != nil {
+				return nil, err
+			}
+			flatAry, err := c.FlatArray(node.Next[0])
+			if err != nil {
+				return nil, err
+			}
+			flatObj[attrName] = flatAry
+		default:
+			flatObj[attrName] = attrData
+		}
+		node.Next = []*Node.PathNode{}
+	}
+	return flatObj, nil
 }

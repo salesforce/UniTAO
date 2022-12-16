@@ -33,8 +33,8 @@ import (
 
 	"Data/DbConfig"
 
-	"github.com/salesforce/UniTAO/lib/Util"
 	"github.com/salesforce/UniTAO/lib/Util/Http"
+	"github.com/salesforce/UniTAO/lib/Util/Json"
 )
 
 const (
@@ -54,7 +54,7 @@ type DataTableConfig struct {
 }
 
 func (t *DataTableConfig) Map() map[string]interface{} {
-	data, _ := Util.StructToMap(t)
+	data, _ := Json.CopyToMap(t)
 	return data
 }
 

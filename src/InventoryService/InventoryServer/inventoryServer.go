@@ -107,14 +107,14 @@ func (srv *Server) Run() {
 
 func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
-	case Http.GET:
+	case http.MethodGet:
 		srv.handleGet(w, r)
-	case Http.PUT:
+	case http.MethodPut:
 		srv.handleUpdate(w, r)
-	case Http.DELETE:
+	case http.MethodDelete:
 		srv.handlerDelete(w, r)
 	default:
-		err := Http.NewHttpError(fmt.Sprintf("method=[%s] not supported. only support method=[%s, %s]", r.Method, Http.PUT, Http.DELETE), http.StatusMethodNotAllowed)
+		err := Http.NewHttpError(fmt.Sprintf("method=[%s] not supported. only support method=[%s, %s]", r.Method, http.MethodPut, http.MethodDelete), http.StatusMethodNotAllowed)
 		Http.ResponseJson(w, err, err.Status, srv.config.Http)
 	}
 }
@@ -150,11 +150,14 @@ func (srv *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		Http.ResponseJson(w, err, err.Status, srv.config.Http)
 		return
 	}
-	payload := make(map[string]interface{})
-	e := Http.LoadRequest(r, &payload)
+	reqBody, e := Http.LoadRequest(r)
 	if e != nil {
 		Http.ResponseJson(w, e, e.Status, srv.config.Http)
 		return
+	}
+	payload, ok := reqBody.(map[string]interface{})
+	if !ok {
+		Http.ResponseJson(w, "failed to parse request into JSON object", http.StatusBadRequest, srv.config.Http)
 	}
 	dataId, err := srv.data.PutData(payload)
 	if err != nil {
