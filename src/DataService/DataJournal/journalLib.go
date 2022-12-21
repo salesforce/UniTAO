@@ -177,7 +177,17 @@ func (j *JournalLib) NextJournalEntry(dataType string, dataId string) *ProcessIf
 	if !ok {
 		return nil
 	}
+	if len(cache.Head.Active) == 0 && cache.Head.Idx < cache.Tail.Idx {
+		currentId := cache.Head.Id()
+		j.Logger.Printf("[%s]: page[%s] complete, move to next page.", WorkId(cache.DataType, cache.DataId), currentId)
+		err := j.JournalHeadForward(cache)
+		if err != nil {
+			j.Logger.Printf("[%s]: page move forward failed. current page[%s], Error:%s", WorkId(cache.DataType, cache.DataId), cache.Head.Id(), err)
+		}
+	}
+	j.Logger.Printf("[%s] get active entry from page[%s]", WorkId(cache.DataType, cache.DataId), cache.Head.Id())
 	if len(cache.Head.Active) == 0 {
+		j.Logger.Printf("[%s] no active entry from page[%s]", WorkId(cache.DataType, cache.DataId), cache.Head.Id())
 		return nil
 	}
 	return cache.Head.Active[0]
@@ -277,10 +287,18 @@ func (j *JournalLib) ArchiveJournalEntry(dataType string, dataId string, entry *
 	cache.Head.Active = cache.Head.Active[1:]
 	cache.Head.Archived = append(cache.Head.Archived, entry)
 	if len(cache.Head.Active) > 0 || cache.Head.Idx == cache.Tail.Idx {
-		j.Logger.Printf("Archive[%s]: still [%d] active entries", WorkId(dataType, dataId), len(cache.Head.Active))
+		if len(cache.Head.Active) > 0 {
+			j.Logger.Printf("Archive[%s]: still [%d] active entries", WorkId(dataType, dataId), len(cache.Head.Active))
+		} else {
+			j.Logger.Printf("Archive[%s]: no more entries, wait for new", WorkId(dataType, dataId))
+		}
 		return j.updateJournal(cache.Head)
 	}
-	j.Logger.Printf("Archive[%s]: finish process Journal Page:[%s], remove it", WorkId(dataType, dataId), cache.Head.Id())
+	return j.JournalHeadForward(cache)
+}
+
+func (j *JournalLib) JournalHeadForward(cache *JournalCache) *Http.HttpError {
+	j.Logger.Printf("Archive[%s]: Page[%s] done, move HEAD forward", WorkId(cache.DataType, cache.DataId), cache.Head.Id())
 	err := j.removeJournal(cache.Head.Id())
 	if err != nil {
 		return err
@@ -288,12 +306,12 @@ func (j *JournalLib) ArchiveJournalEntry(dataType string, dataId string, entry *
 	nextHeadIdx := cache.Head.Idx + 1
 	for nextHeadIdx < cache.Tail.Idx {
 		nextId := ProcessIface.PageId(cache.DataType, cache.DataId, nextHeadIdx)
-		j.Logger.Printf("Archive[%s]: Query next Journal Page: [%s]", WorkId(dataType, dataId), nextId)
+		j.Logger.Printf("Archive[%s]: Query next Journal Page: [%s]", WorkId(cache.DataType, cache.DataId), nextId)
 		data, err := j.QueryJournal(nextId)
 		if err != nil {
 			if err.Status == http.StatusNotFound {
 				nextHeadIdx += 1
-				j.Logger.Printf("Archive[%s]: journal page [%s] does not exists. skip: %d", WorkId(dataType, dataId), nextId, nextHeadIdx)
+				j.Logger.Printf("Archive[%s]: journal page [%s] does not exists. skip: %d", WorkId(cache.DataType, cache.DataId), nextId, nextHeadIdx)
 				continue
 			}
 			return err
@@ -303,10 +321,10 @@ func (j *JournalLib) ArchiveJournalEntry(dataType string, dataId string, entry *
 		if ex != nil {
 			return Http.WrapError(ex, fmt.Sprintf("failed to load journalPage from record [%s/%s]", Common.KeyJournal, nextId), http.StatusInternalServerError)
 		}
-		j.Logger.Printf("Archive[%s]: set Head Journal to [%s]", WorkId(dataId, dataId), cache.Head.Id())
+		j.Logger.Printf("Archive[%s]: set Head Journal to [%s]", WorkId(cache.DataType, cache.DataId), cache.Head.Id())
 		return nil
 	}
-	j.Logger.Printf("Archive[%s]: Processing Last Page.[%s]", WorkId(dataId, dataId), cache.Tail.Id())
+	j.Logger.Printf("Archive[%s]: Processing Last Page.[%s]", WorkId(cache.DataType, cache.DataId), cache.Tail.Id())
 	cache.Head = cache.Tail
 	return nil
 }
@@ -328,8 +346,7 @@ func (j *JournalLib) updateJournal(page *ProcessIface.JournalPage) *Http.HttpErr
 	if err != nil {
 		return Http.WrapError(err, fmt.Sprintf("failed to create Record Data. Error:%s", err), http.StatusBadRequest)
 	}
-	pageId := ProcessIface.PageId(page.DataType, page.DataId, page.Idx)
-	pageRecord := Record.NewRecord(Common.KeyJournal, CurrentVer, pageId, pageData)
+	pageRecord := Record.NewRecord(Common.KeyJournal, CurrentVer, page.Id(), pageData)
 	err = j.db.Create(j.table, pageRecord.Map())
 	if err != nil {
 		return Http.WrapError(err, fmt.Sprintf("failed to create record [{type}/{id}]=[%s]/%s", pageRecord.Type, pageRecord.Id), http.StatusInternalServerError)
@@ -341,23 +358,28 @@ func (j *JournalLib) addJournalEntry(dataType string, dataId string, before map[
 	if j.Cache[dataType][dataId].Tail.LastEntry() >= MaxEntryPerPage {
 		nextIdx := j.Cache[dataType][dataId].Tail.Idx + 1
 		j.Cache[dataType][dataId].Tail = ProcessIface.NewPage(dataType, dataId, nextIdx)
+		j.Logger.Printf("[%s]: create new journal page[%s]", WorkId(dataType, dataId), j.Cache[dataType][dataId].Tail.Id())
+		j.Logger.Printf("[%s]: head page[%s]", WorkId(dataType, dataId), j.Cache[dataType][dataId].Head.Id())
 	}
 	tail := j.Cache[dataType][dataId].Tail
 	if tail.Idx == -1 {
 		tail.Idx = 1
 	}
+	entryIdx := tail.LastEntry() + 1
+	j.Logger.Printf("[%s]: add Journal[%d] to page %d", WorkId(dataType, dataId), entryIdx, tail.Idx)
 	entry := ProcessIface.JournalEntry{
 		Time:   time.Now().String(),
 		Page:   tail.Idx,
-		Idx:    tail.LastEntry() + 1,
+		Idx:    entryIdx,
 		Before: before,
 		After:  after,
 	}
 	tail.Active = append(tail.Active, &entry)
 	err := j.updateJournal(tail)
 	if err != nil {
+		j.Logger.Printf("[%s]: update Journal page [%s] error:%s", WorkId(dataType, dataId), tail.Id(), err)
 		return err
 	}
-	j.Logger.Printf("add Journal [%s/%s] %d-%d", dataType, dataId, tail.Idx, entry.Idx)
+	j.Logger.Printf("[%s]: update Journal page [%s] saved", WorkId(dataType, dataId), tail.Id())
 	return nil
 }
