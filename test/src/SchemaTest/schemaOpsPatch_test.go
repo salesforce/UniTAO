@@ -42,6 +42,10 @@ func TestPatchSimpePath(t *testing.T) {
 		"properties": {
 			"attr1": {
 				"type": "string"
+			},
+			"attr2": {
+				"type": "string",
+				"required": false
 			}
 		}
 	}`
@@ -60,6 +64,17 @@ func TestPatchSimpePath(t *testing.T) {
 	patchData(schemaStr, record, "attr1", "ok")
 	if record.Data["attr1"].(string) != "ok" {
 		t.Fatalf("failed to set simple attr1 to ok ")
+	}
+	patchData(schemaStr, record, "attr2", "ok")
+	if _, ok := record.Data["attr2"]; !ok {
+		t.Fatalf("failed to set attr2 attr through patch")
+	}
+	if record.Data["attr2"].(string) != "ok" {
+		t.Fatalf("failed to set attr2 value to ok, got [%s] instead", record.Data["attr2"])
+	}
+	patchData(schemaStr, record, "attr2", nil)
+	if _, ok := record.Data["attr2"]; ok {
+		t.Fatalf("failed to remove attr2 from data")
 	}
 }
 

@@ -106,10 +106,28 @@ func (o *JournalHandler) Run(notify chan interface{}) error {
 	for {
 		select {
 		case event := <-notify:
-			o.OpsCtrl.Broadcast(event)
+			o.Log("got an event")
 			signal, ok := event.(os.Signal)
 			if ok && signal == syscall.SIGINT {
+				o.Log("exit signal")
+				o.OpsCtrl.Broadcast(event)
 				return nil
+			}
+			journalEvent, ok := event.(ProcessIface.JournalEvent)
+			if ok {
+				workerId := WorkId(journalEvent.DataType, journalEvent.DataId)
+				o.Log(fmt.Sprintf("Journal Event [%s]", workerId))
+				worker := o.OpsCtrl.GetWorker(workerId)
+				if worker != nil {
+					o.Log(fmt.Sprintf("found the worker, pass event to worker:[%s]", workerId))
+					worker.Notify(event)
+				} else {
+					o.Log(fmt.Sprintf("worker not exists, create a new one. [%s]", workerId))
+					added := o.AddJournalWorker(workerId, journalEvent.DataType, journalEvent.DataId)
+					if !added {
+						o.Log(fmt.Sprintf("failed to add Journal Worker [%s] from event, wait %d seconds for next loop to try again", workerId, interval))
+					}
+				}
 			}
 		case <-time.After(time.Duration(interval) * time.Second):
 			if !o.ProcessAllJournals() {
@@ -150,18 +168,31 @@ func (o *JournalHandler) ProcessJournalByType(dataType string) bool {
 }
 
 func (o *JournalHandler) ProcessJournalById(dataType string, dataId string) bool {
-	workerId := fmt.Sprintf("%s_%s", dataType, dataId)
+	workerId := WorkId(dataType, dataId)
 	worker := o.OpsCtrl.GetWorker(workerId)
 	if worker != nil {
 		return false
 	}
+	added := o.AddJournalWorker(workerId, dataType, dataId)
+	if !added {
+		o.Log(fmt.Sprintf("failed to add Journal Worker [%s] from loop, wait for next loop to try again", workerId))
+	}
+	return true
+}
+
+func (o *JournalHandler) AddJournalWorker(workerId string, dataType string, dataId string) bool {
 	jWorker := NewJournalWorker(o.lib, dataType, dataId, o.log, o.processList)
 	o.Log(fmt.Sprintf("worker created: [%s]", workerId))
 	worker, err := o.OpsCtrl.AddWorker(workerId, jWorker.Run)
 	if err != nil {
 		// TODO: log error and exit without throw anything.
 		o.Log(fmt.Sprintf("failed to add workder[%s], Error:%s", workerId, err))
+		return true
 	}
 	worker.Run()
 	return true
+}
+
+func WorkId(dataType string, dataId string) string {
+	return fmt.Sprintf("%s_%s", dataType, dataId)
 }

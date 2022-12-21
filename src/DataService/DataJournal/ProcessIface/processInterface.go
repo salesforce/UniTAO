@@ -28,6 +28,7 @@ package ProcessIface
 
 import (
 	"github.com/salesforce/UniTAO/lib/Util/Http"
+	"github.com/salesforce/UniTAO/lib/Util/Json"
 )
 
 type JournalProcess interface {
@@ -35,4 +36,18 @@ type JournalProcess interface {
 	HandleType(dataType string, version string) (bool, error)
 	ProcessEntry(dataType string, dataId string, entry *JournalEntry) *Http.HttpError
 	Log(message string)
+}
+
+type JournalEvent struct {
+	DataType string `json:"journalDataType"`
+	DataId   string `json:"journalDataId"`
+}
+
+func LoadJournalEvent(data map[string]interface{}) (*JournalEvent, error) {
+	event := JournalEvent{}
+	err := Json.CopyTo(data, &event)
+	if err != nil {
+		return nil, err
+	}
+	return &event, nil
 }

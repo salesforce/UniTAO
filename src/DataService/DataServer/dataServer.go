@@ -125,6 +125,7 @@ func (srv *Server) RunJournalHandler() {
 	if err != nil {
 		srv.log.Fatalf("failed to create Journal Handler as backend process.")
 	}
+	srv.journal.HandlerNotify = worker.Notify
 	worker.Run()
 }
 

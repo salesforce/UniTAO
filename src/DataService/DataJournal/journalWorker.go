@@ -66,7 +66,7 @@ func NewJournalWorker(lib *JournalLib, dataType string, dataId string, logger *l
 func (w *JournalWorker) ProcessNextEntry() *Http.HttpError {
 	entry := w.lib.NextJournalEntry(w.dataType, w.dataId)
 	if entry == nil {
-		errMsg := fmt.Sprintf("no new journal")
+		errMsg := "no new journal"
 		w.Log(errMsg)
 		return Http.NewHttpError(errMsg, http.StatusNotFound)
 	}
@@ -104,6 +104,7 @@ func (w *JournalWorker) ProcessNextEntry() *Http.HttpError {
 	}
 	err := w.lib.ArchiveJournalEntry(w.dataType, w.dataId, entry)
 	if err != nil {
+		w.Log(fmt.Sprintf("failed to archive Journal entry [%d] @[%s]", entry.Idx, ProcessIface.PageId(w.dataType, w.dataId, entry.Page)))
 		return err
 	}
 	return nil
@@ -118,15 +119,22 @@ func (w *JournalWorker) Run(notify chan interface{}) error {
 	for {
 		select {
 		case event := <-notify:
+			w.Log("got an event")
 			signal, ok := event.(os.Signal)
 			if ok && signal == syscall.SIGINT {
+				w.Log("exit event")
 				return nil
+			}
+			_, isJournalEvent := event.(ProcessIface.JournalEvent)
+			if isJournalEvent {
+				w.Log(fmt.Sprintf("got event of new journal: [%s]", WorkId(w.dataType, w.dataId)))
+				interval = w.RunAndCalcNextSleep(0)
 			}
 		case <-time.After(time.Duration(interval) * time.Second):
 			interval = w.RunAndCalcNextSleep(interval)
-			if interval > 0 {
-				w.Log(fmt.Sprintf("sleep %d seconds", interval))
-			}
+		}
+		if interval > 0 {
+			w.Log(fmt.Sprintf("sleep %d seconds", interval))
 		}
 	}
 }

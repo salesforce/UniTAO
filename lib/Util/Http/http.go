@@ -66,7 +66,11 @@ func LoadRequest(r *http.Request) (interface{}, *HttpError) {
 	data := map[string]interface{}{}
 	err = json.Unmarshal(reqBody, &data)
 	if err != nil {
-		return string(reqBody), nil
+		strData := string(reqBody)
+		if strData == "" {
+			return nil, nil
+		}
+		return strData, nil
 	}
 	return data, nil
 }

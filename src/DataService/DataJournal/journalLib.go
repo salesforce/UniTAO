@@ -53,10 +53,11 @@ const (
 )
 
 type JournalLib struct {
-	db     DbIface.Database
-	table  string
-	Cache  map[string]map[string]*JournalCache
-	Logger *log.Logger
+	db            DbIface.Database
+	table         string
+	Cache         map[string]map[string]*JournalCache
+	Logger        *log.Logger
+	HandlerNotify func(event interface{})
 }
 
 func NewJournalLib(db DbIface.Database, table string, logger *log.Logger) (*JournalLib, *Http.HttpError) {
@@ -234,29 +235,39 @@ func (j *JournalLib) AddJournal(dataType string, dataId string, before map[strin
 	if err != nil {
 		return err
 	}
+	if j.HandlerNotify == nil {
+		j.Logger.Print("no JournalHandler Channel define, no event to submit")
+		return nil
+	}
+	j.Logger.Print("there is Handler Channel defined, submit event to Journal Handler")
+	event := ProcessIface.JournalEvent{
+		DataType: dataType,
+		DataId:   dataId,
+	}
+	j.HandlerNotify(event)
 	return nil
 }
 
 func (j *JournalLib) ArchiveJournalEntry(dataType string, dataId string, entry *ProcessIface.JournalEntry) *Http.HttpError {
 	if _, ok := j.Cache[dataType]; !ok {
-		j.Logger.Printf("no journal for type=[%s]", dataType)
+		j.Logger.Printf("Archive: no journal for type=[%s]", dataType)
 		return nil
 	}
 	if _, ok := j.Cache[dataType][dataId]; !ok {
-		j.Logger.Printf("no journal for data=[%s/%s]", dataType, dataId)
+		j.Logger.Printf("Archive: no journal for data=[%s/%s]", dataType, dataId)
 		return nil
 	}
 	cache := j.Cache[dataType][dataId]
 	if cache.Head.Idx != entry.Page {
-		j.Logger.Printf("entry page [%d]!= head page [%d]", entry.Page, cache.Head.Idx)
+		j.Logger.Printf("Archive: entry page [%d]!= head page [%d]", entry.Page, cache.Head.Idx)
 		return nil
 	}
 	if len(cache.Head.Active) == 0 {
-		j.Logger.Printf("no entry to archive @[%s]", cache.Head.Id())
+		j.Logger.Printf("Archive: no entry to archive @[%s]", cache.Head.Id())
 		return nil
 	}
 	if cache.Head.Active[0].Idx != entry.Idx {
-		j.Logger.Printf("entry idx [%d]!= current entry idx [%d]", entry.Idx, cache.Head.Active[0].Idx)
+		j.Logger.Printf("Archive: entry idx [%d]!= current entry idx [%d]", entry.Idx, cache.Head.Active[0].Idx)
 		return nil
 	}
 	if cache.Head.Idx == cache.Tail.Idx {
@@ -266,9 +277,10 @@ func (j *JournalLib) ArchiveJournalEntry(dataType string, dataId string, entry *
 	cache.Head.Active = cache.Head.Active[1:]
 	cache.Head.Archived = append(cache.Head.Archived, entry)
 	if len(cache.Head.Active) > 0 || cache.Head.Idx == cache.Tail.Idx {
+		j.Logger.Printf("Archive[%s]: still [%d] active entries", WorkId(dataType, dataId), len(cache.Head.Active))
 		return j.updateJournal(cache.Head)
 	}
-	j.Logger.Printf("finish process Journal Page:[%s], remove it", cache.Head.Id())
+	j.Logger.Printf("Archive[%s]: finish process Journal Page:[%s], remove it", WorkId(dataType, dataId), cache.Head.Id())
 	err := j.removeJournal(cache.Head.Id())
 	if err != nil {
 		return err
@@ -276,12 +288,12 @@ func (j *JournalLib) ArchiveJournalEntry(dataType string, dataId string, entry *
 	nextHeadIdx := cache.Head.Idx + 1
 	for nextHeadIdx < cache.Tail.Idx {
 		nextId := ProcessIface.PageId(cache.DataType, cache.DataId, nextHeadIdx)
-		j.Logger.Printf("Query next Journal Page: [%s]", nextId)
+		j.Logger.Printf("Archive[%s]: Query next Journal Page: [%s]", WorkId(dataType, dataId), nextId)
 		data, err := j.QueryJournal(nextId)
 		if err != nil {
 			if err.Status == http.StatusNotFound {
 				nextHeadIdx += 1
-				j.Logger.Printf("journal page [%s] does not exists. skip: %d", nextId, nextHeadIdx)
+				j.Logger.Printf("Archive[%s]: journal page [%s] does not exists. skip: %d", WorkId(dataType, dataId), nextId, nextHeadIdx)
 				continue
 			}
 			return err
@@ -291,8 +303,10 @@ func (j *JournalLib) ArchiveJournalEntry(dataType string, dataId string, entry *
 		if ex != nil {
 			return Http.WrapError(ex, fmt.Sprintf("failed to load journalPage from record [%s/%s]", Common.KeyJournal, nextId), http.StatusInternalServerError)
 		}
+		j.Logger.Printf("Archive[%s]: set Head Journal to [%s]", WorkId(dataId, dataId), cache.Head.Id())
+		return nil
 	}
-	j.Logger.Printf("Processing Last Page.[%s]", cache.Tail.Id())
+	j.Logger.Printf("Archive[%s]: Processing Last Page.[%s]", WorkId(dataId, dataId), cache.Tail.Id())
 	cache.Head = cache.Tail
 	return nil
 }
