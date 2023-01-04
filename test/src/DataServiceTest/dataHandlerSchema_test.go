@@ -215,7 +215,7 @@ func TestAddData(t *testing.T) {
 		}
 	}`
 	err = AddData(handler, baseData02)
-	if err != nil {
+	if err == nil {
 		t.Fatalf("failed to add data on archived schema")
 	}
 }

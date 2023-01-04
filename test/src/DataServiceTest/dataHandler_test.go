@@ -35,7 +35,6 @@ import (
 
 	"DataService/Config"
 	"DataService/DataHandler"
-	"DataService/DataServer"
 
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
 )
@@ -194,44 +193,6 @@ func TestDataHandler(t *testing.T) {
 		t.Fatalf("failed to validate negative data.")
 	}
 	log.Printf("negative data validate passed")
-}
-
-func TestParseRecord(t *testing.T) {
-	payload := make(map[string]interface{})
-	dataType := "test"
-	typeVer := "00_00_00"
-	dataId := "test_01"
-	record := Record.NewRecord(dataType, typeVer, dataId, payload)
-	_, err := DataServer.ParseRecord([]string{}, record.Map(), "", "")
-	if err != nil {
-		t.Fatalf("failed to parse record. type=[%s], id=[%s]", dataType, dataId)
-	}
-	_, err = DataServer.ParseRecord([]string{}, record.Map(), dataType, dataId)
-	if err.Status != http.StatusBadRequest {
-		t.Fatalf("failed to validate post/put url path. type and id should be empty")
-	}
-	_, err = DataServer.ParseRecord([]string{}, record.Map(), dataType, "")
-	if err.Status != http.StatusBadRequest {
-		t.Fatalf("failed to parse record. type='%s', id=''", dataType)
-	}
-	_, err = DataServer.ParseRecord([]string{}, record.Map(), "", dataId)
-	if err.Status != http.StatusBadRequest {
-		t.Fatalf("failed to parse record. type='', id='%s'", dataId)
-	}
-	pRecord, err := DataServer.ParseRecord([]string{"true"}, record.Data, dataType, dataId)
-	if err != nil {
-		t.Fatalf("failed to parse record with no Reacod header. Error:%s", err)
-	}
-	if pRecord.Version != "0_00_00" {
-		t.Fatalf("failed to create record with correct version")
-	}
-	_, err = DataServer.ParseRecord([]string{"true"}, record.Data, "", "")
-	if err == nil {
-		t.Fatalf("failed to catch missing type and id error. Error:%s", err)
-	}
-	if err.Status != http.StatusBadRequest {
-		t.Fatalf("invalid status code for missing type and id error. expecte [%d]!=[%d]", http.StatusBadRequest, err.Status)
-	}
 }
 
 func TestDataHandlerPatchAttr(t *testing.T) {

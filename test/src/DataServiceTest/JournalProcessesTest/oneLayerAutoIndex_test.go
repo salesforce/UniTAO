@@ -123,7 +123,7 @@ func setData(t *TestEnv, recordStr string) int {
 	if err != nil {
 		t.T.Fatalf("failed to load test01 as record")
 	}
-	ex := t.Handler.Set(test01)
+	ex := t.Handler.Set("", "", test01)
 	if ex != nil {
 		t.T.Fatalf("failed to add record of test 0.0.1")
 	}
@@ -329,7 +329,7 @@ func addLayer1DataAndLeafDataAndDelete(t *TestEnv) {
 	if ex != nil {
 		t.T.Fatal(ex)
 	}
-	err := t.Handler.Set(catLayer1)
+	err := t.Handler.Set("", "", catLayer1)
 	if err != nil {
 		t.T.Fatal(err)
 	}

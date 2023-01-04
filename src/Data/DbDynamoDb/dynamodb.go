@@ -196,6 +196,12 @@ func MarshalMapWithCustomEncoder(data interface{}) (map[string]*dynamodb.Attribu
 }
 
 func (db *dynamoDB) Create(table string, data interface{}) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return db.createRecord(table, data)
+}
+
+func (db *dynamoDB) createRecord(table string, data interface{}) error {
 	av, err := MarshalMapWithCustomEncoder(data)
 	if err != nil {
 		log.Printf("Got error marshalling map: %s", err)
@@ -214,8 +220,6 @@ func (db *dynamoDB) Create(table string, data interface{}) error {
 }
 
 func (db *dynamoDB) Replace(table string, keys map[string]interface{}, data interface{}) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 	currentList, err := db.Query(table, "", keys)
 	if err != nil {
 		return err
@@ -226,7 +230,7 @@ func (db *dynamoDB) Replace(table string, keys map[string]interface{}, data inte
 			return err
 		}
 	}
-	return db.Create(table, data)
+	return db.createRecord(table, data)
 }
 
 func (db *dynamoDB) Delete(table string, keys map[string]interface{}) error {

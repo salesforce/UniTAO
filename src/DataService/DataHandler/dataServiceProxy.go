@@ -312,7 +312,7 @@ func (i *DataServiceProxy) Put(record *Record.Record) *Http.HttpError {
 		return err
 	}
 	if isLocal {
-		return i.handler.Set(record)
+		return i.handler.Set("", "", record)
 	}
 	queryUrl, err := i.getDsUrl(record.Type, record.Id)
 	if err != nil {
@@ -351,6 +351,8 @@ func (i *DataServiceProxy) Patch(dataType string, dataId string, dataPath string
 	if resp != nil {
 		respData, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
+			respTxt = fmt.Sprintf("failed to read response body. Error:%s", err)
+		} else {
 			respTxt = string(respData)
 		}
 	}

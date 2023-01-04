@@ -35,7 +35,8 @@
                 "additionalProperties": false,
                 "properties": {
                     "name": {
-                        "type": "string"
+                        "type": "string",
+                        "required": false
                     },
                     "version": {
                         "type": "string",

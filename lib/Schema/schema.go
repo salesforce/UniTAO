@@ -469,11 +469,19 @@ func setAttrData(schema *SchemaDoc.SchemaDoc, data map[string]interface{}, attrP
 				}
 				key = newKey
 			}
+			if _, ok := attrData[key]; ok {
+				if itemType != JsonKey.Object && attrData[key] == newData {
+					return Http.NewHttpError(fmt.Sprintf("value already set. @path=[%s/%s[%s]]", prevPath, attrName, key), http.StatusNotModified)
+				}
+			}
 			attrData[key] = newData
 		}
 	default:
 		if key != "" {
 			return Http.NewHttpError(fmt.Sprintf("invalid path, attr=[%s], type=[%s] key=[%s] is not empty. path=[%s]", attrName, attrDef[JsonKey.Type].(string), key, prevPath), http.StatusBadRequest)
+		}
+		if data[attrName] == newData {
+			return Http.NewHttpError(fmt.Sprintf("value already set. @path=[%s/%s]", prevPath, attrName), http.StatusNotModified)
 		}
 		data[attrName] = newData
 	}
@@ -537,6 +545,9 @@ func setAttrAry(schema *SchemaDoc.SchemaDoc, data map[string]interface{}, attrNa
 			itemKey = item.(string)
 		}
 		if itemKey == key {
+			if itemType != JsonKey.Object && item == newData {
+				return Http.NewHttpError("value already set", http.StatusNotModified)
+			}
 			newArray = append(newArray, newData)
 			foundKey = true
 			continue

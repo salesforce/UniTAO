@@ -151,7 +151,8 @@ func FromString(data string) (*SchemaDoc, error) {
 }
 
 func New(data map[string]interface{}) (*SchemaDoc, error) {
-	doc, err := create(data, "", nil)
+	dataCopy, _ := Json.CopyToMap(data)
+	doc, err := create(dataCopy, "", nil)
 	if err != nil {
 		return nil, fmt.Errorf("faile to create doc tree. Error: %s", err)
 	}

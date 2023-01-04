@@ -36,6 +36,7 @@ import (
 
 	"Data/DbConfig"
 	"Data/DbIface"
+	"DataService/Common"
 	"DataService/Config"
 
 	"github.com/salesforce/UniTAO/lib/Schema"
@@ -185,7 +186,6 @@ func (h *Handler) SetLocalSchema(dataType string, schema *Schema.SchemaOps) {
 		return
 	}
 	h.schemaMap[dataType] = schema
-
 }
 
 func (h *Handler) LocalSchema(dataType string, version string) (*Schema.SchemaOps, *Http.HttpError) {
@@ -410,7 +410,7 @@ func (h *Handler) validateCmtAutoIdx(idx CmtIndex.AutoIndex) *Http.HttpError {
 	}
 	if len(invalidAttrs) > 0 {
 		attrStr, _ := json.Marshal(invalidAttrs)
-		return Http.NewHttpError(fmt.Sprintf("invalid or missing attr definition for template. attrs=%s, template=[%s]", string(attrStr), idx.IndexTemplate), http.StatusBadRequest)
+		return Http.NewHttpError(fmt.Sprintf("invalid or missing attr definition for template. attrs=%s of type[%s], template=[%s]", string(attrStr), idx.ContentType, idx.IndexTemplate), http.StatusBadRequest)
 	}
 	return nil
 }
@@ -420,8 +420,9 @@ func (h *Handler) Add(record *Record.Record) *Http.HttpError {
 	if err != nil {
 		return err
 	}
-	if strings.Contains(record.Id, JsonKey.ArchivedSchemaIdDiv) {
-		return Http.NewHttpError(fmt.Sprintf("invalid data format. type=[%s] version=[%s] is archived", record.Type, record.Version), http.StatusBadRequest)
+	schema, _ := h.LocalSchema(record.Type, "")
+	if schema.Schema.Version != record.Version {
+		return Http.NewHttpError(fmt.Sprintf("invalid schema version of [%s %s] not match current schema version[%s]", record.Type, record.Version, schema.Schema.Version), http.StatusBadRequest)
 	}
 	h.Lock.Lock()
 	defer h.Lock.Unlock()
@@ -447,37 +448,49 @@ func (h *Handler) Add(record *Record.Record) *Http.HttpError {
 	return h.addData(record)
 }
 
+func CompareVersion(currentVersion string, newVersion string) (int, *Http.HttpError) {
+	newVer, ex := Record.ParseVersion(newVersion)
+	if ex != nil {
+		return -2, Http.WrapError(ex, fmt.Sprintf("invalid new schema version[%s]", newVersion), http.StatusBadRequest)
+	}
+	currentVer, ex := Record.ParseVersion(currentVersion)
+	if ex != nil {
+		return -2, Http.WrapError(ex, fmt.Sprintf("invalid current schema version[%s]", currentVersion), http.StatusBadRequest)
+	}
+	verComp := Record.CompareVersion(newVer, currentVer)
+	return verComp, nil
+}
+
 func (h *Handler) archiveCurrentSchema(newSchema *Schema.SchemaOps) *Http.HttpError {
 	schema, err := h.LocalSchema(newSchema.Schema.Id, "")
 	if err != nil {
 		return err
 	}
-	newVer, ex := Record.ParseVersion(newSchema.Schema.Version)
-	if ex != nil {
-		return Http.WrapError(ex, fmt.Sprintf("invalid new schema version=[%s]", newSchema.Schema.Version), http.StatusBadRequest)
+	verComp, err := CompareVersion(schema.Schema.Version, newSchema.Schema.Version)
+	if err != nil {
+		return Http.WrapError(err, fmt.Sprintf("failed to validate version of schema[%s]", newSchema.Schema.Id), http.StatusBadRequest)
 	}
-	currentVer, ex := Record.ParseVersion(schema.Schema.Version)
-	if ex != nil {
-		return Http.WrapError(ex, fmt.Sprintf("invalid current schema version=[%s] for current type=[%s]", schema.Schema.Version, newSchema.Schema.Id), http.StatusBadRequest)
-	}
-	verComp := Record.CompareVersion(newVer, currentVer)
 	if verComp < 0 {
-		return Http.WrapError(ex, fmt.Sprintf("new schema version=[%s] is smaller than current version=[%s]", newSchema.Schema.Version, schema.Schema.Version), http.StatusBadRequest)
+		return Http.NewHttpError(fmt.Sprintf("new schema version=[%s] is smaller than current version=[%s]", newSchema.Schema.Version, schema.Schema.Version), http.StatusBadRequest)
 	}
 	if verComp == 0 {
-		return Http.WrapError(ex, fmt.Sprintf("new schema version=[%s] is equal to current version, please provid later version to archive current one", newSchema.Schema.Version), http.StatusBadRequest)
+		return Http.NewHttpError(fmt.Sprintf("new schema version=[%s] is equal to current version, please provid later version to archive current one", newSchema.Schema.Version), http.StatusBadRequest)
+	}
+	before := Record.Record{}
+	ex := Json.CopyTo(schema.Record, &before)
+	if ex != nil {
+		return Http.WrapError(ex, fmt.Sprintf("failed to snapshot schema [%s %s]", schema.Schema.Id, schema.Schema.Version), http.StatusInternalServerError)
 	}
 	schema.Record.Id = SchemaDoc.ArchivedSchemaId(schema.Schema.Id, schema.Schema.Version)
-	args := map[string]interface{}{
-		Record.DataType: JsonKey.Schema,
-		Record.DataId:   schema.Schema.Id,
-	}
-	ex = h.DB.Replace(h.Config.DataTable.Data, args, schema.Record.Map())
-	if ex != nil {
-		return Http.WrapError(ex, fmt.Sprintf("failed to archive current schema=[%s] to [%s]", newSchema.Schema.Id, schema.Record.Id), http.StatusInternalServerError)
+	err = h.updateRecord(JsonKey.Schema, schema.Schema.Id, schema.Record)
+	if err != nil {
+		return err
 	}
 	h.SetLocalSchema(schema.Schema.Id, nil)
 	h.SetLocalSchema(schema.Record.Id, schema)
+	if h.AddJournal != nil {
+		h.AddJournal(before.Type, before.Id, before.Map(), schema.Record.Map())
+	}
 	return nil
 }
 
@@ -493,32 +506,57 @@ func (h *Handler) addData(record *Record.Record) *Http.HttpError {
 	return nil
 }
 
-func (h *Handler) CompareRecords(source *Record.Record, target *Record.Record) (bool, error) {
-	if source == nil && target == nil {
+func (h *Handler) CompareRecords(before *Record.Record, after *Record.Record) (bool, *Http.HttpError) {
+	if before == nil && after == nil {
 		return true, nil
 	}
-	if source == nil || target == nil {
+	if before == nil || after == nil {
 		return false, nil
 	}
-	if source.Id != target.Id || source.Type != target.Type || source.Version != target.Version {
+	if before.Type != after.Type {
+		return false, Http.NewHttpError(fmt.Sprintf("change of field[%s] not allowed", Record.DataType), http.StatusBadRequest)
+	}
+
+	if before.Id != after.Id {
+		if before.Type != JsonKey.Schema {
+			return false, Http.NewHttpError(fmt.Sprintf("[%s] update not allowed on type[%s], id can only be updatd for [%s]", Record.DataId, before.Type, JsonKey.Schema), http.StatusBadRequest)
+		}
 		return false, nil
 	}
-	_, ex := h.LocalSchema(target.Type, target.Version)
+	if before.Version != after.Version {
+		verComp, err := CompareVersion(before.Version, after.Version)
+		if err != nil {
+			return false, Http.WrapError(err, "failed to compare version", http.StatusBadRequest)
+		}
+		if verComp < 0 {
+			return false, Http.NewHttpError(fmt.Sprintf("downgrade data format are not supported. version[%s] -> [%s]", before.Version, after.Version), http.StatusBadRequest)
+		}
+	}
+	_, ex := h.LocalSchema(after.Type, after.Version)
 	if ex != nil {
 		return false, ex
 	}
-	srcStr, _ := json.MarshalIndent(source.Data, "", "    ")
-	tgtStr, _ := json.MarshalIndent(target.Data, "", "    ")
+	srcStr, _ := json.MarshalIndent(before.Data, "", "    ")
+	tgtStr, _ := json.MarshalIndent(after.Data, "", "    ")
 	if string(srcStr) != string(tgtStr) {
 		return false, nil
 	}
 	return true, nil
 }
 
-func (h *Handler) Set(record *Record.Record) *Http.HttpError {
+func (h *Handler) Set(dataType string, dataId string, record *Record.Record) *Http.HttpError {
+	if _, ok := Common.InternalTypes[record.Type]; ok {
+		return Http.NewHttpError(fmt.Sprintf("method[%s] on type[%s] is not allowed", http.MethodPut, record.Type), http.StatusBadRequest)
+	}
 	h.Lock.Lock()
 	defer h.Lock.Unlock()
-	data, err := h.GetData(record.Type, record.Id)
+	if dataType == "" {
+		dataType = record.Type
+	}
+	if dataId == "" {
+		dataId = record.Id
+	}
+	data, err := h.GetData(dataType, dataId)
 	if err != nil && err.Status != http.StatusNotFound {
 		return err
 	}
@@ -530,12 +568,12 @@ func (h *Handler) Set(record *Record.Record) *Http.HttpError {
 		}
 		before = record
 	}
-	isSame, ex := h.CompareRecords(before, record)
-	if ex != nil {
-		return Http.WrapError(ex, "failed to compare diffs", http.StatusInternalServerError)
+	isSame, err := h.CompareRecords(before, record)
+	if err != nil {
+		return err
 	}
 	if !isSame {
-		err = h.updateRecord(record)
+		err = h.updateRecord(before.Type, before.Id, record)
 		if err != nil {
 			return err
 		}
@@ -546,12 +584,15 @@ func (h *Handler) Set(record *Record.Record) *Http.HttpError {
 	return nil
 }
 
-func (h *Handler) updateRecord(record *Record.Record) *Http.HttpError {
+func (h *Handler) updateRecord(dataType string, dataId string, record *Record.Record) *Http.HttpError {
 	err := h.Validate(record)
 	if err != nil {
 		return err
 	}
-	e := h.DB.Create(h.Config.DataTable.Data, record.Map())
+	e := h.DB.Replace(h.Config.DataTable.Data, map[string]interface{}{
+		Record.DataType: dataType,
+		Record.DataId:   dataId,
+	}, record.Map())
 	if e != nil {
 		return Http.NewHttpError(e.Error(), http.StatusInternalServerError)
 	}
@@ -560,7 +601,11 @@ func (h *Handler) updateRecord(record *Record.Record) *Http.HttpError {
 
 func (h *Handler) Delete(dataType string, dataId string) *Http.HttpError {
 	if dataType == JsonKey.Schema {
-		return h.deleteSchema(dataId)
+		err := h.deleteSchema(dataId)
+		if err != nil {
+			return err
+		}
+		delete(h.schemaMap, dataId)
 	}
 	_, err := h.LocalSchema(dataType, "")
 	if err != nil {
@@ -686,14 +731,16 @@ func (h *Handler) Patch(dataType string, idPath string, headers map[string]inter
 			h.Log(err.Error())
 			return nil, err
 		}
-		return patchRecord.Map(), nil
+		return patchRecord.Map(), err
 	}
-	beforeStr, _ := json.MarshalIndent(before.Map(), "", "    ")
-	afterStr, _ := json.MarshalIndent(patchRecord.Map(), "", "    ")
-	if string(beforeStr) == string(afterStr) {
-		return patchRecord.Map(), nil
+	verComp, err := CompareVersion(before.Version, patchRecord.Version)
+	if err != nil {
+		return nil, Http.WrapError(err, "failed to compare version", http.StatusBadRequest)
 	}
-	err = h.updateRecord(patchRecord)
+	if verComp < 0 {
+		return nil, Http.NewHttpError(fmt.Sprintf("downgrade data format are not supported. version[%s] -> [%s]", before.Version, patchRecord.Version), http.StatusBadRequest)
+	}
+	err = h.updateRecord(before.Type, before.Id, patchRecord)
 	if err != nil {
 		h.Log(err.Error())
 		return nil, err
@@ -707,15 +754,32 @@ func (h *Handler) Patch(dataType string, idPath string, headers map[string]inter
 }
 
 func patchRecordByPath(schema *SchemaDoc.SchemaDoc, record *Record.Record, nextPath string, dataPath string, newData interface{}) *Http.HttpError {
-	if nextPath == Record.DataId || nextPath == Record.DataType || nextPath == Record.Version {
-		if nextPath == Record.DataId || nextPath == Record.DataType {
-			return Http.NewHttpError(fmt.Sprintf("cannot update Record Attribute[%s], only [%s] is supported", nextPath, Record.Version), http.StatusBadRequest)
+	switch nextPath {
+	case Record.DataId:
+		if record.Type != JsonKey.Schema {
+			return Http.NewHttpError(fmt.Sprintf("only record type of [%s], allow patch on [%s]", JsonKey.Schema, Record.DataId), http.StatusBadRequest)
 		}
+		archiveVer := record.Data[JsonKey.Version].(string)
+		archiveType := record.Data[JsonKey.Name].(string)
+		archiveId := SchemaDoc.ArchivedSchemaId(archiveType, archiveVer)
+		if archiveId != newData.(string) {
+			return Http.NewHttpError(fmt.Sprintf("invalid archive schema Id[%s], expect[%s]", newData, archiveId), http.StatusBadRequest)
+		}
+		if record.Id == newData.(string) {
+			return Http.NewHttpError(fmt.Sprintf("id already updated. [%s]", record.Id), http.StatusNotModified)
+		}
+		record.Id = archiveId
+	case Record.DataType:
+		return Http.NewHttpError("Change on Record Data Type is not supported", http.StatusNotModified)
+	case Record.Version:
 		if record.Version == newData.(string) {
-			return Http.NewHttpError(fmt.Sprintf("version already updated [%s]", record.Version), http.StatusNotModified)
+			return Http.NewHttpError(fmt.Sprintf("Type Version already updated. [%s]", record.Version), http.StatusNotModified)
 		}
 		record.Version = newData.(string)
-	} else {
+	default:
+		if record.Type == JsonKey.Schema {
+			return Http.NewHttpError(fmt.Sprintf("Patch on [%s] not allowed", JsonKey.Schema), http.StatusBadRequest)
+		}
 		err := Schema.SetDataOnPath(schema, record.Data, nextPath, dataPath, newData)
 		if err != nil {
 			return err

@@ -236,27 +236,18 @@ func (srv *Server) handleGet(w http.ResponseWriter, dataType string, dataId stri
 	Http.ResponseJson(w, result, http.StatusOK, srv.config.Http)
 }
 
-func ParseRecord(noRecordList []string, payload map[string]interface{}, dataType string, dataId string) (*Record.Record, *Http.HttpError) {
-	if len(noRecordList) == 0 {
-		record, err := Record.LoadMap(payload)
-		if err != nil {
-			return nil, Http.WrapError(err, "failed to load JSON payload from request", http.StatusBadRequest)
-		}
-		if dataType != "" {
-			return nil, Http.NewHttpError("data type expect to be empty for action=[POST, PUT]", http.StatusBadRequest)
-		}
-		if dataId != "" {
-			return nil, Http.NewHttpError("data expect to be empty for action=[POST, PUT]", http.StatusBadRequest)
-		}
-		return record, nil
-	}
+func (srv *Server) BuildRecord(payload map[string]interface{}, dataType string, dataId string) (*Record.Record, *Http.HttpError) {
 	if dataType == "" {
 		return nil, Http.NewHttpError(fmt.Sprintf("empty data type in path. [%s/%s]=''", Record.DataType, Record.DataId), http.StatusBadRequest)
 	}
 	if dataId == "" {
 		return nil, Http.NewHttpError(fmt.Sprintf("empty data id in path. [%s/%s]=''", Record.DataType, Record.DataId), http.StatusBadRequest)
 	}
-	record := Record.NewRecord(dataType, "0_00_00", dataId, payload)
+	schema, err := srv.data.LocalSchema(dataType, "")
+	if err != nil {
+		return nil, err
+	}
+	record := Record.NewRecord(dataType, schema.Schema.Version, dataId, payload)
 	return record, nil
 }
 
@@ -269,38 +260,67 @@ func (srv *Server) handlePost(w http.ResponseWriter, r *http.Request, dataType s
 	payload, ok := reqBody.(map[string]interface{})
 	if !ok {
 		Http.ResponseJson(w, "failed to parse request into JSON object", http.StatusBadRequest, srv.config.Http)
-	}
-	record, e := ParseRecord(r.Header.Values(Record.NotRecord), payload, dataType, dataId)
-	if e != nil {
-		Http.ResponseJson(w, err, e.Status, srv.config.Http)
 		return
 	}
-	e = srv.data.Add(record)
-	if e != nil {
-		Http.ResponseJson(w, e, e.Status, srv.config.Http)
+	var record *Record.Record
+	var ex error
+	if len(r.Header.Values(Record.NotRecord)) == 0 {
+		if dataType != "" {
+			Http.ResponseJson(w, Http.NewHttpError("data type expect to be empty for action=[POST]", http.StatusBadRequest), http.StatusBadRequest, srv.config.Http)
+			return
+		}
+		if dataId != "" {
+			Http.ResponseJson(w, Http.NewHttpError("data id expect to be empty for action=[POST]", http.StatusBadRequest), http.StatusBadRequest, srv.config.Http)
+			return
+		}
+		record, ex = Record.LoadMap(payload)
+		if ex != nil {
+			Http.ResponseJson(w, Http.WrapError(ex, "failed to load payload as Record", http.StatusBadRequest), http.StatusBadRequest, srv.config.Http)
+			return
+		}
+	} else {
+		record, err = srv.BuildRecord(payload, dataType, dataId)
+		if err != nil {
+			Http.ResponseJson(w, err, err.Status, srv.config.Http)
+			return
+		}
+	}
+	err = srv.data.Add(record)
+	if err != nil {
+		Http.ResponseJson(w, err, err.Status, srv.config.Http)
 		return
 	}
 	Http.ResponseText(w, []byte(record.Id), http.StatusCreated, srv.config.Http)
 }
 
 func (srv *Server) handlePut(w http.ResponseWriter, r *http.Request, dataType string, dataId string) {
-	reqBody, e := Http.LoadRequest(r)
-	if e != nil {
-		Http.ResponseJson(w, e, e.Status, srv.config.Http)
+	reqBody, err := Http.LoadRequest(r)
+	if err != nil {
+		Http.ResponseJson(w, err, err.Status, srv.config.Http)
 		return
 	}
 	payload, ok := reqBody.(map[string]interface{})
 	if !ok {
 		Http.ResponseJson(w, "failed to parse request into JSON object", http.StatusBadRequest, srv.config.Http)
 	}
-	record, e := ParseRecord(r.Header.Values(Record.NotRecord), payload, dataType, dataId)
-	if e != nil {
-		Http.ResponseJson(w, e, e.Status, srv.config.Http)
-		return
+	var record *Record.Record
+	var ex error
+	if len(r.Header.Values(Record.NotRecord)) == 0 {
+		record, ex = Record.LoadMap(payload)
+		if ex != nil {
+			Http.ResponseJson(w, Http.WrapError(ex, "failed to load payload as Record", http.StatusBadRequest), http.StatusBadRequest, srv.config.Http)
+			return
+		}
+	} else {
+		record, err = srv.BuildRecord(payload, dataType, dataId)
+		if err != nil {
+			Http.ResponseJson(w, err, err.Status, srv.config.Http)
+			return
+		}
 	}
-	e = srv.data.Set(record)
-	if e != nil {
-		Http.ResponseJson(w, e, e.Status, srv.config.Http)
+	err = srv.data.Set(dataType, dataId, record)
+	if err != nil {
+		Http.ResponseJson(w, err, err.Status, srv.config.Http)
 		return
 	}
 	Http.ResponseText(w, []byte(record.Id), http.StatusCreated, srv.config.Http)

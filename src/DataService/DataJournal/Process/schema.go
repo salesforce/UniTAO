@@ -95,7 +95,7 @@ func (s *SchemaChanges) ProcessEntry(dataType string, dataId string, entry *Proc
 		return s.processSchemaChange(entry, entryId)
 	}
 	err := s.processIdxDataChange(entry, entryId)
-	if err != nil {
+	if err != nil && err.Status != http.StatusNotModified {
 		return err
 	}
 	return nil
@@ -103,7 +103,25 @@ func (s *SchemaChanges) ProcessEntry(dataType string, dataId string, entry *Proc
 
 func (s *SchemaChanges) processSchemaChange(entry *ProcessIface.JournalEntry, entryId string) *Http.HttpError {
 	if entry.Before != nil && entry.After != nil {
-		return Http.NewHttpError(fmt.Sprintf("invalid entry=[%s], there should be no change on schema.", entryId), http.StatusInternalServerError)
+		beforeRecord, err := Record.LoadMap(entry.Before)
+		if err != nil {
+			return Http.WrapError(err, fmt.Sprintf("failed to load before record on entry[%s]", entryId), http.StatusInternalServerError)
+		}
+		beforeVer := beforeRecord.Data[JsonKey.Version].(string)
+		archiveId := SchemaDoc.ArchivedSchemaId(beforeRecord.Id, beforeVer)
+		afterRecord, err := Record.LoadMap(entry.After)
+		if err != nil {
+			return Http.WrapError(err, fmt.Sprintf("failed to load after record on entry[%s]", entryId), http.StatusInternalServerError)
+		}
+		if archiveId != afterRecord.Id {
+			return Http.NewHttpError(fmt.Sprintf("invalid patch schema id[%s], expect:[%s]", afterRecord.Id, archiveId), http.StatusInternalServerError)
+		}
+		_, ex := s.Data.LocalSchema(beforeRecord.Id, "")
+		if ex != nil {
+			s.Log(fmt.Sprintf("new schema of [%s] not available yet, please add or roll back manually", beforeRecord.Id))
+			return ex
+		}
+		return nil
 	}
 	if entry.Before != nil {
 		record, err := Record.LoadMap(entry.Before)
@@ -281,15 +299,6 @@ func (s *SchemaChanges) processIdxDataChange(entry *ProcessIface.JournalEntry, e
 	if len(idxList) == 0 {
 		return Http.NewHttpError("no AutoIndex from schema, no change", http.StatusNotModified)
 	}
-	if entry.Before != nil {
-		beforeRecord, err := Record.LoadMap(entry.Before)
-		if err != nil {
-			return Http.WrapError(err, "failed to load before record", http.StatusInternalServerError)
-		}
-		if beforeRecord.Version == afterRecord.Version {
-			return Http.NewHttpError(fmt.Sprintf("no change in schema version: %s %s, no need to rescan for AutoIndex", beforeRecord.Type, beforeRecord.Version), http.StatusNotModified)
-		}
-	}
 	hasChange := false
 	for _, idx := range idxList {
 		ex = s.fillIdx(afterRecord, idx)
@@ -337,7 +346,7 @@ func (s *SchemaChanges) fillIdx(afterRec *Record.Record, idx CmtIndex.AutoIndex)
 		idPatchPath = fmt.Sprintf("%s[%s]", idPatchPath, url.QueryEscape(id.(string)))
 		hasChange = true
 		_, err = s.Data.Patch(afterRec.Type, idPatchPath, map[string]interface{}{JsonKey.Version: afterRec.Version}, id.(string))
-		if err != nil {
+		if err != nil && err.Status != http.StatusNotModified {
 			s.Log(fmt.Sprintf("failed to fill local idx. [%s/%s]=[%s],\nError:%s", afterRec.Type, idPatchPath, id.(string), err))
 			return err
 		}
