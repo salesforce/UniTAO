@@ -29,7 +29,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"sync"
 
 	"Data/DbConfig"
 	"Data/DbIface"
@@ -55,7 +54,6 @@ type dynamoDB struct {
 	config   DbConfig.DatabaseConfig
 	sess     *session.Session
 	database *dynamodb.DynamoDB
-	mu       sync.Mutex
 }
 
 func ParseQueryOutput(output *dynamodb.QueryOutput) ([]map[string]interface{}, error) {
@@ -196,8 +194,6 @@ func MarshalMapWithCustomEncoder(data interface{}) (map[string]*dynamodb.Attribu
 }
 
 func (db *dynamoDB) Create(table string, data interface{}) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 	return db.createRecord(table, data)
 }
 
@@ -234,8 +230,6 @@ func (db *dynamoDB) Replace(table string, keys map[string]interface{}, data inte
 }
 
 func (db *dynamoDB) Delete(table string, keys map[string]interface{}) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 	return db.deleteRecord(table, keys)
 }
 
@@ -273,8 +267,6 @@ func (db *dynamoDB) Update(table string, keys map[string]interface{}, data inter
 	if !ok {
 		return nil, fmt.Errorf("missing patch key=[%s]", DbIface.PatchPath)
 	}
-	db.mu.Lock()
-	defer db.mu.Unlock()
 	patchData, err := db.Get(map[string]interface{}{
 		DbIface.Table:   table,
 		Record.DataType: dataType,
@@ -339,7 +331,6 @@ func Connect(config DbConfig.DatabaseConfig) (DbIface.Database, error) {
 		config:   config,
 		sess:     dbSession,
 		database: dbSvc,
-		mu:       sync.Mutex{},
 	}
 	return &database, nil
 }

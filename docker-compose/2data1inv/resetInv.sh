@@ -34,4 +34,5 @@ rm $SCRIPT_DIR/InventoryService/data/schema/*
 ls -al $SCRIPT_DIR/InventoryService/data/schema/
 echo "rebuild $SCRIPT_DIR/logs"
 rm -rf $SCRIPT_DIR/logs
-
+echo "remove database file"
+rm $SCRIPT_DIR/DynamoDB/*

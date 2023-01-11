@@ -30,7 +30,9 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
 	"github.com/salesforce/UniTAO/lib/Util"
+	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
 const (
@@ -40,6 +42,30 @@ const (
 	KeyRecord = "record"
 	NotRecord = "No-Record-Framework"
 	Version   = "__ver"
+	Schema    = `{
+		"__id": "record",
+		"__type": "schema",
+		"__ver": "0.0.1",
+		"data": {
+			"name": "record",
+			"version": "0.0.1",
+			"description": "schema of data record",
+			"properties": {
+				"__id": {
+					"type": "string"
+				},
+				"__type": {
+					"type": "string"
+				},
+				"__ver": {
+					"type": "string"         
+				},
+				"data": {
+					"type": "object"
+				}
+			}
+		}            
+	}`
 )
 
 type Record struct {
@@ -47,6 +73,15 @@ type Record struct {
 	Type    string                 `json:"__type"`
 	Version string                 `json:"__ver"`
 	Data    map[string]interface{} `json:"data"`
+}
+
+func IsRecord(data map[string]interface{}) bool {
+	record, _ := LoadStr(Schema)
+	doc, _ := SchemaDoc.New(record.Data)
+	schemaBytes, _ := json.MarshalIndent(doc.Data, "", "    ")
+	meta, _ := jsonschema.CompileString("Record", string(schemaBytes))
+	err := meta.Validate(data)
+	return err == nil
 }
 
 func NewRecord(dataType string, typeVersion string, dataId string, data map[string]interface{}) *Record {
@@ -120,6 +155,12 @@ func CompareVersion(ver1List []int, ver2List []int) int {
 }
 
 func LoadMap(data map[string]interface{}) (*Record, error) {
+	if data == nil {
+		return nil, nil
+	}
+	if !IsRecord(data) {
+		return nil, fmt.Errorf("data is not a record")
+	}
 	recordBytes, err := json.Marshal(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal doc to string, Err:%s", err)

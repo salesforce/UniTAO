@@ -79,19 +79,26 @@ func New() (Server, error) {
 	return srv, nil
 }
 
+func (srv *Server) FileLoger(id string) (*os.File, *log.Logger) {
+	if srv.logPath == "" {
+		return nil, log.Default()
+	}
+	logPath := path.Join(srv.logPath, fmt.Sprintf("%s.log", id))
+	log.Printf("log file: %s", logPath)
+	logFile, err := os.OpenFile(logPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("error opening file: %v", err)
+	}
+	mw := io.MultiWriter(os.Stdout, logFile)
+	logger := log.New(mw, fmt.Sprintf("%s: ", srv.Id), log.Ldate|log.Ltime|log.Lshortfile)
+	return logFile, logger
+}
+
 func (srv *Server) Run() {
-	srv.log = log.Default()
-	if srv.logPath != "" {
-		logPath := path.Join(srv.logPath, fmt.Sprintf("%s.log", srv.Id))
-		log.Printf("log file: %s", logPath)
-		logFile, err := os.OpenFile(logPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-		if err != nil {
-			log.Fatalf("error opening file: %v", err)
-		}
+	logFile, logger := srv.FileLoger(srv.Id)
+	srv.log = logger
+	if logFile != nil {
 		defer logFile.Close()
-		mw := io.MultiWriter(os.Stdout, logFile)
-		logger := log.New(mw, fmt.Sprintf("%s: ", srv.Id), log.Ldate|log.Ltime|log.Lshortfile)
-		srv.log = logger
 	}
 	srv.BackendCtl = Thread.NewThreadController(srv.log)
 	handler, err := DataHandler.New(srv.config, srv.log, Data.ConnectDb)
@@ -99,7 +106,11 @@ func (srv *Server) Run() {
 		srv.log.Fatalf("failed to initialize data layer, Err:%s", err)
 	}
 	srv.data = handler
-	journal, err := DataJournal.NewJournalLib(handler.DB, srv.config.DataTable.Data, srv.log)
+	jLogFile, jLogger := srv.FileLoger(fmt.Sprintf("%s_Journal", srv.Id))
+	if jLogFile != nil {
+		defer jLogFile.Close()
+	}
+	journal, err := DataJournal.NewJournalLib(handler.DB, srv.config.DataTable.Data, jLogger)
 	if err != nil {
 		srv.log.Fatalf("failed to create Journal Library. Error: %s", err)
 	}
@@ -116,7 +127,7 @@ func (srv *Server) RunHttp() {
 }
 
 func (srv *Server) RunJournalHandler() {
-	journal, err := DataJournal.NewJournalHandler(srv.data, srv.journal, srv.log)
+	journal, err := DataJournal.NewJournalHandler(srv.data, srv.journal, srv.journal.Logger)
 	if err != nil {
 		srv.log.Fatalf("failed to load Journal Handler. Error:%s", err)
 	}
@@ -172,7 +183,9 @@ func (srv *Server) init() error {
 
 func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 	dataType, idPath := Util.ParsePath(r.URL.Path)
+	srv.log.Printf("process request[%s] on [%s/%s]", r.Method, dataType, idPath)
 	if dataType == Record.KeyRecord {
+		srv.log.Printf("Invalid request on [%s]", dataType)
 		Http.ResponseJson(w, Http.HttpError{
 			Status: http.StatusBadRequest,
 			Message: []string{
@@ -182,6 +195,7 @@ func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, ok := Common.ReadOnlyTypes[dataType]; ok && r.Method != http.MethodGet {
+		srv.log.Printf("Invalid update request on [%s]", dataType)
 		Http.ResponseJson(w, Http.HttpError{
 			Status: http.StatusBadRequest,
 			Message: []string{
@@ -213,6 +227,7 @@ func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 
 func (srv *Server) handleGet(w http.ResponseWriter, dataType string, dataId string) {
 	if dataId == "" {
+		srv.log.Printf("list id of [%s]", dataType)
 		idList, err := srv.data.List(dataType)
 		if err != nil {
 			Http.ResponseJson(w, err, err.Status, srv.config.Http)
@@ -225,8 +240,10 @@ func (srv *Server) handleGet(w http.ResponseWriter, dataType string, dataId stri
 	var err *Http.HttpError
 	switch dataType {
 	case Common.KeyJournal:
+		srv.log.Printf("get Journal of type [%s]", dataId)
 		result, err = srv.journal.GetJournal(dataId)
 	default:
+		srv.log.Printf("get data of [%s/%s]", dataType, dataId)
 		result, err = srv.data.Get(dataType, dataId)
 	}
 	if err != nil {
@@ -340,10 +357,12 @@ func (srv *Server) handleDelete(w http.ResponseWriter, dataType string, dataId s
 func (srv *Server) handlePatch(w http.ResponseWriter, r *http.Request, dataType string, idPath string) {
 	payload, e := Http.LoadRequest(r)
 	if e != nil {
+		srv.log.Printf("PATCH: [%s/%s] failed to load request, Error: %s", dataType, idPath, e)
 		Http.ResponseJson(w, e, e.Status, srv.config.Http)
 		return
 	}
 	headers := Http.ParseHeaders(r)
+	srv.log.Printf("PATCH [%s/%s]: call handler Patch", dataType, idPath)
 	response, e := srv.data.Patch(dataType, idPath, headers, payload)
 	if e != nil {
 		Http.ResponseJson(w, e, e.Status, srv.config.Http)

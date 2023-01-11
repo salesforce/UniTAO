@@ -35,6 +35,7 @@ import (
 	"net/url"
 	"path"
 	"reflect"
+	"strings"
 	"time"
 )
 
@@ -225,13 +226,14 @@ func URLPathJoin(sUrl string, sPath ...string) (*string, error) {
 func ParseHeaders(r *http.Request) map[string]interface{} {
 	headers := map[string]interface{}{}
 	for key, valList := range r.Header {
+		keyLower := strings.ToLower(key)
 		if len(valList) == 0 {
 			continue
 		}
 		if len(valList) > 1 {
-			headers[key] = valList
+			headers[keyLower] = valList
 		}
-		headers[key] = valList[0]
+		headers[keyLower] = valList[0]
 	}
 	return headers
 }

@@ -33,7 +33,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/salesforce/UniTAO/lib/Schema/CmtIndex"
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
@@ -122,21 +121,9 @@ func (schema *SchemaOps) ValidateRecord(record *Record.Record) error {
 			}
 		}
 		schemaData, _ := Json.CopyToMap(record.Data)
-		s, err := SchemaDoc.New(schemaData)
+		_, err := SchemaDoc.New(schemaData)
 		if err != nil {
 			return err
-		}
-		autoIdxList := CmtIndex.FindAutoIndex(s, "")
-		errList := make([]string, 0, len(autoIdxList))
-		for _, autoIdx := range autoIdxList {
-			err := CmtIndex.ValidateIndexTemplate(record.Id, autoIdx)
-			if err != nil {
-				errList = append(errList, err.Error())
-			}
-		}
-		if len(errList) > 0 {
-			errMsg, _ := json.MarshalIndent(errList, "", "     ")
-			return fmt.Errorf(string(errMsg))
 		}
 	} else {
 		if strings.Contains(record.Type, JsonKey.ArchivedSchemaIdDiv) {

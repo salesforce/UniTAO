@@ -43,7 +43,6 @@ import (
 	"github.com/salesforce/UniTAO/lib/Util"
 	"github.com/salesforce/UniTAO/lib/Util/Http"
 	"github.com/salesforce/UniTAO/lib/Util/Json"
-	"github.com/salesforce/UniTAO/lib/Util/Template"
 )
 
 type SchemaChanges struct {
@@ -73,14 +72,6 @@ func (s *SchemaChanges) HandleType(dataType string, version string) (bool, error
 	if dataType == JsonKey.Schema {
 		return true, nil
 	}
-	schema, err := s.Data.LocalSchema(dataType, version)
-	if err != nil {
-		return false, err
-	}
-	idxList := CmtIndex.FindAutoIndex(schema.Schema, "")
-	if len(idxList) > 0 {
-		return true, nil
-	}
 	return false, nil
 }
 
@@ -93,10 +84,6 @@ func (s *SchemaChanges) ProcessEntry(dataType string, dataId string, entry *Proc
 	s.Log(fmt.Sprintf("process entry [%s]", entryId))
 	if dataType == JsonKey.Schema {
 		return s.processSchemaChange(entry, entryId)
-	}
-	err := s.processIdxDataChange(entry, entryId)
-	if err != nil && err.Status != http.StatusNotModified {
-		return err
 	}
 	return nil
 }
@@ -277,81 +264,6 @@ func (s *SchemaChanges) createCmtIdx(idx CmtIndex.CmtIndex) *Http.HttpError {
 	}
 	if !hasChange {
 		s.Log("no change made")
-		return Http.NewHttpError("no change made", http.StatusNotModified)
-	}
-	return nil
-}
-
-func (s *SchemaChanges) processIdxDataChange(entry *ProcessIface.JournalEntry, entryId string) *Http.HttpError {
-	// for deletion, do nothing.
-	if entry.After == nil {
-		return nil
-	}
-	afterRecord, err := Record.LoadMap(entry.After)
-	if err != nil {
-		return Http.WrapError(err, "failed to load after record", http.StatusInternalServerError)
-	}
-	afterSchema, ex := s.Data.LocalSchema(afterRecord.Type, afterRecord.Version)
-	if ex != nil {
-		return ex
-	}
-	idxList := CmtIndex.FindAutoIndex(afterSchema.Schema, "")
-	if len(idxList) == 0 {
-		return Http.NewHttpError("no AutoIndex from schema, no change", http.StatusNotModified)
-	}
-	hasChange := false
-	for _, idx := range idxList {
-		ex = s.fillIdx(afterRecord, idx)
-		if ex != nil {
-			if ex.Status != http.StatusNotModified {
-				return ex
-			}
-			continue
-		}
-		hasChange = true
-	}
-	if !hasChange {
-		return Http.NewHttpError("no change made", http.StatusNotModified)
-	}
-	return nil
-}
-
-func (s *SchemaChanges) fillIdx(afterRec *Record.Record, idx CmtIndex.AutoIndex) *Http.HttpError {
-	idList, err := s.Data.Inventory.List(idx.ContentType)
-	if err != nil {
-		return err
-	}
-	varTemp, ex := Template.ParseStr(idx.IndexTemplate, "{", "}")
-	if ex != nil {
-		return Http.WrapError(ex, fmt.Sprintf("failed to parse indexTemplate %s", idx.IndexTemplate), http.StatusNotModified)
-	}
-	hasChange := false
-	for _, id := range idList {
-		targetRec, err := s.Data.Inventory.Get(idx.ContentType, id.(string))
-		if err != nil {
-			return err
-		}
-		patchPath, ex := varTemp.BuildValue(targetRec.Data)
-		if ex != nil {
-			return Http.WrapError(ex, fmt.Sprintf("failed to build index path with [%s/%s]", idx.ContentType, id.(string)), http.StatusNotModified)
-		}
-		typePatchPath, idPatchPath := Util.ParsePath(patchPath)
-		if typePatchPath != afterRec.Type {
-			continue
-		}
-		patchId, _ := Util.ParsePath(idPatchPath)
-		if patchId != afterRec.Id {
-			continue
-		}
-		idPatchPath = fmt.Sprintf("%s[%s]", idPatchPath, url.QueryEscape(id.(string)))
-		hasChange = true
-		_, err = s.Data.Patch(afterRec.Type, idPatchPath, map[string]interface{}{JsonKey.Version: afterRec.Version}, id.(string))
-		if err != nil && err.Status != http.StatusNotModified {
-			s.Log(fmt.Sprintf("failed to fill local idx. [%s/%s]=[%s],\nError:%s", afterRec.Type, idPatchPath, id.(string), err))
-			return err
-		}
-	}
-	if !hasChange {
 		return Http.NewHttpError("no change made", http.StatusNotModified)
 	}
 	return nil

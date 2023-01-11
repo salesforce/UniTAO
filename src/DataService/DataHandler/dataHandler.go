@@ -32,7 +32,6 @@ import (
 	"net/http"
 	"path"
 	"strings"
-	"sync"
 
 	"Data/DbConfig"
 	"Data/DbIface"
@@ -45,6 +44,7 @@ import (
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
 	"github.com/salesforce/UniTAO/lib/Util"
+	"github.com/salesforce/UniTAO/lib/Util/HashLock"
 	"github.com/salesforce/UniTAO/lib/Util/Http"
 	"github.com/salesforce/UniTAO/lib/Util/Json"
 	"github.com/salesforce/UniTAO/lib/Util/Template"
@@ -56,7 +56,7 @@ type Handler struct {
 	DB         DbIface.Database
 	schemaMap  map[string]*Schema.SchemaOps
 	Config     Config.Confuguration
-	Lock       sync.Mutex
+	Lock       *HashLock.HashLock
 	Inventory  *DataServiceProxy
 	AddJournal JournalAdd
 	log        *log.Logger
@@ -74,7 +74,7 @@ func New(config Config.Confuguration, logger *log.Logger, connectDb func(db DbCo
 		schemaMap: make(map[string]*Schema.SchemaOps),
 		DB:        db,
 		Config:    config,
-		Lock:      sync.Mutex{},
+		Lock:      HashLock.NewHashLock(logger),
 		log:       logger,
 	}
 	handler.Inventory = CreateDsProxy(&handler)
@@ -395,24 +395,7 @@ func (h *Handler) validateCmtAutoIdx(idx CmtIndex.AutoIndex) *Http.HttpError {
 	if ex != nil {
 		return Http.WrapError(ex, fmt.Sprintf("failed to load schema data of type=[%s]", idx.ContentType), http.StatusInternalServerError)
 	}
-	temp, ex := Template.ParseStr(idx.IndexTemplate, "{", "}")
-	if ex != nil {
-		return Http.WrapError(ex, fmt.Sprintf("failed to parse indexTemplate=[%s]", idx.IndexTemplate), http.StatusBadRequest)
-	}
-	targetProps := targetSchema.Data[JsonKey.Properties].(map[string]interface{})
-	invalidAttrs := make([]string, 0, len(temp.Vars))
-	for _, tempAttr := range temp.Vars {
-		attrDef, ok := targetProps[tempAttr]
-		if !ok || attrDef.(map[string]interface{})[JsonKey.Type].(string) != JsonKey.String {
-			invalidAttrs = append(invalidAttrs, tempAttr)
-			continue
-		}
-	}
-	if len(invalidAttrs) > 0 {
-		attrStr, _ := json.Marshal(invalidAttrs)
-		return Http.NewHttpError(fmt.Sprintf("invalid or missing attr definition for template. attrs=%s of type[%s], template=[%s]", string(attrStr), idx.ContentType, idx.IndexTemplate), http.StatusBadRequest)
-	}
-	return nil
+	return idx.ValidateIndexTemplate(targetSchema)
 }
 
 func (h *Handler) Add(record *Record.Record) *Http.HttpError {
@@ -424,20 +407,27 @@ func (h *Handler) Add(record *Record.Record) *Http.HttpError {
 	if schema.Schema.Version != record.Version {
 		return Http.NewHttpError(fmt.Sprintf("invalid schema version of [%s %s] not match current schema version[%s]", record.Type, record.Version, schema.Schema.Version), http.StatusBadRequest)
 	}
-	h.Lock.Lock()
-	defer h.Lock.Unlock()
+	idKey := fmt.Sprintf("%s/%s", record.Type, record.Id)
+	h.Lock.Aquire(idKey, "HandlerAdd")
+	defer h.Lock.Release(idKey, "HandlerAdd")
+	h.Log(fmt.Sprintf("HandlerAdd: query exists.[%s/%s]", record.Type, record.Id))
 	recordList, err := h.QueryDb(record.Type, record.Id)
 	if err != nil {
+		h.Log(fmt.Sprintf("HandlerAdd: query failed.[%s/%s]", record.Type, record.Id))
 		return err
 	}
 	if len(recordList) > 0 {
+		h.Log(fmt.Sprintf("HandlerAdd: already exists.[%s/%s]", record.Type, record.Id))
 		if record.Type != JsonKey.Schema {
 			return Http.NewHttpError(fmt.Sprintf("data [type/id]=[%s/%s] already exists", record.Type, record.Id), http.StatusConflict)
 		}
+		h.Log(fmt.Sprintf("HandlerAdd: upgrade schema.[%s]", record.Id))
 		_, schemaVer := Util.ParseCustomPath(record.Id, JsonKey.ArchivedSchemaIdDiv)
 		if schemaVer != "" {
-			return Http.NewHttpError(fmt.Sprintf(`"invalid schema id=[%s], add new archived data are not supported. 
-				please add new schema directly, current schema will be archived automatically."`, record.Id), http.StatusBadRequest)
+			msg := fmt.Sprintf(`"invalid schema id=[%s], add new archived data are not supported. 
+			please add new schema directly, current schema will be archived automatically."`, record.Id)
+			h.Log(fmt.Sprintf("HandlerAdd: [%s]", msg))
+			return Http.NewHttpError(msg, http.StatusBadRequest)
 		}
 		newSchema, ex := Schema.LoadSchemaOpsRecord(record)
 		if ex != nil {
@@ -462,6 +452,7 @@ func CompareVersion(currentVersion string, newVersion string) (int, *Http.HttpEr
 }
 
 func (h *Handler) archiveCurrentSchema(newSchema *Schema.SchemaOps) *Http.HttpError {
+	h.Log(fmt.Sprintf("HandlerAdd: archive schema [%s]", newSchema.Schema.Id))
 	schema, err := h.LocalSchema(newSchema.Schema.Id, "")
 	if err != nil {
 		return err
@@ -482,24 +473,30 @@ func (h *Handler) archiveCurrentSchema(newSchema *Schema.SchemaOps) *Http.HttpEr
 		return Http.WrapError(ex, fmt.Sprintf("failed to snapshot schema [%s %s]", schema.Schema.Id, schema.Schema.Version), http.StatusInternalServerError)
 	}
 	schema.Record.Id = SchemaDoc.ArchivedSchemaId(schema.Schema.Id, schema.Schema.Version)
+	h.Log(fmt.Sprintf("HandlerAdd: updating schema record [%s]", newSchema.Schema.Id))
 	err = h.updateRecord(JsonKey.Schema, schema.Schema.Id, schema.Record)
 	if err != nil {
 		return err
 	}
+	h.Log(fmt.Sprintf("HandlerAdd: schema archived [%s]", newSchema.Schema.Id))
 	h.SetLocalSchema(schema.Schema.Id, nil)
 	h.SetLocalSchema(schema.Record.Id, schema)
 	if h.AddJournal != nil {
+		h.Log(fmt.Sprintf("HandlerAdd: Add Journal of schema archive. [%s]->[%s]", before.Id, schema.Record.Id))
 		h.AddJournal(before.Type, before.Id, before.Map(), schema.Record.Map())
 	}
 	return nil
 }
 
 func (h *Handler) addData(record *Record.Record) *Http.HttpError {
+	h.Log(fmt.Sprintf("HandlerAdd: add record [%s/%s]", record.Type, record.Id))
 	e := h.DB.Create(h.Config.DataTable.Data, record.Map())
 	if e != nil {
 		return Http.WrapError(e, fmt.Sprintf("failed to create record [{type}/{id}]=[%s]/%s", record.Type, record.Id), http.StatusInternalServerError)
 	}
+	h.Log(fmt.Sprintf("HandlerAdd: record added [%s/%s]", record.Type, record.Id))
 	if h.AddJournal != nil {
+		h.Log(fmt.Sprintf("HandlerAdd: add journal for new record [%s/%s]", record.Type, record.Id))
 		h.AddJournal(record.Type, record.Id, nil, record.Map())
 		// we should log err if failed to add Journal
 	}
@@ -548,14 +545,15 @@ func (h *Handler) Set(dataType string, dataId string, record *Record.Record) *Ht
 	if _, ok := Common.InternalTypes[record.Type]; ok {
 		return Http.NewHttpError(fmt.Sprintf("method[%s] on type[%s] is not allowed", http.MethodPut, record.Type), http.StatusBadRequest)
 	}
-	h.Lock.Lock()
-	defer h.Lock.Unlock()
 	if dataType == "" {
 		dataType = record.Type
 	}
 	if dataId == "" {
 		dataId = record.Id
 	}
+	idKey := fmt.Sprintf("%s/%s", dataType, dataId)
+	h.Lock.Aquire(idKey, "HandlerSet")
+	defer h.Lock.Release(idKey, "HandlerSet")
 	data, err := h.GetData(dataType, dataId)
 	if err != nil && err.Status != http.StatusNotFound {
 		return err
@@ -646,8 +644,9 @@ func (h *Handler) deleteSchema(dataType string) *Http.HttpError {
 }
 
 func (h *Handler) deleteData(dataType string, dataId string) *Http.HttpError {
-	h.Lock.Lock()
-	defer h.Lock.Unlock()
+	idKey := fmt.Sprintf("%s/%s", dataType, dataId)
+	h.Lock.Aquire(idKey, "HandlerDelete")
+	defer h.Lock.Release(idKey, "HandlerDelete")
 	recordList, err := h.QueryDb(dataType, dataId)
 	if err != nil {
 		return err
@@ -689,8 +688,11 @@ func (h *Handler) Patch(dataType string, idPath string, headers map[string]inter
 	if err != nil {
 		return nil, err
 	}
-	h.Lock.Lock()
-	defer h.Lock.Unlock()
+	h.Log(fmt.Sprintf("Handler PATCH[%s/%s]: acquire lock", dataType, dataId))
+	idKey := fmt.Sprintf("%s/%s", dataType, dataId)
+	h.Lock.Aquire(idKey, "HandlerPatch")
+	h.Log(fmt.Sprintf("Handler PATCH[%s/%s]: lock acquired, GetData", dataType, dataId))
+	defer h.Lock.Release(idKey, "HandlerPatch")
 	patchData, err := h.GetData(dataType, dataId)
 	if err != nil {
 		h.Log(fmt.Sprintf("cannot get data [%s/%s]", dataType, dataId))
@@ -706,12 +708,15 @@ func (h *Handler) Patch(dataType string, idPath string, headers map[string]inter
 	}
 	patchVer, ok := headers[JsonKey.Version]
 	if ok {
+		h.Log(fmt.Sprintf("PATCH[%s/%s]: header path version [%s]", dataType, dataId, patchVer))
 		if patchRecord.Version != patchVer {
 			errMsg := fmt.Sprintf("current record:[%s/%s] version:[%s] does not match specified version:[%s]", dataType, dataId, patchRecord.Version, patchVer)
 			h.Log(errMsg)
 			return nil, Http.NewHttpError(errMsg, http.StatusNotModified)
 		}
+		h.Log("version match with header")
 	}
+	h.Log(fmt.Sprintf("Handler PATCH[%s/%s]: get version schema [%s]", dataType, dataId, patchRecord.Version))
 	schema, err := h.LocalSchema(dataType, patchRecord.Version)
 	if err != nil {
 		h.Log(err.Error())
@@ -725,13 +730,14 @@ func (h *Handler) Patch(dataType string, idPath string, headers map[string]inter
 		h.Log(e.Error())
 		return nil, Http.WrapError(e, errMsg, http.StatusInternalServerError)
 	}
+	h.Log(fmt.Sprintf("PATCH [%s/%s] @[%s]", dataType, dataId, nextPath))
 	err = patchRecordByPath(schema.Schema, patchRecord, nextPath, fmt.Sprintf("%s/%s", dataType, dataId), data)
 	if err != nil {
 		if err.Status != http.StatusNotModified {
 			h.Log(err.Error())
 			return nil, err
 		}
-		return patchRecord.Map(), err
+		return patchRecord.Map(), nil
 	}
 	verComp, err := CompareVersion(before.Version, patchRecord.Version)
 	if err != nil {
@@ -745,11 +751,14 @@ func (h *Handler) Patch(dataType string, idPath string, headers map[string]inter
 		h.Log(err.Error())
 		return nil, err
 	}
+	h.Log(fmt.Sprintf("PATCH [%s/%s] complete", dataType, dataId))
 	if h.AddJournal != nil {
+		h.Log(fmt.Sprintf("PATCH [%s/%s] add journal", dataType, dataId))
 		h.AddJournal(dataType, dataId, before.Map(), patchRecord.Map())
 	} else {
-		h.log.Printf("AddJournal is not defined here.")
+		h.Log("AddJournal is not defined here.")
 	}
+	h.Log(fmt.Sprintf("PATCH [%s/%s] return patched record", dataType, dataId))
 	return patchRecord.Map(), nil
 }
 

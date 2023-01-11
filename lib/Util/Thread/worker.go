@@ -100,10 +100,14 @@ func (w *Worker) Run() {
 	go w.workerRoutine()
 }
 
-func (w *Worker) Notify(event interface{}) {
+func (w *Worker) queueEvent(event interface{}) {
 	w.event <- event
 }
 
+func (w *Worker) Notify(event interface{}) {
+	go w.queueEvent(event)
+}
+
 func (w *Worker) Stop() {
-	w.event <- syscall.SIGINT
+	w.Notify(syscall.SIGINT)
 }

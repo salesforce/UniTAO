@@ -357,14 +357,14 @@ func (i *DataServiceProxy) Patch(dataType string, dataId string, dataPath string
 		}
 	}
 	if ex != nil {
-		err = Http.WrapError(ex, fmt.Sprintf("failed to patch [%s]", pUrl), http.StatusInternalServerError)
+		err = Http.WrapError(ex, fmt.Sprintf("failed to patch [%s]", pUrl), status)
 		if respTxt != "" {
 			err.Context = append(err.Context, respTxt)
 		}
 		return err
 	}
 	if status != http.StatusAccepted && status != http.StatusOK {
-		err = Http.NewHttpError(fmt.Sprintf("failed to create [%s]", pUrl), status)
+		err = Http.NewHttpError(fmt.Sprintf("failed to set [%s]", pUrl), status)
 		if respTxt != "" {
 			err.Context = append(err.Context, respTxt)
 		}

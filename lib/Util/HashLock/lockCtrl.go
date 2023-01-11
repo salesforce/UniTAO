@@ -23,51 +23,69 @@ This copyright notice and license applies to all files in this directory or sub-
 ************************************************************************************************************
 */
 
-// functions to record all data changes
-package DataJournal
+package HashLock
 
 import (
-	"DataService/DataJournal/ProcessIface"
-	"fmt"
 	"log"
-
-	"github.com/salesforce/UniTAO/lib/Util/HashLock"
+	"sync/atomic"
+	"time"
 )
 
-type JournalCache struct {
-	log      *log.Logger
-	DataType string
-	DataId   string
-	Head     *ProcessIface.JournalPage
-	Tail     *ProcessIface.JournalPage
-	Lock     *HashLock.ChanLock
+type lockCtrl struct {
+	log    *log.Logger
+	key    string
+	lock   *ChanLock
+	count  int32
+	userId string
 }
 
-func NewCache(dataType string, dataId string, logger *log.Logger) *JournalCache {
+func NewLockCtrl(key string, logger *log.Logger) *lockCtrl {
 	if logger == nil {
 		logger = log.Default()
 	}
-	cache := JournalCache{
-		log:      logger,
-		DataType: dataType,
-		DataId:   dataId,
-		Head:     ProcessIface.NewPage(dataType, dataId, -1),
-		Tail:     ProcessIface.NewPage(dataType, dataId, -1),
-		Lock:     HashLock.NewChanLock(logger),
+	return &lockCtrl{
+		log:    logger,
+		key:    key,
+		lock:   NewChanLock(logger),
+		count:  0,
+		userId: "",
 	}
-	return &cache
 }
 
-func (cache *JournalCache) Key() string {
-	return fmt.Sprintf("journal[%s/%s]", cache.DataType, cache.DataId)
+func (lc *lockCtrl) inc() {
+	atomic.AddInt32(&lc.count, 1)
 }
 
-func (cache *JournalCache) ListPages() []string {
-	pageCount := cache.Tail.Idx - cache.Head.Idx + 1
-	pageList := make([]string, 0, pageCount)
-	idx := cache.Head.Idx
-	for idx <= cache.Tail.Idx {
-		pageList = append(pageList, ProcessIface.PageId(cache.DataType, cache.DataId, idx))
+func (lc *lockCtrl) dec() {
+	atomic.AddInt32(&lc.count, -1)
+}
+
+func (lc *lockCtrl) Key() string {
+	return lc.key
+}
+
+func (lc *lockCtrl) Count() int32 {
+	return lc.count
+}
+
+func (lc *lockCtrl) LockedBy() string {
+	return lc.userId
+}
+
+func (lc *lockCtrl) Aquire(userId string, timeout time.Duration) error {
+	lc.log.Printf("LockCtrl: acquire lock on [%s] for [%s], current waiting [%d]", lc.key, userId, lc.count)
+	lc.inc()
+	err := lc.lock.Lock(timeout)
+	lc.dec()
+	if err != nil {
+		return err
 	}
-	return pageList
+	lc.userId = userId
+	return nil
+}
+
+func (lc *lockCtrl) Release() {
+	lc.log.Printf("LockCtrl: release lock on [%s] for [%s], current waiting [%d]", lc.key, lc.userId, lc.count)
+	lc.userId = ""
+	lc.lock.Unlock()
 }

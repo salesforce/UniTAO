@@ -336,7 +336,11 @@ func (d *SchemaDoc) validateKeyDefs() error {
 				}
 				return nil
 			}
-			subDoc := d.SubDocs[attr]
+			subDoc, ok := d.SubDocs[attr]
+			if !ok {
+				// subDoc is not defined. free form object
+				return nil
+			}
 			if !d.IsAncestor(subDoc.Id) {
 				err := subDoc.validateKeyDefs()
 				if err != nil {

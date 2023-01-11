@@ -23,51 +23,39 @@ This copyright notice and license applies to all files in this directory or sub-
 ************************************************************************************************************
 */
 
-// functions to record all data changes
-package DataJournal
+package HashLock
 
 import (
-	"DataService/DataJournal/ProcessIface"
 	"fmt"
 	"log"
-
-	"github.com/salesforce/UniTAO/lib/Util/HashLock"
+	"time"
 )
 
-type JournalCache struct {
-	log      *log.Logger
-	DataType string
-	DataId   string
-	Head     *ProcessIface.JournalPage
-	Tail     *ProcessIface.JournalPage
-	Lock     *HashLock.ChanLock
+type ChanLock struct {
+	log     *log.Logger
+	channel chan struct{}
 }
 
-func NewCache(dataType string, dataId string, logger *log.Logger) *JournalCache {
+func NewChanLock(logger *log.Logger) *ChanLock {
 	if logger == nil {
 		logger = log.Default()
 	}
-	cache := JournalCache{
-		log:      logger,
-		DataType: dataType,
-		DataId:   dataId,
-		Head:     ProcessIface.NewPage(dataType, dataId, -1),
-		Tail:     ProcessIface.NewPage(dataType, dataId, -1),
-		Lock:     HashLock.NewChanLock(logger),
+	return &ChanLock{
+		log:     logger,
+		channel: make(chan struct{}, 1),
 	}
-	return &cache
 }
 
-func (cache *JournalCache) Key() string {
-	return fmt.Sprintf("journal[%s/%s]", cache.DataType, cache.DataId)
+func (l *ChanLock) Lock(timeout time.Duration) error {
+	select {
+	case l.channel <- struct{}{}:
+		// lock acquired
+		return nil
+	case <-time.After(timeout):
+		return fmt.Errorf("failed to acquire lock after [%s]", timeout)
+	}
 }
 
-func (cache *JournalCache) ListPages() []string {
-	pageCount := cache.Tail.Idx - cache.Head.Idx + 1
-	pageList := make([]string, 0, pageCount)
-	idx := cache.Head.Idx
-	for idx <= cache.Tail.Idx {
-		pageList = append(pageList, ProcessIface.PageId(cache.DataType, cache.DataId, idx))
-	}
-	return pageList
+func (l *ChanLock) Unlock() {
+	<-l.channel
 }

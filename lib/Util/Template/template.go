@@ -160,3 +160,29 @@ func (t *StrTemp) BuildValue(data map[string]interface{}) (string, error) {
 	}
 	return result, nil
 }
+
+func (t *StrTemp) MatchValue(value string) bool {
+	tParts := t.Parts
+	varPrefix := false
+	for _, part := range tParts {
+		attrName := t.ParseVar(part)
+		if attrName != "" {
+			varPrefix = true
+			continue
+		}
+		if !varPrefix {
+			if !strings.HasPrefix(value, part) {
+				return false
+			}
+			value = value[len(part):]
+			continue
+		}
+		partIdx := strings.Index(value, part)
+		if partIdx < 0 {
+			return false
+		}
+		value = value[partIdx+len(part):]
+		varPrefix = false
+	}
+	return true
+}

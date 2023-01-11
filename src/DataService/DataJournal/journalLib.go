@@ -93,7 +93,7 @@ func (j *JournalLib) initCache() *Http.HttpError {
 			j.Cache[dataType] = map[string]*JournalCache{}
 		}
 		if _, ok := j.Cache[dataType][dataId]; !ok {
-			j.Cache[dataType][dataId] = NewCache(dataType, dataId)
+			j.Cache[dataType][dataId] = NewCache(dataType, dataId, j.Logger)
 		}
 		cache := j.Cache[dataType][dataId]
 		if cache.Head.Idx == -1 || cache.Head.Idx > idx {
@@ -233,28 +233,28 @@ func (j *JournalLib) AddJournal(dataType string, dataId string, before map[strin
 		j.Cache[dataType] = map[string]*JournalCache{}
 	}
 	if _, ok := j.Cache[dataType][dataId]; !ok {
-		c := NewCache(dataType, dataId)
+		c := NewCache(dataType, dataId, j.Logger)
 		c.Head = c.Tail
 		j.Cache[dataType][dataId] = c
 	}
-	cache := j.Cache[dataType][dataId]
-	cache.Lock.Lock()
-	defer cache.Lock.Unlock()
-	j.Logger.Printf("adding Journal for [%s/%s]", dataType, dataId)
+	j.Logger.Printf("AddJournal: [%s/%s] adding Journal", dataType, dataId)
 	err := j.addJournalEntry(dataType, dataId, before, after)
 	if err != nil {
+		j.Logger.Printf("AddJournal: error while addJournalEntry. Error:%s", err)
 		return err
 	}
+	j.Logger.Printf("AddJournal: [%s/%s] journal added ", dataType, dataId)
 	if j.HandlerNotify == nil {
-		j.Logger.Print("no JournalHandler Channel define, no event to submit")
+		j.Logger.Printf("AddJournal: [%s/%s] no JournalHandler Channel define", dataType, dataId)
 		return nil
 	}
-	j.Logger.Print("there is Handler Channel defined, submit event to Journal Handler")
+	j.Logger.Printf("AddJournal: [%s/%s] there is Handler Channel defined, submit event to Journal Handler", dataType, dataId)
 	event := ProcessIface.JournalEvent{
 		DataType: dataType,
 		DataId:   dataId,
 	}
 	j.HandlerNotify(event)
+	j.Logger.Printf("AddJournal: [%s/%s] add journal process completed", dataType, dataId)
 	return nil
 }
 
@@ -281,7 +281,8 @@ func (j *JournalLib) ArchiveJournalEntry(dataType string, dataId string, entry *
 		return nil
 	}
 	if cache.Head.Idx == cache.Tail.Idx {
-		cache.Lock.Lock()
+		j.Logger.Printf("Archive: acquire Lock for [%s/%s]", dataType, dataId)
+		cache.Lock.Lock(10 * time.Second)
 		defer cache.Lock.Unlock()
 	}
 	cache.Head.Active = cache.Head.Active[1:]
@@ -355,6 +356,14 @@ func (j *JournalLib) updateJournal(page *ProcessIface.JournalPage) *Http.HttpErr
 }
 
 func (j *JournalLib) addJournalEntry(dataType string, dataId string, before map[string]interface{}, after map[string]interface{}) *Http.HttpError {
+	cache := j.Cache[dataType][dataId]
+	j.Logger.Printf("AddJournal: acquire lock for [%s/%s]", dataType, dataId)
+	ex := cache.Lock.Lock(10 * time.Second)
+	if ex != nil {
+		return Http.WrapError(ex, fmt.Sprintf("AddJournal: lock acquire time out after 10 seconds. [%s/%s]", dataType, dataId), http.StatusInternalServerError)
+	}
+	defer cache.Lock.Unlock()
+	defer j.Logger.Printf("AddJournal: lock for [%s/%s] released", dataType, dataId)
 	if j.Cache[dataType][dataId].Tail.LastEntry() >= MaxEntryPerPage {
 		nextIdx := j.Cache[dataType][dataId].Tail.Idx + 1
 		j.Cache[dataType][dataId].Tail = ProcessIface.NewPage(dataType, dataId, nextIdx)
