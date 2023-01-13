@@ -208,6 +208,7 @@ func SiteReachable(url string) bool {
 		log.Println("Site unreachable, error: ", err)
 		return false
 	}
+	log.Printf("Site[%s] reached", url)
 	return true
 }
 

@@ -46,7 +46,8 @@ import (
 )
 
 type Handler struct {
-	Db DbIface.Database
+	log *log.Logger
+	Db  DbIface.Database
 }
 
 var InvTypes = map[string]bool{
@@ -60,13 +61,17 @@ var EditableTypes = map[string]bool{
 	SchemaPath.PathName: true,
 }
 
-func New(config DbConfig.DatabaseConfig) (*Handler, error) {
+func New(config DbConfig.DatabaseConfig, logger *log.Logger) (*Handler, error) {
+	if logger == nil {
+		logger = log.Default()
+	}
 	db, err := Data.ConnectDb(config)
 	if err != nil {
 		return nil, err
 	}
 	handler := Handler{
-		Db: db,
+		log: logger,
+		Db:  db,
 	}
 	handler.Db = db
 	err = handler.init()
@@ -74,6 +79,10 @@ func New(config DbConfig.DatabaseConfig) (*Handler, error) {
 		return nil, err
 	}
 	return &handler, nil
+}
+
+func (h *Handler) Log(msg string) {
+	h.log.Printf(fmt.Sprintf("InvSrvHandler: %s", msg))
 }
 
 func (h *Handler) init() error {
@@ -89,7 +98,7 @@ func (h *Handler) init() error {
 			}
 		}
 		if !tblExists {
-			log.Printf("missing table=[%s], create one", name)
+			h.Log(fmt.Sprintf("missing table=[%s], create one", name))
 			err := h.Db.CreateTable(name, nil)
 			if err != nil {
 				err = fmt.Errorf("failed to creat table=[%s], Err:%s", name, err)
@@ -326,7 +335,7 @@ func (h *Handler) GetReferral(dataType string) (*RefRecord.ReferralData, *Http.H
 		return nil, Http.NewHttpError(e.Error(), http.StatusBadRequest)
 	}
 	referral.DsInfo = dsInfo
-	err = referral.GetSchema()
+	err = referral.GetSchema(h.log)
 	if err != nil {
 		return nil, err
 	}

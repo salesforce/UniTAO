@@ -34,7 +34,7 @@
             "request": "launch",
             "mode": "debug",
             "program": "${workspaceFolder}/tool/InventoryServiceAdmin/main.go",
-            "args": ["sync", "-config", "${workspaceFolder}/docker-compose/2data1inv/InventoryService/extConfig/config.json"],
+            "args": ["sync", "-config", "${workspaceFolder}/docker-compose/2data1inv/InventoryService/extConfig/config.json", "-log", "${workspaceFolder}/docker-compose/2data1inv/logs"],
         }
     ]
 }

@@ -29,11 +29,8 @@ import (
 	"Data"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
-	"os"
-	"path"
 
 	"DataService/Common"
 	"DataService/Config"
@@ -42,6 +39,7 @@ import (
 
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Util"
+	"github.com/salesforce/UniTAO/lib/Util/CustomLogger"
 	"github.com/salesforce/UniTAO/lib/Util/Http"
 	"github.com/salesforce/UniTAO/lib/Util/Thread"
 )
@@ -79,23 +77,14 @@ func New() (Server, error) {
 	return srv, nil
 }
 
-func (srv *Server) FileLoger(id string) (*os.File, *log.Logger) {
-	if srv.logPath == "" {
-		return nil, log.Default()
-	}
-	logPath := path.Join(srv.logPath, fmt.Sprintf("%s.log", id))
-	log.Printf("log file: %s", logPath)
-	logFile, err := os.OpenFile(logPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		log.Fatalf("error opening file: %v", err)
-	}
-	mw := io.MultiWriter(os.Stdout, logFile)
-	logger := log.New(mw, fmt.Sprintf("%s: ", srv.Id), log.Ldate|log.Ltime|log.Lshortfile)
-	return logFile, logger
-}
-
 func (srv *Server) Run() {
-	logFile, logger := srv.FileLoger(srv.Id)
+	logFile, logger, ex := CustomLogger.FileLoger(srv.logPath, srv.Id)
+	if ex != nil {
+		log.Fatalf("failed to create file logger[%s], Error: %s", srv.Id, ex)
+	}
+	if logFile != nil {
+		defer logFile.Close()
+	}
 	srv.log = logger
 	if logFile != nil {
 		defer logFile.Close()
@@ -106,7 +95,10 @@ func (srv *Server) Run() {
 		srv.log.Fatalf("failed to initialize data layer, Err:%s", err)
 	}
 	srv.data = handler
-	jLogFile, jLogger := srv.FileLoger(fmt.Sprintf("%s_Journal", srv.Id))
+	jLogFile, jLogger, ex := CustomLogger.FileLoger(srv.logPath, fmt.Sprintf("%s_Journal", srv.Id))
+	if ex != nil {
+		srv.log.Fatalf("failed to create file logger[%s_Journal], Error: %s", srv.Id, err)
+	}
 	if jLogFile != nil {
 		defer jLogFile.Close()
 	}
@@ -161,10 +153,6 @@ func (srv *Server) init() error {
 		return fmt.Errorf("missing parameter config")
 	}
 	if logPath != "" {
-		err := os.MkdirAll(logPath, os.ModePerm)
-		if err != nil {
-			return fmt.Errorf("failed to create log path: %s", logPath)
-		}
 		srv.logPath = logPath
 	}
 	srv.args[CONFIG] = configPath

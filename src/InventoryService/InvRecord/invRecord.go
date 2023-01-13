@@ -81,6 +81,5 @@ func (ds *DataServiceInfo) GetUrl() (string, error) {
 			return "", fmt.Errorf("no good url is reachable for DS=[%s]", ds.Id)
 		}
 	}
-
 	return ds.goodUrl, nil
 }

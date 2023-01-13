@@ -9,5 +9,6 @@ WORKDIR /opt/UniTAO/
 ENV PATH="/opt/UniTAO/:${PATH}"
 RUN mkdir ./config
 RUN mkdir ./data
+RUN mkdir ./log
 RUN echo 'alias ll="ls -alF"' >> ~/.bashrc
 COPY --from=build /go/src/github.com/salesforce/UniTAO/bin/. ./

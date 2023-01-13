@@ -35,6 +35,7 @@ import (
 	"InventoryService/DataHandler"
 
 	"github.com/salesforce/UniTAO/lib/Util"
+	"github.com/salesforce/UniTAO/lib/Util/CustomLogger"
 	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
 
@@ -43,11 +44,13 @@ type Server struct {
 	args   ServerArgs
 	config Config.ServerConfig
 	data   *DataHandler.Handler
+	log    *log.Logger
 }
 
 type ServerArgs struct {
-	port   string
-	config string
+	logPath string
+	port    string
+	config  string
 }
 
 const (
@@ -60,11 +63,14 @@ func argHandler() ServerArgs {
 	args := ServerArgs{}
 	var port string
 	var configPath string
+	var logPath string
 	flag.StringVar(&port, "port", "", "Data Server Listen Port")
 	flag.StringVar(&configPath, "config", "", "Data Server Configuration JSON path")
+	flag.StringVar(&logPath, "log", "", "path that hold log")
 	flag.Parse()
 	args.port = port
 	args.config = configPath
+	args.logPath = logPath
 	if args.config == "" {
 		flag.Usage()
 		log.Fatalf("missing parameter [%s]", CONFIG)
@@ -94,15 +100,23 @@ func New() Server {
 }
 
 func (srv *Server) Run() {
-	log.Printf("Server Listen on PORT:%s", srv.Port)
-	handler, err := DataHandler.New(srv.config.Database)
+	logFile, logger, err := CustomLogger.FileLoger(srv.args.logPath, "InventoryService")
 	if err != nil {
-		log.Fatalf("failed to initialize data layer, Err:%s", err)
+		log.Printf("Inventory Service failed to create logger. Err: %s", err)
+	}
+	if logFile != nil {
+		defer logFile.Close()
+	}
+	srv.log = logger
+	srv.log.Printf("Server Listen on PORT:%s", srv.Port)
+	handler, err := DataHandler.New(srv.config.Database, srv.log)
+	if err != nil {
+		srv.log.Fatalf("failed to initialize data layer, Err:%s", err)
 	}
 	srv.data = handler
 	http.HandleFunc("/", srv.handler)
-	log.Printf("Data Server Listen @%s://%s:%s", srv.config.Http.HttpType, srv.config.Http.DnsName, srv.Port)
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", srv.Port), nil))
+	srv.log.Printf("Data Server Listen @%s://%s:%s", srv.config.Http.HttpType, srv.config.Http.DnsName, srv.Port)
+	srv.log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", srv.Port), nil))
 }
 
 func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
