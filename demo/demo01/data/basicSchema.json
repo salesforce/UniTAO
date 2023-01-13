@@ -1,0 +1,20 @@
+{
+    "DataService_01": [
+        {
+            "__id": "VirtualMachine",
+            "__type": "schema",
+            "__ver": "0.0.1",
+            "data": {
+                "name": "VirtualMachine",
+                "description": "virtual machine",
+                "version": "0.0.1",
+                "key": "vm-{name}",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    }
+                }
+            }
+        }
+    ]
+}
