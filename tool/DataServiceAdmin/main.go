@@ -34,7 +34,7 @@ import (
 	"Data/DbIface"
 	"DataService/Config"
 
-	"github.com/salesforce/UniTAO/lib/Util"
+	"github.com/salesforce/UniTAO/lib/Util/Json"
 )
 
 type AdminArgs struct {
@@ -113,7 +113,7 @@ func ArgHandler() AdminArgs {
 
 func CreateTables(db DbIface.Database, args AdminArgs) {
 	log.Printf("create table from %s", args.table.meta)
-	tableMeta, err := Util.LoadJSONMap(args.table.meta)
+	tableMeta, err := Json.LoadJSONMap(args.table.meta)
 	if err != nil {
 		log.Fatalf("failed to load database metadata file [%s]", args.table.meta)
 	}
@@ -177,7 +177,7 @@ func ImportData(db DbIface.Database, args AdminArgs) {
 		return
 	}
 	log.Printf("load record list for table [%s]", args.data.table)
-	data, err := Util.LoadJSONList(args.data.file)
+	data, err := Json.LoadJSONList(args.data.file)
 	if err != nil {
 		log.Fatalf("failed to load database metadata file [%s]", args.data.file)
 	}
@@ -200,7 +200,7 @@ func ImportData(db DbIface.Database, args AdminArgs) {
 func ImportTables(db DbIface.Database, tableList []*string, args AdminArgs) {
 	tableMap := args.srvConfig.DataTable.Map()
 	log.Print("no table specified, load multi-table data file")
-	data, err := Util.LoadJSONMap(args.data.file)
+	data, err := Json.LoadJSONMap(args.data.file)
 	if err != nil {
 		log.Fatalf("failed to load database metadata file [%s]", args.data.file)
 	}

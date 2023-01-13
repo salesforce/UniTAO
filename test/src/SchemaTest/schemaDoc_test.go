@@ -36,6 +36,7 @@ import (
 func TestOjectKeyAttrRequired(t *testing.T) {
 	schemaStr := `{
 		"name": "test",
+		"version": "0.0.1",
 		"description": "test schema",
 		"key": "{type}_{name}_{version}",
 		"properties": {
@@ -56,7 +57,7 @@ func TestOjectKeyAttrRequired(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to load schemaStr. Error:%s", err)
 	}
-	_, err = SchemaDoc.New(data, "test", nil)
+	_, err = SchemaDoc.New(data)
 	if err == nil {
 		t.Errorf("failed to validate key [attr]=[version]] as required")
 	}
@@ -65,6 +66,7 @@ func TestOjectKeyAttrRequired(t *testing.T) {
 func TestObjectKey(t *testing.T) {
 	schemaStr := `{
 		"name": "test",
+		"version": "0.0.1",
 		"description": "test schema",
 		"key": "{type}_{name}_{version}",
 		"properties": {
@@ -80,13 +82,13 @@ func TestObjectKey(t *testing.T) {
 		}
 	}`
 	recordStr := `{
-		"__id": "test_key_01",
+		"__id": "test_key_0.0.1",
 		"__type": "test",
 		"__ver": "0.0.1",
 		"data": {
 			"name": "key",
 			"type": "test",
-			"version": "01"
+			"version": "0.0.1"
 		}
 	}`
 	data := map[string]interface{}{}
@@ -94,7 +96,7 @@ func TestObjectKey(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to load schemaStr. Error:%s", err)
 	}
-	schema, err := SchemaDoc.New(data, "test", nil)
+	schema, err := SchemaDoc.New(data)
 	if err != nil {
 		t.Errorf("failed to load schemaStr as SchemaDoc")
 	}
@@ -108,5 +110,72 @@ func TestObjectKey(t *testing.T) {
 	}
 	if recordKey != record.Id {
 		t.Errorf("build the wrong key. [%s]!=[%s]", recordKey, record.Id)
+	}
+}
+
+func TestHashArrayKeyReq(t *testing.T) {
+	schemaStrMisKey := `{
+		"name": "test",
+		"version": "0.0.1",
+		"properties": {
+			"hashArray": {
+				"type": "array",
+				"items": {
+					"type": "object",
+					"$ref": "#/definitions/hashItem"
+				}
+			}
+		},
+		"definitions": {
+			"hashItem": {
+				"name": "hashItem",
+				"properties": {
+					"test": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	}`
+	data := map[string]interface{}{}
+	err := json.Unmarshal([]byte(schemaStrMisKey), &data)
+	if err != nil {
+		t.Errorf("failed to load schemaStr. Error:%s", err)
+	}
+	_, err = SchemaDoc.New(data)
+	if err == nil {
+		t.Errorf("failed to catch error of missing key in hash item")
+	}
+	schemaStrWithKey := `{
+		"name": "test",
+		"version": "0.0.1",
+		"properties": {
+			"hashArray": {
+				"type": "array",
+				"items": {
+					"type": "object",
+					"$ref": "#/definitions/hashItem"
+				}
+			}
+		},
+		"definitions": {
+			"hashItem": {
+				"name": "hashItem",
+				"key": "{test}",
+				"properties": {
+					"test": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	}`
+	err = json.Unmarshal([]byte(schemaStrWithKey), &data)
+	if err != nil {
+		t.Errorf("failed to load schemaStr. Error:%s", err)
+	}
+	_, err = SchemaDoc.New(data)
+	if err != nil {
+		t.Errorf("failed to validate a good data")
 	}
 }

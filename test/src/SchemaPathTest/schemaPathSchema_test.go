@@ -26,42 +26,69 @@ This copyright notice and license applies to all files in this directory or sub-
 package SchemaPathTest
 
 import (
+	"net/http"
 	"testing"
 
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 )
 
 func TestWalkArraySchema(t *testing.T) {
-	schemaStr := `
-	{
-		"schemaWitArray": {
-			"name": "schemaWitArray",
-			"description": "schema of object with array of object in attribute",
-			"properties": {
-				"attrArray": {
-					"type": "array",
-					"items": {
-						"type": "object",
-						"$ref": "#/definitions/itemObj"
-					}
-				},
-				"attrArraySimple": {
-					"type": "array",
-					"items": {
-						"type": "string"
-					}
-				},
-				"attrArrayRef": {
-					"type": "array",
-					"items": {
-						"type": "string",
-						"contentMediaType": "inventory/refObj"
+	recordStr := `{
+		"schema": {
+			"schemaWitArray": {
+				"__id": "schemaWitArray",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "schemaWitArray",
+					"version": "0.0.1",
+					"description": "schema of object with array of object in attribute",
+					"properties": {
+						"attrArray": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"$ref": "#/definitions/itemObj"
+							}
+						},
+						"attrArraySimple": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						},
+						"attrArrayRef": {
+							"type": "array",
+							"items": {
+								"type": "string",
+								"contentMediaType": "inventory/refObj"
+							}
+						}
+					},
+					"definitions": {
+						"itemObj": {
+							"name": "itemObj",
+							"description": "item object of an array",
+							"key": "{key1}_{key2}",
+							"properties": {
+								"key1": {
+									"type": "string"
+								},
+								"key2": {
+									"type": "string"
+								}
+							}
+						}
 					}
 				}
 			},
-			"definitions": {
-				"itemObj": {
-					"name": "itemObj",
+			"refObj": {
+				"__id": "refObj",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "refObj",
+					"version": "0.0.1",
 					"description": "item object of an array",
 					"key": "{key1}_{key2}",
 					"properties": {
@@ -75,23 +102,6 @@ func TestWalkArraySchema(t *testing.T) {
 				}
 			}
 		},
-		"refObj": {
-			"name": "refObj",
-			"description": "item object of an array",
-			"key": "{key1}_{key2}",
-			"properties": {
-				"key1": {
-					"type": "string"
-				},
-				"key2": {
-					"type": "string"
-				}
-			}
-		}
-	}
-`
-	recordStr := `
-	{
 		"schemaWitArray": {
 			"testArray01": {
 				"__id": "testArray01",
@@ -148,7 +158,7 @@ func TestWalkArraySchema(t *testing.T) {
 			}
 		}
 	}`
-	conn := PrepareConn(schemaStr, recordStr)
+	conn := PrepareConn(recordStr)
 	queryPath := "schemaWitArray/testArray01?schema"
 	value, err := QueryPath(conn, queryPath)
 	if err != nil {
@@ -216,36 +226,62 @@ func TestWalkArraySchema(t *testing.T) {
 }
 
 func TestWalkMapSchema(t *testing.T) {
-	schemaStr := `
-	{
-		"schemaWithMap": {
-			"name": "schemaWithMap",
-			"description": "schema of object with Map of object in attribute",
-			"properties": {
-				"attrMap": {
-					"type": "map",
-					"items": {
-						"type": "object",
-						"$ref": "#/definitions/itemObj"
-					}
-				},
-				"attrMapSimple": {
-					"type": "map",
-					"items": {
-						"type": "string"
-					}
-				},
-				"attrMapRef": {
-					"type": "map",
-					"items": {
-						"type": "string",
-						"contentMediaType": "inventory/refObj"
+	recordStr := `{
+		"schema": {
+			"schemaWithMap": {
+				"__id": "schemaWithMap",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "schemaWithMap",
+					"version": "0.0.1",
+					"description": "schema of object with Map of object in attribute",
+					"properties": {
+						"attrMap": {
+							"type": "map",
+							"items": {
+								"type": "object",
+								"$ref": "#/definitions/itemObj"
+							}
+						},
+						"attrMapSimple": {
+							"type": "map",
+							"items": {
+								"type": "string"
+							}
+						},
+						"attrMapRef": {
+							"type": "map",
+							"items": {
+								"type": "string",
+								"contentMediaType": "inventory/refObj"
+							}
+						}
+					},
+					"definitions": {
+						"itemObj": {
+							"name": "itemObj",
+							"description": "item object of an array",
+							"key": "{key1}_{key2}",
+							"properties": {
+								"key1": {
+									"type": "string"
+								},
+								"key2": {
+									"type": "string"
+								}
+							}
+						}
 					}
 				}
 			},
-			"definitions": {
-				"itemObj": {
-					"name": "itemObj",
+			"refObj": {
+				"__id": "refObj",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "refObj",
+					"version": "0.0.1",
 					"description": "item object of an array",
 					"key": "{key1}_{key2}",
 					"properties": {
@@ -259,23 +295,6 @@ func TestWalkMapSchema(t *testing.T) {
 				}
 			}
 		},
-		"refObj": {
-			"name": "refObj",
-			"description": "item object of an array",
-			"key": "{key1}_{key2}",
-			"properties": {
-				"key1": {
-					"type": "string"
-				},
-				"key2": {
-					"type": "string"
-				}
-			}
-		}
-	}
-`
-	recordStr := `
-	{
 		"schemaWithMap": {
 			"testMap01": {
 				"__id": "testMap01",
@@ -332,7 +351,7 @@ func TestWalkMapSchema(t *testing.T) {
 			}
 		}
 	}`
-	conn := PrepareConn(schemaStr, recordStr)
+	conn := PrepareConn(recordStr)
 	queryPath := "schemaWithMap/testMap01?schema"
 	value, err := QueryPath(conn, queryPath)
 	if err != nil {
@@ -358,12 +377,12 @@ func TestWalkMapSchema(t *testing.T) {
 		t.Errorf("got invalid shema data")
 	}
 	queryPath = "schemaWithMap/testMap01/attrMap/anything?schema"
-	value, err = QueryPath(conn, queryPath)
-	if err != nil {
-		t.Fatal(err)
+	_, err = QueryPath(conn, queryPath)
+	if err == nil {
+		t.Fatal("failed to catch invalid path")
 	}
-	if value.(map[string]interface{})[JsonKey.Name].(string) != "itemObj" {
-		t.Errorf("got invalid shema data")
+	if err.Status != http.StatusNotFound {
+		t.Fatal("got wrong error status, expect StatusNotFound")
 	}
 	queryPath = "schemaWithMap/testMap01/attrMapSimple?schema"
 	value, err = QueryPath(conn, queryPath)
@@ -373,7 +392,7 @@ func TestWalkMapSchema(t *testing.T) {
 	if value.(map[string]interface{})[JsonKey.Type].(string) != JsonKey.Map {
 		t.Errorf("got invalid shema data")
 	}
-	queryPath = "schemaWithMap/testMap01/attrMapSimple[01_02]?schema"
+	queryPath = "schemaWithMap/testMap01/attrMapSimple[01]?schema"
 	value, err = QueryPath(conn, queryPath)
 	if err != nil {
 		t.Fatal(err)
@@ -382,12 +401,12 @@ func TestWalkMapSchema(t *testing.T) {
 		t.Errorf("got invalid shema data")
 	}
 	queryPath = "schemaWithMap/testMap01/attrMapSimple/anything?schema"
-	value, err = QueryPath(conn, queryPath)
-	if err != nil {
-		t.Fatal(err)
+	_, err = QueryPath(conn, queryPath)
+	if err == nil {
+		t.Fatal("failed to catch invalid path")
 	}
-	if value.(map[string]interface{})[JsonKey.Type].(string) != JsonKey.String {
-		t.Errorf("got invalid shema data")
+	if err.Status != http.StatusNotFound {
+		t.Fatal("got wrong error status, expect StatusNotFound")
 	}
 	queryPath = "schemaWithMap/testMap01/attrMapRef?schema"
 	value, err = QueryPath(conn, queryPath)
@@ -397,7 +416,7 @@ func TestWalkMapSchema(t *testing.T) {
 	if value.(map[string]interface{})[JsonKey.Type].(string) != JsonKey.Map {
 		t.Errorf("got invalid shema data")
 	}
-	queryPath = "schemaWithMap/testMap01/attrMapRef[01_02]?schema"
+	queryPath = "schemaWithMap/testMap01/attrMapRef[01]?schema"
 	value, err = QueryPath(conn, queryPath)
 	if err != nil {
 		t.Fatal(err)
@@ -406,11 +425,11 @@ func TestWalkMapSchema(t *testing.T) {
 		t.Errorf("got invalid shema data")
 	}
 	queryPath = "schemaWithMap/testMap01/attrMapRef/anything?schema"
-	value, err = QueryPath(conn, queryPath)
-	if err != nil {
-		t.Fatal(err)
+	_, err = QueryPath(conn, queryPath)
+	if err == nil {
+		t.Fatal("failed to catch invalid path")
 	}
-	if value.(map[string]interface{})[JsonKey.Name].(string) != "refObj" {
-		t.Errorf("got invalid shema data")
+	if err.Status != http.StatusNotFound {
+		t.Fatal("got wrong error status, expect StatusNotFound")
 	}
 }

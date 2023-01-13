@@ -26,6 +26,7 @@ This copyright notice and license applies to all files in this directory or sub-
 package main
 
 import (
+	"DataService/Common"
 	"flag"
 	"fmt"
 	"log"
@@ -41,7 +42,9 @@ import (
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Util"
+	"github.com/salesforce/UniTAO/lib/Util/CustomLogger"
 	"github.com/salesforce/UniTAO/lib/Util/Http"
+	"github.com/salesforce/UniTAO/lib/Util/Json"
 )
 
 type AdminArgs struct {
@@ -65,30 +68,35 @@ const (
 )
 
 type Admin struct {
+	log     *log.Logger
 	args    *AdminArgs
 	config  Config.ServerConfig
 	handler *DataHandler.Handler
 }
 
-func (a *Admin) argHandler() (*AdminArgs, error) {
+func ArgHandler() (string, *AdminArgs, error) {
+	var logPath string
 	addCmd := flag.NewFlagSet(CMD_ADD, flag.ExitOnError)
 	addDbConfig := addCmd.String("config", "", "database connection config")
 	addDs := addCmd.String(CMD_DS, "", "data service url to be registered with inventory service")
 	addDsId := addCmd.String(CMD_DS_ID, "", "data service unique id within Inventory Service")
+	CustomLogger.AddLogParam(addCmd, &logPath)
 
 	syncCmd := flag.NewFlagSet(CMD_SYNC, flag.ExitOnError)
 	syncDbConfig := syncCmd.String("config", "", "database connection config")
 	syncDsId := syncCmd.String(CMD_DS_ID, "", "data service unique id to sync data with. if empty, then all ds will be sync-ed")
+	CustomLogger.AddLogParam(syncCmd, &logPath)
 
 	delCmd := flag.NewFlagSet(CMD_DEL, flag.ExitOnError)
 	delDbConfig := delCmd.String("config", "", "database connection config")
 	delDsId := delCmd.String(CMD_DS_ID, "", "data service unique id to be deleted")
+	CustomLogger.AddLogParam(delCmd, &logPath)
 
 	if len(os.Args) < 2 {
 		for _, cmd := range []flag.FlagSet{*addCmd, *syncCmd, *delCmd} {
 			cmd.Usage()
 		}
-		return nil, fmt.Errorf("expected [%s, %s, %s]] subcommands", CMD_ADD, CMD_SYNC, CMD_DEL)
+		return "", nil, fmt.Errorf("expected [%s, %s, %s]] subcommands", CMD_ADD, CMD_SYNC, CMD_DEL)
 	}
 	args := AdminArgs{
 		cmd: os.Args[1],
@@ -103,6 +111,7 @@ func (a *Admin) argHandler() (*AdminArgs, error) {
 		}
 		if args.config == "" || args.ops.id == "" || args.ops.url == "" {
 			addCmd.Usage()
+			return "", nil, fmt.Errorf("missing parameters")
 		}
 	case CMD_SYNC:
 		syncCmd.Parse(os.Args[2:])
@@ -112,6 +121,7 @@ func (a *Admin) argHandler() (*AdminArgs, error) {
 		}
 		if args.config == "" {
 			syncCmd.Usage()
+			return "", nil, fmt.Errorf("missing parameters")
 		}
 	case CMD_DEL:
 		delCmd.Parse(os.Args[2:])
@@ -121,27 +131,25 @@ func (a *Admin) argHandler() (*AdminArgs, error) {
 		}
 		if args.config == "" || args.ops.id == "" {
 			delCmd.Usage()
+			return "", nil, fmt.Errorf("missing parameters")
 		}
 	default:
+		logPath = CustomLogger.ParseLogFilePathInArgs()
 		for _, cmd := range []flag.FlagSet{*addCmd, *syncCmd, *delCmd} {
 			cmd.Usage()
 		}
+		return logPath, nil, fmt.Errorf("unknown command[%s]", args.cmd)
 	}
-	return &args, nil
+	return logPath, &args, nil
 }
 
 func (a *Admin) Init() error {
-	args, err := a.argHandler()
-	if err != nil {
-		return err
-	}
-	a.args = args
-	err = Config.Read(a.args.config, &a.config)
+	err := Config.Read(a.args.config, &a.config)
 	if err != nil {
 		return fmt.Errorf("failed to load Inventory Service Configuration,[%s], Error:%s", a.args.config, err)
 
 	}
-	handler, err := DataHandler.New(a.config.Database)
+	handler, err := DataHandler.New(a.config.Database, a.log)
 	if err != nil {
 		return fmt.Errorf("failed to initialize data layer, Err:%s", err)
 	}
@@ -170,7 +178,7 @@ func (a *Admin) addDsRecord() error {
 		return fmt.Errorf("failed to query Data Service record, [%s]=[%s], Status:%d, Error:%s", Record.DataId, a.args.ops.id, err.Status, err)
 	}
 	dsRecord := InvRecord.NewDsInfo(a.args.ops.id, a.args.ops.url)
-	payload, e := Util.StructToMap(dsRecord)
+	payload, e := Json.CopyToMap(dsRecord)
 	if e != nil {
 		return e
 	}
@@ -187,7 +195,7 @@ func (a *Admin) syncDsSchema() error {
 		return fmt.Errorf("failed to list all inventorys. Error: %s", err)
 	}
 	for _, dsId := range idList {
-		e := a.syncSchemaWithId(dsId)
+		e := a.syncSchemaWithId(dsId.(string))
 		if e != nil {
 			return fmt.Errorf("failed to get schema from DS_Id=[%s], Error:%s", dsId, e)
 		}
@@ -195,26 +203,28 @@ func (a *Admin) syncDsSchema() error {
 	return nil
 }
 
-func (a *Admin) getCurrentTypeList(dsId string) ([]string, error) {
+func (a *Admin) getReferralTypes(dsId string) (map[string]*Record.Record, error) {
 	typeList, err := a.handler.List(RefRecord.Referral)
 	if err != nil {
 		return nil, err
 	}
-	currentTypes := []string{}
+	refTypes := map[string]*Record.Record{}
 	for _, dataType := range typeList {
-		referral, err := a.handler.GetReferral(dataType)
+		referral, err := a.handler.GetReferral(dataType.(string))
 		if err != nil {
-			a.removeType(dsId, dataType)
+			a.removeType(dsId, dataType.(string))
 			continue
 		}
 		if referral.DsId == dsId {
-			currentTypes = append(currentTypes, dataType)
+			typeSchema, _ := a.handler.GetData(JsonKey.Schema, dataType.(string))
+			record, _ := Record.LoadMap(typeSchema.(map[string]interface{}))
+			refTypes[dataType.(string)] = record
 		}
 	}
-	return currentTypes, nil
+	return refTypes, nil
 }
 
-func (a *Admin) getDsTypeList(dsId string) ([]string, error) {
+func (a *Admin) getDsTypeHash(dsId string) (map[string]*Record.Record, error) {
 	ds, err := a.handler.GetDsInfo(dsId)
 	if err != nil {
 		return nil, err
@@ -228,36 +238,70 @@ func (a *Admin) getDsTypeList(dsId string) ([]string, error) {
 		return nil, fmt.Errorf("failed to parse url from DS record [%s]=[%s], Err:%s", Record.DataId, a.args.ops.id, err)
 	}
 	result, code, e := Http.GetRestData(*schemaUrl)
-	if err != nil {
+	if e != nil {
 		return nil, fmt.Errorf("failed to Rest Data from [path]=[%s], Code:%d", *schemaUrl, code)
 	}
-	newTypeList := []string{}
+	typeHash := map[string]*Record.Record{}
 	for _, dataType := range result.([]interface{}) {
-		if dataType != JsonKey.Schema && dataType != Record.KeyRecord {
-			newTypeList = append(newTypeList, dataType.(string))
+		if _, ok := Common.InternalTypes[dataType.(string)]; !ok {
+			typeUrl, e := Http.URLPathJoin(*schemaUrl, dataType.(string))
+			if e != nil {
+				return nil, fmt.Errorf("failed to build url for [%s]=[%s], Err:%s", Record.DataType, dataType, err)
+			}
+			typeSchema, code, e := Http.GetRestData(*typeUrl)
+			if e != nil {
+				return nil, fmt.Errorf("failed to Rest Data from [path]=[%s], Code:%d", *schemaUrl, code)
+			}
+			typeRecord, _ := Record.LoadMap(typeSchema.(map[string]interface{}))
+			typeHash[dataType.(string)] = typeRecord
 		}
 	}
-	return newTypeList, nil
+	return typeHash, nil
 }
 
 func (a *Admin) syncSchemaWithId(dsId string) error {
-	currentTypes, err := a.getCurrentTypeList(dsId)
+	refTypes, err := a.getReferralTypes(dsId)
 	if err != nil {
 		return err
 	}
-	dsTypes, err := a.getDsTypeList(dsId)
+	dsTypes, err := a.getDsTypeHash(dsId)
 	if err != nil {
 		return err
 	}
-	for _, dataType := range currentTypes {
-		if !Util.SearchStrList(dsTypes, dataType) {
+	for dataType := range refTypes {
+		if _, ok := dsTypes[dataType]; !ok {
 			a.removeType(dsId, dataType)
 		}
 	}
-	for _, dataType := range dsTypes {
-		if !Util.SearchStrList(currentTypes, dataType) {
+	for dataType := range dsTypes {
+		_, archiveVer := Util.ParseCustomPath(dataType, JsonKey.ArchivedSchemaIdDiv)
+		if archiveVer != "" {
+			a.log.Printf("ignore archived type[%s]", dataType)
+			continue
+		}
+		if _, ok := refTypes[dataType]; !ok {
+			a.log.Printf("type[%s] not exists, add new", dataType)
 			a.addType(dsId, dataType)
 		}
+		if dsTypes[dataType].Data[JsonKey.Version].(string) != refTypes[dataType].Data[JsonKey.Version].(string) {
+			a.log.Printf("version upgrade [%s]->[%s], update", refTypes[dataType].Data[JsonKey.Version], dsTypes[dataType].Data[JsonKey.Version])
+			a.updateType(dataType, dsTypes[dataType])
+		}
+		a.log.Printf("no change with type[%s] on DS[%s]", dataType, dsId)
+	}
+	return nil
+}
+
+func (a *Admin) updateType(dataType string, typeRecord *Record.Record) error {
+	err := a.removeData(JsonKey.Schema, dataType)
+	if err != nil {
+		a.log.Printf("failed to remove type[%s], Error:%s", dataType, err)
+		return err
+	}
+	err = a.handler.Db.Create(JsonKey.Schema, typeRecord)
+	if err != nil {
+		a.log.Printf("failed to create type[%s], Error:%s", dataType, err)
+		return err
 	}
 	return nil
 }
@@ -283,7 +327,7 @@ func (a *Admin) addType(dsId string, dataType string) error {
 		SchemaVer: schemaRecord.(map[string]interface{})[Record.Version].(string),
 		DsId:      dsId,
 	}
-	referralData, _ := Util.StructToMap(referral.GetRecord())
+	referralData, _ := Json.CopyToMap(referral.GetRecord())
 	a.handler.Db.Create(RefRecord.Referral, referralData)
 	return nil
 }
@@ -313,13 +357,27 @@ func (a *Admin) removeData(dataType string, id string) error {
 }
 
 func main() {
-	admin := Admin{}
+	logPath, args, argErr := ArgHandler()
+	logFile, logger, fileLogErr := CustomLogger.FileLoger(logPath, "InventoryServiceAdmin")
+	if logFile != nil {
+		defer logFile.Close()
+	}
+	if argErr != nil {
+		logger.Fatalf("failed to parse Arguments, Error:\n%s", argErr)
+	}
+	if fileLogErr != nil {
+		logger.Fatalf("failed to logger, Error: %s", fileLogErr)
+	}
+	admin := Admin{
+		log:  logger,
+		args: args,
+	}
 	err := admin.Init()
 	if err != nil {
-		log.Fatalf("failed to init Inventory Admin, Err:%s", err)
+		admin.log.Fatalf("failed to init Inventory Admin, Err:%s", err)
 	}
 	err = admin.Run()
 	if err != nil {
-		log.Fatalf("Run Inventory Admin failed.\n Error:%s\n", err)
+		admin.log.Fatalf("Run Inventory Admin failed.\n Error:%s\n", err)
 	}
 }

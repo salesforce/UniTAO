@@ -27,13 +27,15 @@ package JsonKey
 
 const (
 	AdditionalProperties = "additionalProperties"
+	ArchivedSchemaIdDiv  = "__"
 	Array                = "array"
 	ContentMediaType     = "contentMediaType"
 	Definitions          = "definitions"
 	DefinitionPrefix     = "#/definitions/"
 	DocRoot              = "#"
-	Items                = "items"
+	IndexTemplate        = "indexTemplate"
 	Inventory            = "inventory"
+	Items                = "items"
 	Key                  = "key"
 	Name                 = "name"
 	Map                  = "map"
@@ -44,4 +46,19 @@ const (
 	Schema               = "schema"
 	String               = "string"
 	Type                 = "type"
+	Version              = "version"
 )
+
+var InvalidTypeChars = []string{
+	"/",
+	"#",
+	"$",
+	"[",
+	"]",
+}
+
+var InvalidKeyChars = []string{
+	"/",
+	"[",
+	"]",
+}

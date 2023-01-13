@@ -26,6 +26,7 @@ This copyright notice and license applies to all files in this directory or sub-
 package SchemaDoc
 
 import (
+	"encoding/json"
 	"fmt"
 	"path"
 	"reflect"
@@ -33,13 +34,15 @@ import (
 
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Util"
+	"github.com/salesforce/UniTAO/lib/Util/Json"
+	"github.com/salesforce/UniTAO/lib/Util/Template"
 )
 
 type SchemaDoc struct {
 	Id          string
+	Version     string
 	Parent      *SchemaDoc
-	KeyTemplate string
-	KeyAttrs    []string
+	KeyTemplate *Template.StrTemp
 	Data        map[string]interface{}
 	Definitions map[string]*SchemaDoc
 	CmtRefs     map[string]*CMTDocRef
@@ -48,45 +51,70 @@ type SchemaDoc struct {
 }
 
 type CMTDocRef struct {
-	Doc         *SchemaDoc
-	Name        string
-	CmtType     string
-	ContentType string
+	Doc           *SchemaDoc
+	Name          string
+	CmtType       string
+	ContentType   string
+	IndexTemplate string
 }
 
 func create(data map[string]interface{}, id string, parent *SchemaDoc) (*SchemaDoc, error) {
+	version, vreExists := data[JsonKey.Version].(string)
+	schemaName, nameExists := data[JsonKey.Name]
+	if parent == nil {
+		if !nameExists || schemaName.(string) == "" {
+			return nil, fmt.Errorf("missing key=[%s] in schema data", JsonKey.Name)
+		}
+		if id != "" && id != schemaName.(string) {
+			return nil, fmt.Errorf("given id=[%s] not match schema name=[%s]", id, schemaName)
+		}
+		id = schemaName.(string)
+		if !vreExists {
+			return nil, fmt.Errorf("missing key=[%s] at schema document root", JsonKey.Version)
+		}
+	} else {
+		if nameExists && id != schemaName.(string) {
+			return nil, fmt.Errorf("def key=[%s] not match def name=[%s]", id, schemaName)
+		}
+		if !vreExists {
+			version = ""
+		}
+	}
 	parentPath := ""
 	if parent != nil {
 		parentPath = parent.Path()
 	}
 	_, ok := data[JsonKey.Properties].(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("missing key [%s], failed to create doc path=[%s/%s]", JsonKey.Properties, parentPath, id)
+		return nil, fmt.Errorf("missing key [%s], failed to create doc path=[%s/%s]", JsonKey.Properties, parentPath, schemaName)
 	}
 	keyTemplate, ok := data[JsonKey.Key].(string)
 	if !ok {
 		keyTemplate = ""
 	}
-
-  doc := SchemaDoc{
+	template, err := Template.ParseStr(keyTemplate, "{", "}")
+	if err != nil {
+		return nil, fmt.Errorf("invalid template=[%s], Error:%s", keyTemplate, err)
+	}
+	doc := SchemaDoc{
 		Id:          id,
+		Version:     version,
 		Parent:      parent,
 		Data:        data,
-		KeyTemplate: keyTemplate,
-		KeyAttrs:    ParseTemplateVars(keyTemplate),
+		KeyTemplate: template,
 		CmtRefs:     map[string]*CMTDocRef{},
 		SubDocs:     map[string]*SchemaDoc{},
 	}
 	if parent == nil {
-		rawDataIface, err := Util.JsonCopy(data)
+		rawDataIface, err := Json.Copy(data)
 		if err != nil {
 			return nil, fmt.Errorf("failed to copy SchemaDoc Data. @path=[%s], Error:%s", parentPath, err)
 		}
 		doc.RAW = rawDataIface.(map[string]interface{})
 	} else {
-		rawData, err := parent.GetDefinitionRaw(id)
+		rawData, err := parent.GetDefinitionRaw(doc.Id)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get Raw Schema for definition dataType=[%s]", id)
+			return nil, fmt.Errorf("failed to get Raw Schema for definition dataType=[%s]", doc.Id)
 		}
 		doc.RAW = rawData
 	}
@@ -95,13 +123,13 @@ func create(data map[string]interface{}, id string, parent *SchemaDoc) (*SchemaD
 	if ok {
 		defMap, ok := docDefs.(map[string]interface{})
 		if !ok {
-			return nil, fmt.Errorf("failed to parse field=[%s], path=[%s/%s]", JsonKey.Definitions, parentPath, id)
+			return nil, fmt.Errorf("failed to parse field=[%s], path=[%s/%s]", JsonKey.Definitions, parentPath, doc.Id)
 		}
 		doc.Definitions = make(map[string]*SchemaDoc, len(defMap))
 		for key, def := range defMap {
 			defObj, ok := def.(map[string]interface{})
 			if !ok {
-				return nil, fmt.Errorf("failed to parse definition to object. path=[%s/%s/%s/%s]", parentPath, id, JsonKey.Definitions, key)
+				return nil, fmt.Errorf("failed to parse definition to object. path=[%s/%s/%s/%s]", parentPath, doc.Id, JsonKey.Definitions, key)
 			}
 			defDoc, err := create(defObj, key, &doc)
 			if err != nil {
@@ -113,8 +141,18 @@ func create(data map[string]interface{}, id string, parent *SchemaDoc) (*SchemaD
 	return &doc, nil
 }
 
-func New(data map[string]interface{}, id string, parent *SchemaDoc) (*SchemaDoc, error) {
-	doc, err := create(data, id, parent)
+func FromString(data string) (*SchemaDoc, error) {
+	dataObj := map[string]interface{}{}
+	err := json.Unmarshal([]byte(data), &dataObj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse string as map[string]interface{}, Error:%s", err)
+	}
+	return New(dataObj)
+}
+
+func New(data map[string]interface{}) (*SchemaDoc, error) {
+	dataCopy, _ := Json.CopyToMap(data)
+	doc, err := create(dataCopy, "", nil)
 	if err != nil {
 		return nil, fmt.Errorf("faile to create doc tree. Error: %s", err)
 	}
@@ -122,7 +160,15 @@ func New(data map[string]interface{}, id string, parent *SchemaDoc) (*SchemaDoc,
 	if err != nil {
 		return nil, fmt.Errorf("failed @preprocess, Err:\n%s", err)
 	}
+	err = doc.validateKeyDefs()
+	if err != nil {
+		return nil, err
+	}
 	return doc, nil
+}
+
+func ArchivedSchemaId(dataType string, typeVersion string) string {
+	return fmt.Sprintf("%s%s%s", dataType, JsonKey.ArchivedSchemaIdDiv, typeVersion)
 }
 
 func (d *SchemaDoc) Path() string {
@@ -132,10 +178,18 @@ func (d *SchemaDoc) Path() string {
 	return path.Join(d.Parent.Path(), d.Id)
 }
 
+func (d *SchemaDoc) Properties() map[string]interface{} {
+	return d.Data[JsonKey.Properties].(map[string]interface{})
+}
+
 func (d *SchemaDoc) preprocess() error {
 	err := d.processRequired()
 	if err != nil {
 		return fmt.Errorf("preprocess failed @processRequired, [path]=[%s], Error:%s", d.Path(), err)
+	}
+	err = d.processAttrInvalidKeyChar()
+	if err != nil {
+		return err
 	}
 	err = d.processMap()
 	if err != nil {
@@ -160,10 +214,20 @@ func (d *SchemaDoc) preprocess() error {
 	return nil
 }
 
+func (d *SchemaDoc) processAttrInvalidKeyChar() error {
+	propPath := path.Join(d.Path(), JsonKey.Properties)
+	propMap := d.Data[JsonKey.Properties].(map[string]interface{})
+	invalidChars := Util.CheckInvalidKeys(JsonKey.InvalidKeyChars, propMap)
+	if len(invalidChars) > 0 {
+		return fmt.Errorf("invalid property names found. path:[%s], invalid names: %s", propPath, invalidChars)
+	}
+	return nil
+}
+
 func (d *SchemaDoc) processRequired() error {
 	propPath := path.Join(d.Path(), JsonKey.Properties)
 	propMap := d.Data[JsonKey.Properties].(map[string]interface{})
-	requiredList := make([]string, 0, len(propMap))
+	requiredList := make([]interface{}, 0, len(propMap))
 	for pname, prop := range propMap {
 		propDef, ok := prop.(map[string]interface{})
 		if !ok {
@@ -210,17 +274,79 @@ func (d *SchemaDoc) processMap() error {
 }
 
 func (d *SchemaDoc) validateKeyAttrs() error {
-	requiredAttrs, ok := d.Data[JsonKey.Required].([]string)
+	requiredAttrs, ok := d.Data[JsonKey.Required].([]interface{})
 	if !ok {
-		requiredAttrs = []string{}
+		requiredAttrs = []interface{}{}
 	}
-	for _, attr := range d.KeyAttrs {
-		if !Util.SearchStrList(requiredAttrs, attr) {
-			return fmt.Errorf("key attribute: [%s] is not defined as required attribute", attr)
+	reqMap := map[string]interface{}{}
+	for _, attr := range requiredAttrs {
+		attrStr := attr.(string)
+		reqMap[attrStr] = d.Data[JsonKey.Properties].(map[string]interface{})[attrStr]
+	}
+	keyMap, err := d.KeyTemplate.BuildVarMap(reqMap)
+	if err != nil {
+		return fmt.Errorf("required key attr definition validaton failed. Error: %s", err)
+	}
+	testValue := d.KeyTemplate.TestValue()
+	invalidChars := make([]string, 0, len(JsonKey.InvalidKeyChars))
+	for _, invalidC := range JsonKey.InvalidKeyChars {
+		if strings.Contains(testValue, invalidC) {
+			invalidChars = append(invalidChars, invalidC)
 		}
-		attrType := d.Data[JsonKey.Properties].(map[string]interface{})[attr].(map[string]interface{})[JsonKey.Type].(string)
+	}
+	if len(invalidChars) > 0 {
+		return fmt.Errorf("invalid schema key definition [%s], found illegal chars [%s] @[%s]", d.KeyTemplate.Template, invalidChars, d.Path())
+	}
+	for attr, attrDef := range keyMap {
+		attrType := attrDef.(map[string]interface{})[JsonKey.Type].(string)
 		if attrType != JsonKey.String {
 			return fmt.Errorf("only string attribute can be key attribute. [attr]=[%s] [type]=[%s]", attr, attrType)
+		}
+	}
+	return nil
+}
+
+// all hash type, array/map of object, the schema for sub-doc should define key
+func (d *SchemaDoc) validateKeyDefs() error {
+	propDef := d.Data[JsonKey.Properties].(map[string]interface{})
+	for attr := range propDef {
+		attrDef := propDef[attr].(map[string]interface{})
+		switch attrDef[JsonKey.Type].(string) {
+		case JsonKey.Array:
+			itemType := attrDef[JsonKey.Items].(map[string]interface{})[JsonKey.Type].(string)
+			if itemType == JsonKey.Object {
+				subDoc := d.SubDocs[attr]
+				if len(subDoc.KeyTemplate.Vars) == 0 {
+					return fmt.Errorf("no key definition @path=[%s/%s]", d.Path(), attr)
+				}
+				err := subDoc.validateKeyDefs()
+				if err != nil {
+					return err
+				}
+			}
+		case JsonKey.Object:
+			if IsMap(attrDef) {
+				itemType := attrDef[JsonKey.AdditionalProperties].(map[string]interface{})[JsonKey.Type].(string)
+				if itemType == JsonKey.Object {
+					subDoc := d.SubDocs[attr]
+					err := subDoc.validateKeyDefs()
+					if err != nil {
+						return err
+					}
+				}
+				return nil
+			}
+			subDoc, ok := d.SubDocs[attr]
+			if !ok {
+				// subDoc is not defined. free form object
+				return nil
+			}
+			if !d.IsAncestor(subDoc.Id) {
+				err := subDoc.validateKeyDefs()
+				if err != nil {
+					return err
+				}
+			}
 		}
 	}
 	return nil
@@ -283,18 +409,23 @@ func (d *SchemaDoc) processRefs() error {
 }
 
 func (d *SchemaDoc) getCmtRef(pname string, prop map[string]interface{}) error {
-	cmt, ok := prop[JsonKey.ContentMediaType].(string)
-	if !ok || cmt == "" {
+	if !IsCmtRef(prop) {
 		return nil
 	}
+	cmt := prop[JsonKey.ContentMediaType].(string)
 	cmtType, dataType := Util.ParsePath(cmt)
 	switch cmtType {
 	case JsonKey.Inventory:
 		ref := CMTDocRef{
-			Doc:         d,
-			Name:        pname,
-			CmtType:     cmtType,
-			ContentType: dataType,
+			Doc:           d,
+			Name:          pname,
+			CmtType:       JsonKey.Inventory,
+			ContentType:   dataType,
+			IndexTemplate: "",
+		}
+		idxTemp, ok := prop[JsonKey.IndexTemplate]
+		if ok {
+			ref.IndexTemplate = idxTemp.(string)
 		}
 		d.CmtRefs[ref.Name] = &ref
 		return nil
@@ -394,7 +525,17 @@ func (d *SchemaDoc) GetDefinitionRaw(dataType string) (map[string]interface{}, e
 }
 
 func (d *SchemaDoc) BuildKey(data map[string]interface{}) (string, error) {
-	return BuildTemplateValue(d.KeyTemplate, d.KeyAttrs, data)
+	return d.KeyTemplate.BuildValue(data)
+}
+
+func (d *SchemaDoc) IsAncestor(docId string) bool {
+	if d.Id == docId {
+		return true
+	}
+	if d.Parent != nil {
+		return d.Parent.IsAncestor(docId)
+	}
+	return false
 }
 
 func IsMap(attrDef map[string]interface{}) bool {
@@ -405,57 +546,16 @@ func IsMap(attrDef map[string]interface{}) bool {
 	return true
 }
 
-func ParseTemplateVars(template string) []string {
-	attrList := []string{}
-	for len(template) > 0 {
-		leftIdx := strings.Index(template, "{")
-		if leftIdx < 0 {
-			break
-		}
-		template = template[leftIdx+1:]
-		rightIdx := strings.Index(template, "}")
-		attrName := template[:rightIdx]
-		template = template[rightIdx+1:]
-		if !Util.SearchStrList(attrList, attrName) {
-			attrList = append(attrList, attrName)
-		}
+func IsCmtRef(attrDef map[string]interface{}) bool {
+	if attrDef[JsonKey.Type] != JsonKey.String {
+		return false
 	}
-	return attrList
-}
-
-func BuildTemplateValue(template string, attrList []string, data interface{}) (string, error) {
-	dataList := []map[string]interface{}{}
-	if reflect.TypeOf(data).Kind() == reflect.Slice {
-		for idx, d := range data.([]interface{}) {
-			dMap, ok := d.(map[string]interface{})
-			if !ok {
-				return "", fmt.Errorf("invalid param=[data], idx=[%d] cannot convert to map", idx)
-			}
-			dataList = append(dataList, dMap)
-		}
-	} else {
-		dMap, ok := data.(map[string]interface{})
-		if !ok {
-			return "", fmt.Errorf("invalid param=[data], is not list or map")
-		}
-		dataList = append(dataList, dMap)
+	cmt, ok := attrDef[JsonKey.ContentMediaType].(string)
+	if !ok {
+		return false
 	}
-
-	key := template
-	for _, attrName := range attrList {
-		hasAttr := false
-		for _, dMap := range dataList {
-			attrValue, ok := dMap[attrName]
-			if ok {
-				tempStr := fmt.Sprintf("{%s}", attrName)
-				key = strings.ReplaceAll(key, tempStr, attrValue.(string))
-				hasAttr = true
-				break
-			}
-		}
-		if !hasAttr {
-			return "", fmt.Errorf("attr=[%s] does not exists in data", attrName)
-		}
+	if cmt == "" {
+		return false
 	}
-	return key, nil
+	return true
 }

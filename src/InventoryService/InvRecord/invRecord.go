@@ -31,8 +31,8 @@ import (
 
 	"github.com/salesforce/UniTAO/lib/Schema"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
-	"github.com/salesforce/UniTAO/lib/Util"
 	"github.com/salesforce/UniTAO/lib/Util/Http"
+	"github.com/salesforce/UniTAO/lib/Util/Json"
 )
 
 const (
@@ -51,7 +51,7 @@ func NewDsInfo(id string, url string) *Record.Record {
 		Id:  id,
 		URL: []string{url},
 	}
-	dsMap, _ := Util.StructToMap(dsInfo)
+	dsMap, _ := Json.CopyToMap(dsInfo)
 	record := Record.NewRecord(Schema.Inventory, LatestVer, id, dsMap)
 	return record
 }
@@ -81,6 +81,5 @@ func (ds *DataServiceInfo) GetUrl() (string, error) {
 			return "", fmt.Errorf("no good url is reachable for DS=[%s]", ds.Id)
 		}
 	}
-
 	return ds.goodUrl, nil
 }

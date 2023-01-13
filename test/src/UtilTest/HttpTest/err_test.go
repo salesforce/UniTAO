@@ -59,9 +59,9 @@ func TestNewHttpErr(t *testing.T) {
 func TestAppendErr(t *testing.T) {
 	err01 := Http.NewHttpError("test", http.StatusOK)
 	err02 := Http.NewHttpError("testTab", http.StatusOK)
-	Http.AppendError(err01, err02)
-	if len(err01.Message) != 2 {
-		t.Fatalf("failed to append message to 2")
+	err01.AppendError(err02)
+	if len(err01.Message) != 1 {
+		t.Fatalf("append error, message should not change")
 	}
 	if len(err01.Context) != 1 {
 		t.Fatalf("failed to append err02 into Context")

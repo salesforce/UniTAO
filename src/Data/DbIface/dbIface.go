@@ -25,20 +25,21 @@ This copyright notice and license applies to all files in this directory or sub-
 
 package DbIface
 
-import "fmt"
+import (
+	"fmt"
+	"reflect"
+	"strconv"
+
+	"github.com/salesforce/UniTAO/lib/Util"
+)
 
 const (
-	Command           = "command"
 	DbType            = "type"
 	DisplayAttributes = "displayAttributes"
 	Payload           = "payload"
 	Table             = "table"
+	PatchPath         = "patchPath"
 )
-
-type UpdateCommand struct {
-	Command string
-	Payload map[string]interface{}
-}
 
 type Database interface {
 	ListTable() ([]*string, error)
@@ -46,22 +47,116 @@ type Database interface {
 	DeleteTable(name string) error
 	Get(queryArgs map[string]interface{}) ([]map[string]interface{}, error)
 	Create(table string, data interface{}) error
-	Update(table string, keys map[string]interface{}, cmd UpdateCommand) (map[string]interface{}, error)
+	Update(table string, keys map[string]interface{}, data interface{}) (map[string]interface{}, error)
 	Replace(table string, keys map[string]interface{}, data interface{}) error
 	Delete(table string, keys map[string]interface{}) error
 }
 
-func CreateUpdateCommand(data map[string]interface{}) (UpdateCommand, error) {
-	update := UpdateCommand{}
-	cmd, ok := data[Command].(string)
-	if !ok {
-		return update, fmt.Errorf("missing field %s", Command)
+// walk into data with dataPath
+// return last data layer that wrapping the attrbute
+// attribute path:
+//      attr name if it is a direct attribute
+//      attr name with key, if it is a map
+//      attr name with idx, if it is a array
+func GetDataOnPath(data map[string]interface{}, dataPath string, prevPath string) (map[string]interface{}, string, error) {
+	attrPath, nextPath := Util.ParsePath(dataPath)
+	if nextPath == "" {
+		return data, attrPath, nil
 	}
-	update.Command = cmd
-	payload, ok := data[Payload].(map[string]interface{})
-	if !ok {
-		return update, fmt.Errorf("missing field %s", payload)
+	attrName, key, err := Util.ParseArrayPath(attrPath)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to parse attrPath=[%s] @path=[%s]", attrPath, prevPath)
 	}
-	update.Payload = payload
-	return update, nil
+	attrData, ok := data[attrName]
+	if !ok || attrData == nil {
+		return nil, "", fmt.Errorf("missing attr=[%s] @path=[%s] to drill further", attrName, prevPath)
+	}
+	switch reflect.TypeOf(attrData).Kind() {
+	case reflect.Slice:
+		idx, err := strconv.Atoi(key)
+		if err != nil {
+			return nil, "", fmt.Errorf("invalid array path=%s[%s] @path=[%s], Error:%s", attrName, key, prevPath, err)
+		}
+		item, ok := attrData.([]interface{})[idx].(map[string]interface{})
+		if !ok {
+			return nil, "", fmt.Errorf("array item @[%s] is not map, @path=[%s]", attrPath, prevPath)
+		}
+		return GetDataOnPath(item, nextPath, fmt.Sprintf("%s/%s", prevPath, attrPath))
+	case reflect.Map:
+		if key == "" {
+			return GetDataOnPath(attrData.(map[string]interface{}), nextPath, fmt.Sprintf("%s/%s", prevPath, attrPath))
+		}
+		itemData, ok := attrData.(map[string]interface{})[key]
+		if !ok {
+			return nil, "", fmt.Errorf("invalid key=[%s] on map attr=[%s] @path=[%s], Error:%s", key, attrName, prevPath, err)
+		}
+		item, ok := itemData.(map[string]interface{})
+		if !ok {
+			return nil, "", fmt.Errorf("map item @[%s] is not map, @path=[%s]", attrPath, prevPath)
+		}
+		return GetDataOnPath(item, nextPath, fmt.Sprintf("%s/%s", prevPath, attrPath))
+	default:
+		if key != "" {
+			return nil, "", fmt.Errorf("invalid key=[%s], data is not array or map @path=[%s/%s]", key, prevPath, attrName)
+		}
+		return nil, "", fmt.Errorf("type=[%s] cannot drill in further. @path=[%s/%s]", reflect.TypeOf(attrData).Kind(), prevPath, attrPath)
+	}
+}
+
+// update data on attribute.
+// this function is for database that does not support patch
+func SetPatchData(data map[string]interface{}, attrPath string, newData interface{}) error {
+	attrName, key, err := Util.ParseArrayPath(attrPath)
+	if err != nil {
+		return err
+	}
+	if key == "" {
+		if newData == nil {
+			delete(data, attrName)
+			return nil
+		}
+		data[attrName] = newData
+		return nil
+	}
+	switch reflect.TypeOf(data[attrName]).Kind() {
+	case reflect.Slice:
+		idx, err := strconv.Atoi(key)
+		if err != nil {
+			return fmt.Errorf("invalid array item reference=%s[%s], Error:%s", attrName, key, err)
+		}
+		attrData := data[attrName].([]interface{})
+		if newData == nil {
+			if idx < 0 || idx >= len(attrData) {
+				// do nothing if idx not in range
+				return nil
+			}
+			newList := make([]interface{}, 0, len(attrData)-1)
+			for newIdx, _ := range attrData {
+				if newIdx != idx {
+					newList = append(newList, attrData[newIdx])
+				}
+			}
+			data[attrName] = newList
+			return nil
+		}
+		if idx < 0 {
+			data[attrName] = append([]interface{}{newData}, attrData...)
+			return nil
+		}
+		if idx >= len(attrData) {
+			data[attrName] = append(attrData, newData)
+			return nil
+		}
+		attrData[idx] = newData
+	case reflect.Map:
+		attrData := data[attrName].(map[string]interface{})
+		if newData == nil {
+			delete(attrData, key)
+			return nil
+		}
+		attrData[key] = newData
+	default:
+		return fmt.Errorf("attr=[%s] and type=[%s] is not fit to be set with Key/idx=[%s]", attrName, reflect.TypeOf(data[attrName]).Kind(), key)
+	}
+	return nil
 }

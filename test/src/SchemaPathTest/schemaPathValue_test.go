@@ -33,41 +33,46 @@ import (
 )
 
 func TestWalkInObjectAndMap(t *testing.T) {
-	schemaStr := `
-	{
-		"schema1": {
-			"name": "schema1",
-			"description": "test schema 01",
-			"properties": {
-				"name": {
-					"type": "string"
-				},
-				"value": {
-					"type": "object",
-					"$ref": "#/definitions/testValue"
-				},
-				"mapStr": {
-					"type": "map",
-					"items": {
-						"type": "string"
-					}
-				}
-			},
-			"definitions": {
-				"testValue": {
+	recordStr := `{
+		"schema": {
+			"schema1": {
+				"__id": "schema1",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "schema1",
+					"version": "0.0.1",
+					"description": "test schema 01",
 					"properties": {
-						"value1": {
+						"name": {
 							"type": "string"
 						},
-						"value2": {
-							"type": "string"
+						"value": {
+							"type": "object",
+							"$ref": "#/definitions/testValue"
+						},
+						"mapStr": {
+							"type": "map",
+							"items": {
+								"type": "string"
+							}
+						}
+					},
+					"definitions": {
+						"testValue": {
+							"properties": {
+								"value1": {
+									"type": "string"
+								},
+								"value2": {
+									"type": "string"
+								}
+							}
 						}
 					}
 				}
 			}
-		}
-	}`
-	recordStr := `{
+		},
 		"schema1": {
 			"data1": {
 				"__id": "data1",
@@ -86,7 +91,7 @@ func TestWalkInObjectAndMap(t *testing.T) {
 			}
 		}
 	}`
-	conn := PrepareConn(schemaStr, recordStr)
+	conn := PrepareConn(recordStr)
 	queryPath := "schema1/data1/value/value1"
 	value, err := QueryPath(conn, queryPath)
 	if err != nil {
@@ -130,39 +135,42 @@ func TestWalkInObjectAndMap(t *testing.T) {
 }
 
 func TestWalkInArray(t *testing.T) {
-	schemaStr := `
-		{
+	recordStr := `{
+		"schema": {
 			"schemaWitArray": {
-				"name": "schemaWitArray",
-				"description": "schema of object with array of object in attribute",
-				"properties": {
-					"attrArray": {
-						"type": "array",
-						"items": {
-							"type": "object",
-							"$ref": "#/definitions/itemObj"
+				"__id": "schemaWitArray",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "schemaWitArray",
+					"version": "0.0.1",
+					"description": "schema of object with array of object in attribute",
+					"properties": {
+						"attrArray": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"$ref": "#/definitions/itemObj"
+							}
 						}
-					}
-				},
-				"definitions": {
-					"itemObj": {
-						"description": "item object of an array",
-						"key": "{key1}_{key2}",
-						"properties": {
-							"key1": {
-								"type": "string"
-							},
-							"key2": {
-								"type": "string"
+					},
+					"definitions": {
+						"itemObj": {
+							"description": "item object of an array",
+							"key": "{key1}_{key2}",
+							"properties": {
+								"key1": {
+									"type": "string"
+								},
+								"key2": {
+									"type": "string"
+								}
 							}
 						}
 					}
 				}
 			}
-		}
-	`
-	recordStr := `
-	{
+		},
 		"schemaWitArray": {
 			"testArray01": {
 				"__id": "testArray01",
@@ -183,7 +191,7 @@ func TestWalkInArray(t *testing.T) {
 			}
 		}
 	}`
-	conn := PrepareConn(schemaStr, recordStr)
+	conn := PrepareConn(recordStr)
 	queryPath := "schemaWitArray/testArray01/attrArray"
 	value, err := QueryPath(conn, queryPath)
 	if err != nil {
@@ -217,43 +225,73 @@ func TestWalkInArray(t *testing.T) {
 }
 
 func TestWalkInAll(t *testing.T) {
-	schemaStr := `{
-		"SchemaAllPath": {
-			"name": "SchemaAllPath",
-			"description": "Entry Point for Schema Path All Test",
-			"properties": {
-				"arrayObj": {
-					"type": "array",
-					"items": {
-						"type": "object",
-						"$ref": "#/definitions/itemObj"
-					}
-				},
-				"arrayRef": {
-					"type": "array",
-					"items": {
-						"type": "string",
-						"contentMediaType": "inventory/refObj"
-					}
-				},
-				"mapObj": {
-					"type": "map",
-					"items": {
-						"type": "object",
-						"$ref": "#/definitions/itemObj"
-					}
-				},
-				"mapRef": {
-					"type": "map",
-					"items": {
-						"type": "string",
-						"contentMediaType": "inventory/refObj"
+	recordStr := `{
+		"schema": {
+			"SchemaAllPath": {
+				"__id": "SchemaAllPath",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "SchemaAllPath",
+					"version": "0.0.1",
+					"description": "Entry Point for Schema Path All Test",
+					"properties": {
+						"arrayObj": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"$ref": "#/definitions/itemObj"
+							}
+						},
+						"arrayRef": {
+							"type": "array",
+							"items": {
+								"type": "string",
+								"contentMediaType": "inventory/refObj"
+							}
+						},
+						"mapObj": {
+							"type": "map",
+							"items": {
+								"type": "object",
+								"$ref": "#/definitions/itemObj"
+							}
+						},
+						"mapRef": {
+							"type": "map",
+							"items": {
+								"type": "string",
+								"contentMediaType": "inventory/refObj"
+							}
+						}
+					},
+					"definitions": {
+						"itemObj": {
+							"name": "itemObj",
+							"key": "{key1}_{key2}",
+							"properties": {
+								"key1": {
+									"type": "string"
+								},
+								"key2": {
+									"type": "string"
+								},
+								"key3": {
+									"type": "string",
+									"required": false
+								}
+							}
+						}
 					}
 				}
 			},
-			"definitions": {
-				"itemObj": {
-					"name": "itemObj",
+			"refObj": {
+				"__id": "refObj",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "refObj",
+					"version": "0.0.1",
 					"key": "{key1}_{key2}",
 					"properties": {
 						"key1": {
@@ -270,24 +308,6 @@ func TestWalkInAll(t *testing.T) {
 				}
 			}
 		},
-		"refObj": {
-			"name": "itemObj",
-			"key": "{key1}_{key2}",
-			"properties": {
-				"key1": {
-					"type": "string"
-				},
-				"key2": {
-					"type": "string"
-				},
-				"key3": {
-					"type": "string",
-					"required": false
-				}
-			}
-		}
-	}`
-	recordStr := `{
 		"SchemaAllPath": {
 			"allPath01": {
 				"__id": "allPath01",
@@ -371,7 +391,7 @@ func TestWalkInAll(t *testing.T) {
 			}
 		}
 	}`
-	conn := PrepareConn(schemaStr, recordStr)
+	conn := PrepareConn(recordStr)
 	for _, pathPart := range []string{
 		"arrayObj", "arrayRef", "mapObj", "mapRef",
 	} {
@@ -399,37 +419,50 @@ func TestWalkInAll(t *testing.T) {
 }
 
 func TestWalkRecordCmtRecordDirect(t *testing.T) {
-	schemaStr := `{
-		"entry": {
-			"name": "entry",
-			"properties": {
-				"nextList": {
-					"type": "array",
-					"items": {
-						"type": "string",
-						"contentMediaType": "inventory/next"
+	recordStr := `{
+		"schema": {
+			"entry": {
+				"__id": "entry",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "entry",
+					"version": "0.0.1",
+					"properties": {
+						"nextList": {
+							"type": "array",
+							"items": {
+								"type": "string",
+								"contentMediaType": "inventory/next"
+							}
+						}
+					}
+				}
+			},
+			"next": {
+				"__id": "next",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "next",
+					"version": "0.0.1",
+					"key": "{itemKey}",
+					"properties": {
+						"itemKey": {
+							"type": "string"
+						},
+						"value":{
+							"type": "string"
+						}
 					}
 				}
 			}
 		},
-		"next": {
-			"name": "next",
-			"key": "{itemKey}",
-			"properties": {
-				"itemKey": {
-					"type": "string"
-				},
-				"value":{
-					"type": "string"
-				}
-			}
-		}
-	}`
-	recordStr := `{
 		"entry": {
 			"01": {
 				"__id": "01",
 				"__type": "entry",
+				"__ver": "0.0.1",
 				"data": {
 					"nextList": [
 						"next-02",
@@ -442,6 +475,7 @@ func TestWalkRecordCmtRecordDirect(t *testing.T) {
 			"aws-dev2-uswest2": {
 				"__id": "aws-dev2-uswest2",
 				"__type": "next",
+				"__ver": "0.0.1",
 				"data": {
 					"itemKey": "aws-dev2-uswest2",
 					"value": "this is next 01"
@@ -450,6 +484,7 @@ func TestWalkRecordCmtRecordDirect(t *testing.T) {
 			"next-02": {
 				"__id": "next-02",
 				"__type": "next",
+				"__ver": "0.0.1",
 				"data": {
 					"itemKey": "next-02",
 					"value": "this is next 02"
@@ -457,7 +492,7 @@ func TestWalkRecordCmtRecordDirect(t *testing.T) {
 			}
 		}
 	}`
-	conn := PrepareConn(schemaStr, recordStr)
+	conn := PrepareConn(recordStr)
 	path := "entry/01/nextList"
 	value, err := QueryPath(conn, path)
 	if err != nil {

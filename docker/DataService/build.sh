@@ -29,6 +29,9 @@ IMAGE_NAME="$(echo "UniTAO/${SCRIPT_DIR##*/}:localbuild" | awk '{print tolower($
 
 pushd $SCRIPT_DIR/../../
 
+docker pull golang:1.18
+docker pull centos:latest
+
 # Create the docker image with tag localbuild the image with same tag will be set as empty
 docker build --no-cache -t $IMAGE_NAME -f $SCRIPT_DIR/dockerfile .
 # remove the empty image from previous command

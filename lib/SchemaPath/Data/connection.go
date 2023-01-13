@@ -31,16 +31,13 @@ import (
 
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
-	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
 	"github.com/salesforce/UniTAO/lib/Util/Http"
+	"github.com/salesforce/UniTAO/lib/Util/Json"
 )
-
-type SchemaFunction func(dataType string) (*SchemaDoc.SchemaDoc, *Http.HttpError)
 
 type RecordFunction func(dataType string, dataId string) (*Record.Record, *Http.HttpError)
 
 type Connection struct {
-	FuncSchema SchemaFunction
 	FuncRecord RecordFunction
 	cache      map[string]TypeCache
 }
@@ -62,35 +59,29 @@ func (c *Connection) cacheData(dataType string, id string) (interface{}, *Http.H
 	}
 	data, ok := c.cache[dataType].IdCache[id]
 	if ok {
-		return data, nil
+		dataCopy, ex := Json.Copy(data)
+		if ex != nil {
+			return nil, Http.WrapError(ex, "failed to copy cache data", http.StatusInternalServerError)
+		}
+		recordCopy, _ := Record.LoadMap(dataCopy.(map[string]interface{}))
+		return recordCopy, nil
 	}
 	var err *Http.HttpError
 	switch dataType {
 	case JsonKey.Schema:
-		data, err = c.FuncSchema(id)
+		data, err = c.FuncRecord(JsonKey.Schema, id)
 	default:
 		data, err = c.FuncRecord(dataType, id)
 	}
 	if err != nil {
 		return nil, err
 	}
-	c.cache[dataType].IdCache[id] = data
+	dataCopy, ex := Json.Copy(data)
+	if ex != nil {
+		return nil, Http.WrapError(ex, "failed to copy cache data", http.StatusInternalServerError)
+	}
+	c.cache[dataType].IdCache[id] = dataCopy
 	return data, err
-}
-
-func (c *Connection) GetSchema(dataType string) (*SchemaDoc.SchemaDoc, *Http.HttpError) {
-	if c.FuncSchema == nil {
-		return nil, Http.NewHttpError("field funcSchema is nil", http.StatusInternalServerError)
-	}
-	data, err := c.cacheData(JsonKey.Schema, dataType)
-	if err != nil {
-		return nil, err
-	}
-	schema, ok := data.(*SchemaDoc.SchemaDoc)
-	if !ok {
-		return nil, Http.NewHttpError(fmt.Sprintf("function schema return invalid data. failed convert it to SchemaDoc.SchemaDoc. [type]=[%s]", dataType), http.StatusInternalServerError)
-	}
-	return schema, nil
 }
 
 func (c *Connection) GetRecord(dataType string, dataId string) (*Record.Record, *Http.HttpError) {
@@ -103,7 +94,7 @@ func (c *Connection) GetRecord(dataType string, dataId string) (*Record.Record, 
 	}
 	record, ok := data.(*Record.Record)
 	if !ok {
-		return nil, Http.NewHttpError(fmt.Sprintf("function schema return invalid data. failed convert it to Record.Record. [type]=[%s], id=[%s]", dataType, dataId), http.StatusInternalServerError)
+		return nil, Http.NewHttpError(fmt.Sprintf("function GetRecord return invalid data. failed convert it to Record.Record. [type]=[%s], id=[%s]", dataType, dataId), http.StatusInternalServerError)
 	}
 	return record, nil
 }

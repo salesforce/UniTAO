@@ -26,131 +26,103 @@ This copyright notice and license applies to all files in this directory or sub-
 package Util
 
 import (
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"net/http"
+	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 )
 
-type HttpConfig struct {
-	HttpType  string                 `json:"type"`
-	DnsName   string                 `json:"dns"`
-	Port      string                 `json:"port"`
-	Id        string                 `json:"id"`
-	HeaderCfg map[string]interface{} `json:"headers"`
+func ParsePath(path string) (string, string) {
+	return ParseCustomPath(path, "/")
 }
 
-func ParsePath(path string) (string, string) {
+func ParseCustomPath(path string, div string) (string, string) {
 	queryPath := path
-	if len(queryPath) > 0 && queryPath[0:1] == "/" {
-		queryPath = queryPath[1:]
+	for strings.HasPrefix(queryPath, div) {
+		queryPath = strings.TrimPrefix(queryPath, div)
 	}
-	//log.Printf("path[0:1]:%s, queryPath:%s", path[0:1], queryPath)
-	devIdx := strings.Index(queryPath, "/")
+	for strings.HasSuffix(queryPath, div) {
+		queryPath = strings.TrimSuffix(queryPath, div)
+	}
+	devIdx := strings.Index(queryPath, div)
 	if devIdx < 0 {
 		return queryPath, ""
 	}
-	currentPath := queryPath[0:devIdx]
-	nextPath := queryPath[devIdx+1:]
+	currentPath := queryPath[:devIdx]
+	nextPath := queryPath[devIdx+len(div):]
 	return currentPath, nextPath
 }
 
 func ParseArrayPath(path string) (string, string, error) {
-	if path[len(path)-1:] != "]" {
-		return path, "", nil
-	}
 	keyIdx := strings.Index(path, "[")
 	if keyIdx < 1 {
 		return path, "", nil
 	}
+	if path[len(path)-1:] != "]" {
+		return path, "", nil
+	}
 	attrName := path[:keyIdx]
-	key := path[keyIdx+1 : len(path)-1]
-	if key == "" {
+	keyStr := path[keyIdx+1 : len(path)-1]
+	if keyStr == "" {
 		return "", "", fmt.Errorf("invalid array path=[%s], key empty", path)
+	}
+	key, err := url.QueryUnescape(keyStr)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to unescape key=[%s], Error:%s", keyStr, err)
 	}
 	return attrName, key, nil
 }
 
-func LoadJsonFile(filePath string) (interface{}, error) {
-	jsonFile, err := os.Open(filePath)
-	if err != nil {
-		newErr := fmt.Errorf("failed to open JSON file: [%s]", filePath)
-		return nil, newErr
+func IdxList(searchAry []interface{}) map[interface{}]int {
+	hash := map[interface{}]int{}
+	for idx, item := range searchAry {
+		hash[item] = idx
 	}
-	defer jsonFile.Close()
-	byteValue, _ := ioutil.ReadAll(jsonFile)
-	var data interface{}
-	json.Unmarshal([]byte(byteValue), &data)
-	return data, nil
+	return hash
 }
 
-func LoadJSONMap(filePath string) (map[string]interface{}, error) {
-	data, err := LoadJsonFile(filePath)
-	if err != nil {
-		return nil, err
+func ListDel(data []interface{}, idx int) []interface{} {
+	if idx < 0 || len(data) == 0 || idx >= len(data) {
+		return nil
 	}
-	if reflect.TypeOf(data).Kind() != reflect.Map {
-		return nil, fmt.Errorf("data is not map, [path]=[%s], Error:%s", filePath, err)
-	}
-	return data.(map[string]interface{}), nil
+	newList := append(data[:idx], data[idx+1:]...)
+	return newList
 }
 
-func LoadJSONList(filePath string) ([]interface{}, error) {
-	data, err := LoadJsonFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-	if reflect.TypeOf(data).Kind() != reflect.Slice {
-		return nil, fmt.Errorf("data is not Slice, [path]=[%s], Error:%s", filePath, err)
-	}
-	return data.([]interface{}), nil
-}
-
-func LoadJSONPayload(r *http.Request, payload map[string]interface{}) (int, error) {
-	reqBody, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		newErr := fmt.Errorf("failed to read %s body. %s", r.Method, err)
-		return http.StatusInternalServerError, newErr
-	}
-	err = json.Unmarshal([]byte(reqBody), &payload)
-	if err != nil {
-		newErr := fmt.Errorf("failed to load payload as json, %s", err)
-		return http.StatusBadRequest, newErr
-	}
-	return 0, nil
-}
-
-func SearchStrList(searchAry []string, value string) bool {
-	for _, item := range searchAry {
-		if item == value {
-			return true
-		}
-	}
-	return false
-}
-
-func DeDupeList(itemList []interface{}) ([]interface{}, error) {
+func CountListIdx(itemList []interface{}) (map[interface{}]int, error) {
+	cMap := map[interface{}]int{}
 	if len(itemList) == 0 {
-		return itemList, nil
+		return cMap, nil
 	}
 	itemType := reflect.TypeOf(itemList[0]).Kind()
 	if itemType == reflect.Slice || itemType == reflect.Map {
-		return nil, fmt.Errorf("cannot dedupe list of type=[%s]", itemType)
+		return nil, fmt.Errorf("cannot count list of type=[%s]", itemType)
 	}
-	searchMap := map[interface{}]int{}
-	result := make([]interface{}, 0, len(itemList))
 	for idx, item := range itemList {
 		thisType := reflect.TypeOf(item).Kind()
 		if thisType != itemType {
 			return nil, fmt.Errorf("inconsist data type [%s]!=[%s] @%d", itemType, thisType, idx)
 		}
-		if _, found := searchMap[item]; !found {
-			searchMap[item] = 1
-			result = append(result, item)
+		if _, found := cMap[item]; !found {
+			cMap[item] = 1
+		} else {
+			cMap[item] += 1
 		}
+	}
+	return cMap, nil
+}
+
+func DeDupeList(itemList []interface{}) ([]interface{}, error) {
+	searchMap, err := CountListIdx(itemList)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]interface{}, 0, len(searchMap))
+	for item := range searchMap {
+		result = append(result, item)
 	}
 	return result, nil
 }
@@ -163,48 +135,35 @@ func DirExists(dirPath string) bool {
 	return !info.IsDir()
 }
 
-func StructToMap(sData interface{}) (map[string]interface{}, error) {
-	sDataBytes, err := json.Marshal(sData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to Marshal data. Error:%s", err)
+func PrefixStrLst(strList []string, prefix string) {
+	for idx := range strList {
+		strList[idx] = fmt.Sprintf("%s%s", prefix, strList[idx])
 	}
-	data := make(map[string]interface{})
-	err = json.Unmarshal(sDataBytes, &data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to Unmarshal sData to map[string]interface{}, Error:%s", err)
-	}
-	return data, nil
 }
 
-func JsonCopy(data interface{}) (interface{}, error) {
-	dataBytes, err := json.Marshal(data)
+func RootDir() (string, error) {
+	_, filename, _, _ := runtime.Caller(0)
+	dir, err := filepath.Abs(fmt.Sprintf("%s/../../", filepath.Dir(filename)))
 	if err != nil {
-		return nil, fmt.Errorf("Util.JsonCopy failed to Marshal data, Error: %s", err)
+		return "", err
 	}
-	var result interface{}
-	err = json.Unmarshal(dataBytes, &result)
-	if err != nil {
-		return nil, fmt.Errorf("Util.JsonCopy failed to UnMarshal data, Error: %s", err)
-	}
-	return result, nil
+	return dir, nil
 }
 
-func ObjCopy(src interface{}, target interface{}) error {
-	dataBytes, err := json.Marshal(src)
-	if err != nil {
-		return fmt.Errorf("Util.JsonCopy failed to Marshal data, Error: %s", err)
+func CheckInvalidKeys(invalidChars []string, data map[string]interface{}) []string {
+	result := make([]string, 0, len(invalidChars))
+	foundChars := map[string]bool{}
+	for _, c := range invalidChars {
+		if _, ok := foundChars[c]; ok {
+			continue
+		}
+		for key := range data {
+			if strings.Contains(key, c) {
+				foundChars[c] = true
+				result = append(result, c)
+				break
+			}
+		}
 	}
-	err = json.Unmarshal(dataBytes, target)
-	if err != nil {
-		return fmt.Errorf("Util.JsonCopy failed to UnMarshal data, Error: %s", err)
-	}
-	return nil
-}
-
-func PrefixStrLst(strList []string, prefix string) []string {
-	newList := make([]string, 0, len(strList))
-	for _, line := range strList {
-		newList = append(newList, fmt.Sprintf("%s%s", prefix, line))
-	}
-	return newList
+	return result
 }

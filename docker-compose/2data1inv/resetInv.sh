@@ -25,11 +25,14 @@
 
 SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]:-$0}"; )" &> /dev/null && pwd 2> /dev/null; )";
 
+docker-compose down
 echo "$SCRIPT_DIR/InventoryService/data/referral/*"
 rm $SCRIPT_DIR/InventoryService/data/referral/*
 ls -al $SCRIPT_DIR/InventoryService/data/referral/
 echo "$SCRIPT_DIR/InventoryService/data/schema/*"
 rm $SCRIPT_DIR/InventoryService/data/schema/*
 ls -al $SCRIPT_DIR/InventoryService/data/schema/
-
-docker-compose down
+echo "rebuild $SCRIPT_DIR/logs"
+rm -rf $SCRIPT_DIR/logs
+echo "remove database file"
+rm $SCRIPT_DIR/DynamoDB/*

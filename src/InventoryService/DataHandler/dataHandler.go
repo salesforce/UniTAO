@@ -39,7 +39,6 @@ import (
 	"github.com/salesforce/UniTAO/lib/Schema"
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
-	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
 	"github.com/salesforce/UniTAO/lib/SchemaPath"
 	SchemaPathData "github.com/salesforce/UniTAO/lib/SchemaPath/Data"
 	"github.com/salesforce/UniTAO/lib/Util"
@@ -47,16 +46,32 @@ import (
 )
 
 type Handler struct {
-	Db DbIface.Database
+	log *log.Logger
+	Db  DbIface.Database
 }
 
-func New(config DbConfig.DatabaseConfig) (*Handler, error) {
+var InvTypes = map[string]bool{
+	JsonKey.Schema:      true,
+	Schema.Inventory:    true,
+	RefRecord.Referral:  true,
+	SchemaPath.PathName: true,
+}
+
+var EditableTypes = map[string]bool{
+	SchemaPath.PathName: true,
+}
+
+func New(config DbConfig.DatabaseConfig, logger *log.Logger) (*Handler, error) {
+	if logger == nil {
+		logger = log.Default()
+	}
 	db, err := Data.ConnectDb(config)
 	if err != nil {
 		return nil, err
 	}
 	handler := Handler{
-		Db: db,
+		log: logger,
+		Db:  db,
 	}
 	handler.Db = db
 	err = handler.init()
@@ -64,6 +79,10 @@ func New(config DbConfig.DatabaseConfig) (*Handler, error) {
 		return nil, err
 	}
 	return &handler, nil
+}
+
+func (h *Handler) Log(msg string) {
+	h.log.Printf(fmt.Sprintf("InvSrvHandler: %s", msg))
 }
 
 func (h *Handler) init() error {
@@ -79,7 +98,7 @@ func (h *Handler) init() error {
 			}
 		}
 		if !tblExists {
-			log.Printf("missing table=[%s], create one", name)
+			h.Log(fmt.Sprintf("missing table=[%s], create one", name))
 			err := h.Db.CreateTable(name, nil)
 			if err != nil {
 				err = fmt.Errorf("failed to creat table=[%s], Err:%s", name, err)
@@ -90,13 +109,13 @@ func (h *Handler) init() error {
 	return nil
 }
 
-func (h *Handler) List(dataType string) ([]string, *Http.HttpError) {
-	if Util.SearchStrList([]string{JsonKey.Schema, Schema.Inventory, RefRecord.Referral, SchemaPath.PathName}, dataType) {
+func (h *Handler) List(dataType string) ([]interface{}, *Http.HttpError) {
+	if _, ok := InvTypes[dataType]; ok {
 		result, err := h.ListData(dataType)
 		if err != nil {
 			return nil, err
 		}
-		dsList := make([]string, 0, len(result))
+		dsList := make([]interface{}, 0, len(result))
 		dataKey := Record.DataId
 		for _, data := range result {
 			dsList = append(dsList, data[dataKey].(string))
@@ -119,22 +138,18 @@ func (h *Handler) List(dataType string) ([]string, *Http.HttpError) {
 	if e != nil {
 		return nil, Http.WrapError(e, fmt.Sprintf("failed to parse url from data service [%s]=[%s], url=[%s]", Record.DataId, referral.DsInfo.Id, dsUrl), http.StatusInternalServerError)
 	}
-	dataList, code, e := Http.GetRestData(*urlPath)
+	data, code, e := Http.GetRestData(*urlPath)
 	if e != nil {
 		return nil, Http.WrapError(e, fmt.Sprintf("failed to get data from REST URL=[%s]", *urlPath), code)
 
 	}
-	idList := []string{}
-	for _, id := range dataList.([]interface{}) {
-		idList = append(idList, id.(string))
-	}
-	return idList, nil
+	return data.([]interface{}), nil
 }
 
 func (h *Handler) Get(dataType string, dataPath string) (interface{}, *Http.HttpError) {
 	// if we get to this function, it means dataPath is not empty string already
 	dataId, nextPath := Util.ParsePath(dataPath)
-	if Util.SearchStrList([]string{JsonKey.Schema, Schema.Inventory, RefRecord.Referral, SchemaPath.PathName}, dataType) {
+	if _, ok := InvTypes[dataType]; ok {
 		if nextPath != "" {
 			return nil, Http.NewHttpError(fmt.Sprintf("path=[%s] not supported on type=[%s]", dataPath, dataType), http.StatusBadRequest)
 		}
@@ -173,7 +188,7 @@ func (h *Handler) GetRecord(dataType string, dataId string) (*Record.Record, *Ht
 }
 
 func (h *Handler) ListData(dataType string) ([]map[string]interface{}, *Http.HttpError) {
-	if !Util.SearchStrList([]string{JsonKey.Schema, Schema.Inventory, RefRecord.Referral, SchemaPath.PathName}, dataType) {
+	if _, ok := InvTypes[dataType]; !ok {
 		return nil, Http.NewHttpError(fmt.Sprintf("[type]=[%s] is not supported", dataType), http.StatusBadRequest)
 	}
 	err := h.Db.CreateTable(dataType, nil)
@@ -189,7 +204,7 @@ func (h *Handler) ListData(dataType string) ([]map[string]interface{}, *Http.Htt
 	return result, nil
 }
 
-func (h *Handler) GetSchema(dataType string) (*SchemaDoc.SchemaDoc, *Http.HttpError) {
+func (h *Handler) GetSchema(dataType string) (*Record.Record, *Http.HttpError) {
 	data, err := h.GetData(JsonKey.Schema, dataType)
 	if err != nil {
 		return nil, Http.WrapError(err, fmt.Sprintf("object of type “%s” does not exist", dataType), err.Status)
@@ -198,14 +213,13 @@ func (h *Handler) GetSchema(dataType string) (*SchemaDoc.SchemaDoc, *Http.HttpEr
 	if e != nil {
 		return nil, Http.WrapError(e, fmt.Sprintf("failed to load schema record data. [type]=[%s]", dataType), http.StatusInternalServerError)
 	}
-	doc, e := SchemaDoc.New(record.Data, dataType, nil)
-	if e != nil {
-		return nil, Http.WrapError(e, fmt.Sprintf("failed to schema doc from schema record. [id]=[%s]", dataType), http.StatusInternalServerError)
-	}
-	return doc, nil
+	return record, nil
 }
 
 func (h *Handler) GetDataServiceRecord(dataType string, dataId string) (*Record.Record, *Http.HttpError) {
+	if dataType == JsonKey.Schema {
+		return h.GetSchema(dataId)
+	}
 	data, err := h.GetDataServiceData(dataType, dataId)
 	if err != nil {
 		return nil, err
@@ -219,7 +233,6 @@ func (h *Handler) GetDataServiceRecord(dataType string, dataId string) (*Record.
 
 func (h *Handler) GetDataByPath(dataType string, idPath string, nextPath string) (interface{}, *Http.HttpError) {
 	conn := SchemaPathData.Connection{
-		FuncSchema: h.GetSchema,
 		FuncRecord: h.GetRecord,
 	}
 	dataPath := idPath
@@ -322,7 +335,7 @@ func (h *Handler) GetReferral(dataType string) (*RefRecord.ReferralData, *Http.H
 		return nil, Http.NewHttpError(e.Error(), http.StatusBadRequest)
 	}
 	referral.DsInfo = dsInfo
-	err = referral.GetSchema()
+	err = referral.GetSchema(h.log)
 	if err != nil {
 		return nil, err
 	}
@@ -363,8 +376,8 @@ func (h *Handler) PutData(data map[string]interface{}) (string, *Http.HttpError)
 	if err != nil {
 		return "", Http.WrapError(err, "payload failed to be load as Record", http.StatusBadRequest)
 	}
-	if !Util.SearchStrList([]string{SchemaPath.PathName}, record.Type) {
-		return "", Http.NewHttpError(fmt.Sprintf("update on type=[%s] not supported", record.Type), http.StatusBadRequest)
+	if _, ok := EditableTypes[record.Type]; !ok {
+		return "", Http.NewHttpError(fmt.Sprintf("update on type=[%s] not editable", record.Type), http.StatusBadRequest)
 	}
 	err = h.Db.CreateTable(record.Type, nil)
 	if err != nil {
@@ -376,7 +389,10 @@ func (h *Handler) PutData(data map[string]interface{}) (string, *Http.HttpError)
 			return "", e
 		}
 	}
-	err = h.Db.Replace(record.Type, nil, record.Map())
+	args := make(map[string]interface{})
+	args[DbIface.Table] = record.Type
+	args[Record.DataId] = record.Id
+	err = h.Db.Replace(record.Type, args, record.Map())
 	if err != nil {
 		return "", Http.NewHttpError(err.Error(), http.StatusInternalServerError)
 	}
@@ -387,7 +403,7 @@ func (h *Handler) DeleteData(dataType string, dataId string) *Http.HttpError {
 	if dataType == "" || dataId == "" {
 		return Http.NewHttpError("invalid url for delete, expected=[{dataType}/{dataId}]", http.StatusBadRequest)
 	}
-	if !Util.SearchStrList([]string{SchemaPath.PathName}, dataType) {
+	if _, ok := EditableTypes[dataType]; !ok {
 		return Http.NewHttpError(fmt.Sprintf("delete on type=[%s] not supported", dataType), http.StatusBadRequest)
 	}
 	err := h.Db.CreateTable(dataType, nil)

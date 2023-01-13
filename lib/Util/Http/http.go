@@ -35,16 +35,21 @@ import (
 	"net/url"
 	"path"
 	"reflect"
+	"strings"
 	"time"
 )
 
-const (
-	DELETE = "DELETE"
-	GET    = "GET"
-	PATCH  = "PATCH"
-	POST   = "POST"
-	PUT    = "PUT"
-)
+var UpdateMethods = map[string]bool{
+	http.MethodPost:  true,
+	http.MethodPatch: true,
+	http.MethodPut:   true,
+}
+
+var SuccessCodes = map[int]bool{
+	http.StatusAccepted: true,
+	http.StatusOK:       true,
+	http.StatusCreated:  true,
+}
 
 type Config struct {
 	HttpType  string                 `json:"type"`
@@ -54,6 +59,23 @@ type Config struct {
 	HeaderCfg map[string]interface{} `json:"headers"`
 }
 
+func LoadRequest(r *http.Request) (interface{}, *HttpError) {
+	reqBody, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return nil, WrapError(err, "failed to read body from request", http.StatusBadRequest)
+	}
+	data := map[string]interface{}{}
+	err = json.Unmarshal(reqBody, &data)
+	if err != nil {
+		strData := string(reqBody)
+		if strData == "" {
+			return nil, nil
+		}
+		return strData, nil
+	}
+	return data, nil
+}
+
 func ResponseJson(w http.ResponseWriter, data interface{}, status int, httpCfg Config) {
 	jsonData, err := json.MarshalIndent(data, "", "    ")
 	if err != nil {
@@ -61,9 +83,9 @@ func ResponseJson(w http.ResponseWriter, data interface{}, status int, httpCfg C
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	jsonData = append(jsonData, "\n"...)
+	jsonStr := fmt.Sprintf("%s\n", string(jsonData))
 	w.Header().Set("Content-Type", "application/json")
-	Response(w, jsonData, status, httpCfg)
+	Response(w, []byte(jsonStr), status, httpCfg)
 }
 
 func ResponseText(w http.ResponseWriter, txt []byte, status int, httpCfg Config) {
@@ -97,9 +119,10 @@ func ResponseErr(w http.ResponseWriter, err error, code int, httpCfg Config) {
 }
 
 func GetRestData(url string) (interface{}, int, error) {
-	response, err := http.Get(url)
+	client := &http.Client{}
+	response, err := client.Get(url)
 	if err != nil {
-		return nil, http.StatusBadRequest, fmt.Errorf("failed to get response, [url]=[%s], Err:%s", url, err)
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to get response, [url]=[%s], Err:%s", url, err)
 	}
 	responseData, err := ioutil.ReadAll(response.Body)
 	if response.StatusCode >= 200 && response.StatusCode <= 299 {
@@ -116,16 +139,63 @@ func GetRestData(url string) (interface{}, int, error) {
 	return nil, response.StatusCode, fmt.Errorf("invalid response from url=[%s], Err:%s", url, string(responseData))
 }
 
-func PostRestData(dataUrl string, payload interface{}) (int, error) {
-	json_data, err := json.Marshal(payload)
-	if err != nil {
-		return http.StatusBadRequest, fmt.Errorf("failed to marshal payload. Error: %s", err)
+func SubmitPayload(dataUrl string, method string, headers map[string]interface{}, payload interface{}) (*http.Response, int, error) {
+	if _, ok := UpdateMethods[method]; !ok {
+		return nil, http.StatusBadRequest, fmt.Errorf("invalid method=[%s], not a update method", method)
 	}
-	resp, err := http.Post(dataUrl, "application/json", bytes.NewBuffer(json_data))
-	if err != nil {
-		return resp.StatusCode, fmt.Errorf("failed to post data to [url]=[%s], Error:%s", dataUrl, err)
+	client := &http.Client{}
+	var req *http.Request
+	if payload == nil {
+		if method != http.MethodGet && method != http.MethodDelete && method != http.MethodPatch {
+			return nil, http.StatusBadRequest, fmt.Errorf("invalid method=[%s], only [%s, %s] allow payload=nil", method, http.MethodPatch, http.MethodDelete)
+		}
+		r, err := http.NewRequest(method, dataUrl, nil)
+		if err != nil {
+			return nil, http.StatusInternalServerError, fmt.Errorf("failed to create request. Error:%s", err)
+		}
+		req = r
+	} else {
+		payloadType := reflect.TypeOf(payload).Kind()
+		var json_data []byte
+		if payloadType == reflect.Slice || payloadType == reflect.Map {
+			data, err := json.MarshalIndent(payload, "", "    ")
+			if err != nil {
+				return nil, http.StatusBadRequest, fmt.Errorf("failed to marshal payload. Error: %s", err)
+			}
+			json_data = data
+		} else {
+			json_data = []byte(payload.(string))
+		}
+		r, err := http.NewRequest(method, dataUrl, bytes.NewBuffer(json_data))
+		if err != nil {
+			return nil, http.StatusInternalServerError, fmt.Errorf("failed to create request. Error:%s", err)
+		}
+		req = r
 	}
-	return http.StatusAccepted, nil
+	defaultHeaders := map[string]interface{}{
+		"Content-Type": "application/json",
+	}
+	for hKey, hValue := range headers {
+		code, err := AddHeaders(req, hKey, hValue)
+		if err != nil {
+			return nil, code, err
+		}
+		delete(defaultHeaders, hKey)
+	}
+	for hKey, hValue := range defaultHeaders {
+		code, err := AddHeaders(req, hKey, hValue)
+		if err != nil {
+			return nil, code, err
+		}
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return resp, http.StatusInternalServerError, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return resp, resp.StatusCode, fmt.Errorf("failed to [%s] data to [url]=[%s], Code: %d", method, dataUrl, resp.StatusCode)
+	}
+	return resp, resp.StatusCode, nil
 }
 
 func SiteReachable(url string) bool {
@@ -138,6 +208,7 @@ func SiteReachable(url string) bool {
 		log.Println("Site unreachable, error: ", err)
 		return false
 	}
+	log.Printf("Site[%s] reached", url)
 	return true
 }
 
@@ -151,4 +222,38 @@ func URLPathJoin(sUrl string, sPath ...string) (*string, error) {
 	u.Path = path.Join(pathList...)
 	jUrl := u.String()
 	return &jUrl, nil
+}
+
+func ParseHeaders(r *http.Request) map[string]interface{} {
+	headers := map[string]interface{}{}
+	for key, valList := range r.Header {
+		keyLower := strings.ToLower(key)
+		if len(valList) == 0 {
+			continue
+		}
+		if len(valList) > 1 {
+			headers[keyLower] = valList
+		}
+		headers[keyLower] = valList[0]
+	}
+	return headers
+}
+
+func AddHeaders(r *http.Request, key string, value interface{}) (int, error) {
+	if reflect.TypeOf(value).Kind() == reflect.Slice {
+		valList, ok := value.([]string)
+		if !ok {
+			return http.StatusBadRequest, fmt.Errorf("invalid header value. key=[%s], should be string or []string", key)
+		}
+		for _, valStr := range valList {
+			r.Header.Add(key, valStr)
+		}
+	} else {
+		hValStr, ok := value.(string)
+		if !ok {
+			return http.StatusBadRequest, fmt.Errorf("invalid header value. key=[%s], should be string or []string", key)
+		}
+		r.Header.Add(key, hValStr)
+	}
+	return http.StatusOK, nil
 }

@@ -27,10 +27,27 @@ package SchemaPath
 
 import (
 	"github.com/salesforce/UniTAO/lib/SchemaPath/Data"
+	"github.com/salesforce/UniTAO/lib/SchemaPath/Node"
 	"github.com/salesforce/UniTAO/lib/SchemaPath/PathCmd"
 	"github.com/salesforce/UniTAO/lib/Util"
 	"github.com/salesforce/UniTAO/lib/Util/Http"
 )
+
+func BuildNodePath(conn *Data.Connection, dataType string, dataId string, dataPath string) (*Node.PathNode, *Http.HttpError) {
+	node, err := Node.New(conn, dataType, dataId)
+	if err != nil {
+		return nil, err
+	}
+	for dataPath != "" {
+		stepPath, stepNext := Util.ParsePath(dataPath)
+		err = node.BuildPath(stepPath)
+		if err != nil {
+			return nil, err
+		}
+		dataPath = stepNext
+	}
+	return node, nil
+}
 
 func CreateQuery(conn *Data.Connection, dataType string, dataPath string) (PathCmd.QueryIface, *Http.HttpError) {
 	qPath, qCmd, pErr := PathCmd.Parse(dataPath)

@@ -50,14 +50,14 @@ const (
 	TableName = "TableName"
 )
 
-type Database struct {
+type dynamoDB struct {
 	config   DbConfig.DatabaseConfig
 	sess     *session.Session
 	database *dynamodb.DynamoDB
 }
 
 func ParseQueryOutput(output *dynamodb.QueryOutput) ([]map[string]interface{}, error) {
-	result := make([]map[string]interface{}, len(output.Items))
+	result := make([]map[string]interface{}, 0, len(output.Items))
 	for idx, value := range output.Items {
 		item := make(map[string]interface{})
 		err := dynamodbattribute.UnmarshalMap(value, &item)
@@ -65,12 +65,12 @@ func ParseQueryOutput(output *dynamodb.QueryOutput) ([]map[string]interface{}, e
 			err = fmt.Errorf("failed to unmarshal item: %d, Error:%s", idx, err)
 			return nil, err
 		}
-		result[idx] = item
+		result = append(result, item)
 	}
 	return result, nil
 }
 
-func (db *Database) Query(table string, index string, queryArgs map[string]interface{}) ([]map[string]interface{}, error) {
+func (db *dynamoDB) Query(table string, index string, queryArgs map[string]interface{}) ([]map[string]interface{}, error) {
 	init := false
 	var cond expression.KeyConditionBuilder
 	for key, value := range queryArgs {
@@ -102,7 +102,7 @@ func (db *Database) Query(table string, index string, queryArgs map[string]inter
 	return ParseQueryOutput(output)
 }
 
-func (db *Database) Get(queryArgs map[string]interface{}) ([]map[string]interface{}, error) {
+func (db *dynamoDB) Get(queryArgs map[string]interface{}) ([]map[string]interface{}, error) {
 	tableName, ok := queryArgs[DbIface.Table].(string)
 	if !ok {
 		return nil, fmt.Errorf("missing parameter [%s] from queryArgs", DbIface.Table)
@@ -120,7 +120,7 @@ func (db *Database) Get(queryArgs map[string]interface{}) ([]map[string]interfac
 	return db.Query(tableName, "", args)
 }
 
-func (db *Database) ListTable() ([]*string, error) {
+func (db *dynamoDB) ListTable() ([]*string, error) {
 	tableList := []*string{}
 	input := &dynamodb.ListTablesInput{}
 	for {
@@ -156,7 +156,7 @@ func (db *Database) ListTable() ([]*string, error) {
 	return tableList, nil
 }
 
-func (db *Database) CreateTable(name string, meta map[string]interface{}) error {
+func (db *dynamoDB) CreateTable(name string, meta map[string]interface{}) error {
 	log.Printf("create table %s in dynamodb", name)
 	meta[TableName] = name
 	rawJson, _ := json.Marshal(meta)
@@ -170,7 +170,7 @@ func (db *Database) CreateTable(name string, meta map[string]interface{}) error 
 	return nil
 }
 
-func (db *Database) DeleteTable(name string) error {
+func (db *dynamoDB) DeleteTable(name string) error {
 	params := &dynamodb.DeleteTableInput{
 		TableName: aws.String(name),
 	}
@@ -193,7 +193,11 @@ func MarshalMapWithCustomEncoder(data interface{}) (map[string]*dynamodb.Attribu
 	return av.M, nil
 }
 
-func (db *Database) Create(table string, data interface{}) error {
+func (db *dynamoDB) Create(table string, data interface{}) error {
+	return db.createRecord(table, data)
+}
+
+func (db *dynamoDB) createRecord(table string, data interface{}) error {
 	av, err := MarshalMapWithCustomEncoder(data)
 	if err != nil {
 		log.Printf("Got error marshalling map: %s", err)
@@ -211,15 +215,25 @@ func (db *Database) Create(table string, data interface{}) error {
 	return nil
 }
 
-func (db *Database) Update(table string, keys map[string]interface{}, cmd DbIface.UpdateCommand) (map[string]interface{}, error) {
-	return nil, nil
+func (db *dynamoDB) Replace(table string, keys map[string]interface{}, data interface{}) error {
+	currentList, err := db.Query(table, "", keys)
+	if err != nil {
+		return err
+	}
+	if len(currentList) > 0 {
+		err = db.deleteRecord(table, keys)
+		if err != nil {
+			return err
+		}
+	}
+	return db.createRecord(table, data)
 }
 
-func (db *Database) Replace(table string, keys map[string]interface{}, data interface{}) error {
-	return db.Create(table, data)
+func (db *dynamoDB) Delete(table string, keys map[string]interface{}) error {
+	return db.deleteRecord(table, keys)
 }
 
-func (db *Database) Delete(table string, keys map[string]interface{}) error {
+func (db *dynamoDB) deleteRecord(table string, keys map[string]interface{}) error {
 	av, err := dynamodbattribute.MarshalMap(keys)
 	if err != nil {
 		log.Printf("Got error marshalling map: %s", err)
@@ -235,6 +249,48 @@ func (db *Database) Delete(table string, keys map[string]interface{}) error {
 		return err
 	}
 	return nil
+}
+
+func (db *dynamoDB) Update(table string, keys map[string]interface{}, data interface{}) (map[string]interface{}, error) {
+	dataType, ok := keys[Record.DataType].(string)
+	if !ok {
+		return nil, fmt.Errorf("missing key=[%s]", Record.DataType)
+	}
+	dataId, ok := keys[Record.DataId].(string)
+	if !ok {
+		return nil, fmt.Errorf("missing key=[%s]", Record.DataId)
+	}
+	if dataType == "" || dataId == "" {
+		return nil, fmt.Errorf("missing dataType/dataId, expect format:[{dataType}/{dataId}/{dataPath}]")
+	}
+	queryPath, ok := keys[DbIface.PatchPath].(string)
+	if !ok {
+		return nil, fmt.Errorf("missing patch key=[%s]", DbIface.PatchPath)
+	}
+	patchData, err := db.Get(map[string]interface{}{
+		DbIface.Table:   table,
+		Record.DataType: dataType,
+		Record.DataId:   dataId,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(patchData) == 0 {
+		return nil, fmt.Errorf("data [%s/%s] does not exists", dataType, dataId)
+	}
+	subData, attrPath, err := DbIface.GetDataOnPath(patchData[0], queryPath, fmt.Sprintf("%s/%s/%s", dataType, dataId, queryPath))
+	if err != nil {
+		return nil, err
+	}
+	err = DbIface.SetPatchData(subData, attrPath, data)
+	if err != nil {
+		return nil, err
+	}
+	err = db.Create(table, patchData[0])
+	if err != nil {
+		return nil, err
+	}
+	return patchData[0], nil
 }
 
 func Connect(config DbConfig.DatabaseConfig) (DbIface.Database, error) {
@@ -271,7 +327,7 @@ func Connect(config DbConfig.DatabaseConfig) (DbIface.Database, error) {
 	if dbErr != nil {
 		panic("failed to list tables")
 	}
-	database := Database{
+	database := dynamoDB{
 		config:   config,
 		sess:     dbSession,
 		database: dbSvc,

@@ -29,12 +29,12 @@ import (
 	"testing"
 
 	"github.com/salesforce/UniTAO/lib/SchemaPath"
-	"github.com/salesforce/UniTAO/lib/Util"
+	"github.com/salesforce/UniTAO/lib/Util/Json"
 )
 
 func LoadIterResult(data interface{}) (*SchemaPath.IteratorResult, error) {
 	result := SchemaPath.IteratorResult{}
-	err := Util.ObjCopy(data, &result)
+	err := Json.CopyTo(data, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -42,47 +42,77 @@ func LoadIterResult(data interface{}) (*SchemaPath.IteratorResult, error) {
 }
 
 func TestIterOneFork(t *testing.T) {
-	schemaStr := `{
-		"IterEntry": {
-			"name": "IterEntry",
-			"key": "{iterKey}",
-			"properties": {
-				"iterKey": {
-					"type": "string"
-				},
-				"arrayObj": {
-					"type": "array",
-					"items": {
-						"type": "object",
-						"$ref": "#/definitions/itemObj"
-					}
-				},
-				"mapObj": {
-					"type": "map",
-					"items": {
-						"type": "object",
-						"$ref": "#/definitions/itemObj"
-					}
-				},
-				"arrayRef": {
-					"type": "array",
-					"items": {
-						"type": "string",
-						"contentMediaType": "inventory/refObj"
-					}
-				},
-				"mapRef": {
-					"type": "map",
-					"items": {
-						"type": "string",
-						"contentMediaType": "inventory/refObj"
+	recordStr := `{
+		"schema":{
+			"IterEntry": {
+				"__id": "IterEntry",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "IterEntry",
+					"version": "0.0.1",
+					"key": "{iterKey}",
+					"properties": {
+						"iterKey": {
+							"type": "string"
+						},
+						"arrayObj": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"$ref": "#/definitions/itemObj"
+							}
+						},
+						"mapObj": {
+							"type": "map",
+							"items": {
+								"type": "object",
+								"$ref": "#/definitions/itemObj"
+							}
+						},
+						"arrayRef": {
+							"type": "array",
+							"items": {
+								"type": "string",
+								"contentMediaType": "inventory/refObj"
+							}
+						},
+						"mapRef": {
+							"type": "map",
+							"items": {
+								"type": "string",
+								"contentMediaType": "inventory/refObj"
+							}
+						}
+					},
+					"definitions": {
+						"itemObj": {
+							"name": "itemObj",
+							"key": "{key1}_{key2}",
+							"properties": {
+								"key1": {
+									"type": "string"
+								},
+								"key2": {
+									"type": "string"
+								},
+								"recursiveKey": {
+									"type": "object",
+									"$ref": "#"
+								}
+							}
+						}
 					}
 				}
 			},
-			"definitions": {
-				"itemObj": {
-					"name": "itemObj",
-					"key": "{key1}_{key2}",
+			"refObj": {
+				"__id": "IterEntry",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "refObj",
+					"version": "0.0.1",
+					"key": "ref{key1}_{key2}",
 					"properties": {
 						"key1": {
 							"type": "string"
@@ -91,31 +121,13 @@ func TestIterOneFork(t *testing.T) {
 							"type": "string"
 						},
 						"recursiveKey": {
-							"type": "object",
-							"$ref": "#"
+							"type": "string",
+							"contentMediaType": "inventory/IterEntry"
 						}
 					}
 				}
 			}
 		},
-		"refObj": {
-			"name": "refObj",
-			"key": "ref{key1}_{key2}",
-			"properties": {
-				"key1": {
-					"type": "string"
-				},
-				"key2": {
-					"type": "string"
-				},
-				"recursiveKey": {
-					"type": "string",
-					"contentMediaType": "inventory/IterEntry"
-				}
-			}
-		}
-	}`
-	recordStr := `{
 		"IterEntry": {
 			"iter01": {
 				"__id": "iter01",
@@ -204,7 +216,7 @@ func TestIterOneFork(t *testing.T) {
 			}
 		}
 	}`
-	conn := PrepareConn(schemaStr, recordStr)
+	conn := PrepareConn(recordStr)
 	path := "IterEntry/iter01/arrayObj[*]?iterator"
 	iterResult, err := QueryPath(conn, path)
 	if err != nil {
@@ -283,47 +295,77 @@ func TestIterOneFork(t *testing.T) {
 }
 
 func TestIterTwoForks(t *testing.T) {
-	schemaStr := `{
-		"IterEntry": {
-			"name": "IterEntry",
-			"key": "{iterKey}",
-			"properties": {
-				"iterKey": {
-					"type": "string"
-				},
-				"arrayObj": {
-					"type": "array",
-					"items": {
-						"type": "object",
-						"$ref": "#/definitions/itemObj"
-					}
-				},
-				"mapObj": {
-					"type": "map",
-					"items": {
-						"type": "object",
-						"$ref": "#/definitions/itemObj"
-					}
-				},
-				"arrayRef": {
-					"type": "array",
-					"items": {
-						"type": "string",
-						"contentMediaType": "inventory/refObj"
-					}
-				},
-				"mapRef": {
-					"type": "map",
-					"items": {
-						"type": "string",
-						"contentMediaType": "inventory/refObj"
+	recordStr := `{
+		"schema":{
+			"IterEntry": {
+				"__id": "IterEntry",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "IterEntry",
+					"version": "0.0.1",
+					"key": "{iterKey}",
+					"properties": {
+						"iterKey": {
+							"type": "string"
+						},
+						"arrayObj": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"$ref": "#/definitions/itemObj"
+							}
+						},
+						"mapObj": {
+							"type": "map",
+							"items": {
+								"type": "object",
+								"$ref": "#/definitions/itemObj"
+							}
+						},
+						"arrayRef": {
+							"type": "array",
+							"items": {
+								"type": "string",
+								"contentMediaType": "inventory/refObj"
+							}
+						},
+						"mapRef": {
+							"type": "map",
+							"items": {
+								"type": "string",
+								"contentMediaType": "inventory/refObj"
+							}
+						}
+					},
+					"definitions": {
+						"itemObj": {
+							"name": "itemObj",
+							"key": "{key1}_{key2}",
+							"properties": {
+								"key1": {
+									"type": "string"
+								},
+								"key2": {
+									"type": "string"
+								},
+								"recursiveKey": {
+									"type": "object",
+									"$ref": "#"
+								}
+							}
+						}
 					}
 				}
 			},
-			"definitions": {
-				"itemObj": {
-					"name": "itemObj",
-					"key": "{key1}_{key2}",
+			"refObj": {
+				"__id": "refObj",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "refObj",
+					"version": "0.0.1",
+					"key": "ref{key1}_{key2}",
 					"properties": {
 						"key1": {
 							"type": "string"
@@ -332,31 +374,13 @@ func TestIterTwoForks(t *testing.T) {
 							"type": "string"
 						},
 						"recursiveKey": {
-							"type": "object",
-							"$ref": "#"
+							"type": "string",
+							"contentMediaType": "inventory/IterEntry"
 						}
 					}
 				}
 			}
 		},
-		"refObj": {
-			"name": "refObj",
-			"key": "ref{key1}_{key2}",
-			"properties": {
-				"key1": {
-					"type": "string"
-				},
-				"key2": {
-					"type": "string"
-				},
-				"recursiveKey": {
-					"type": "string",
-					"contentMediaType": "inventory/IterEntry"
-				}
-			}
-		}
-	}`
-	recordStr := `{
 		"IterEntry": {
 			"iter01": {
 				"__id": "iter01",
@@ -596,7 +620,7 @@ func TestIterTwoForks(t *testing.T) {
 			}
 		}
 	}`
-	conn := PrepareConn(schemaStr, recordStr)
+	conn := PrepareConn(recordStr)
 	path := "IterEntry/iter01/arrayObj[*]/recursiveKey/arrayObj[*]?iterator"
 	iterResult, err := QueryPath(conn, path)
 	if err != nil {
@@ -677,47 +701,77 @@ func TestIterTwoForks(t *testing.T) {
 }
 
 func TestIterFilter(t *testing.T) {
-	schemaStr := `{
-		"IterEntry": {
-			"name": "IterEntry",
-			"key": "{iterKey}",
-			"properties": {
-				"iterKey": {
-					"type": "string"
-				},
-				"arrayObj": {
-					"type": "array",
-					"items": {
-						"type": "object",
-						"$ref": "#/definitions/itemObj"
-					}
-				},
-				"mapObj": {
-					"type": "map",
-					"items": {
-						"type": "object",
-						"$ref": "#/definitions/itemObj"
-					}
-				},
-				"arrayRef": {
-					"type": "array",
-					"items": {
-						"type": "string",
-						"contentMediaType": "inventory/refObj"
-					}
-				},
-				"mapRef": {
-					"type": "map",
-					"items": {
-						"type": "string",
-						"contentMediaType": "inventory/refObj"
+	recordStr := `{
+		"schema":{
+			"IterEntry": {
+				"__id": "IterEntry",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "IterEntry",
+					"version": "0.0.1",
+					"key": "{iterKey}",
+					"properties": {
+						"iterKey": {
+							"type": "string"
+						},
+						"arrayObj": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"$ref": "#/definitions/itemObj"
+							}
+						},
+						"mapObj": {
+							"type": "map",
+							"items": {
+								"type": "object",
+								"$ref": "#/definitions/itemObj"
+							}
+						},
+						"arrayRef": {
+							"type": "array",
+							"items": {
+								"type": "string",
+								"contentMediaType": "inventory/refObj"
+							}
+						},
+						"mapRef": {
+							"type": "map",
+							"items": {
+								"type": "string",
+								"contentMediaType": "inventory/refObj"
+							}
+						}
+					},
+					"definitions": {
+						"itemObj": {
+							"name": "itemObj",
+							"key": "{key1}_{key2}",
+							"properties": {
+								"key1": {
+									"type": "string"
+								},
+								"key2": {
+									"type": "string"
+								},
+								"recursiveKey": {
+									"type": "object",
+									"$ref": "#"
+								}
+							}
+						}
 					}
 				}
 			},
-			"definitions": {
-				"itemObj": {
-					"name": "itemObj",
-					"key": "{key1}_{key2}",
+			"refObj": {
+				"__id": "refObj",
+				"__type": "schema",
+				"__ver": "0.0.1",
+				"data": {
+					"name": "refObj",
+					"version": "0.0.1",
+					"key": "ref{key1}_{key2}",
 					"properties": {
 						"key1": {
 							"type": "string"
@@ -726,31 +780,13 @@ func TestIterFilter(t *testing.T) {
 							"type": "string"
 						},
 						"recursiveKey": {
-							"type": "object",
-							"$ref": "#"
+							"type": "string",
+							"contentMediaType": "inventory/IterEntry"
 						}
 					}
 				}
 			}
 		},
-		"refObj": {
-			"name": "refObj",
-			"key": "ref{key1}_{key2}",
-			"properties": {
-				"key1": {
-					"type": "string"
-				},
-				"key2": {
-					"type": "string"
-				},
-				"recursiveKey": {
-					"type": "string",
-					"contentMediaType": "inventory/IterEntry"
-				}
-			}
-		}
-	}`
-	recordStr := `{
 		"IterEntry": {
 			"iter01": {
 				"__id": "iter01",
@@ -1021,7 +1057,7 @@ func TestIterFilter(t *testing.T) {
 			}
 		}
 	}`
-	conn := PrepareConn(schemaStr, recordStr)
+	conn := PrepareConn(recordStr)
 	path := "IterEntry/iter01/arrayObj[*]/recursiveKey/arrayObj[03_01]/?iterator"
 	iterResult, err := QueryPath(conn, path)
 	if err != nil {
