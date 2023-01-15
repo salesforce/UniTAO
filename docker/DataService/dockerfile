@@ -3,12 +3,14 @@ WORKDIR /go/src/github.com/salesforce/UniTAO/
 COPY . ./
 RUN go build -a -o ./bin/ ./app/DataService
 RUN go build -a -o ./bin/ ./tool/DataServiceAdmin
-COPY ./tool/DataServiceAdmin/initTable.sh ./bin/
+RUN sed 's/\r$//' ./tool/DataServiceAdmin/initTable.sh > ./bin/initTable.sh
+RUN ls ./bin/
 
 FROM centos:latest
 WORKDIR /opt/UniTAO/
 ENV PATH="/opt/UniTAO/:${PATH}"
 COPY --from=build /go/src/github.com/salesforce/UniTAO/bin/. ./
+RUN chmod +x ./initTable.sh
 RUN mkdir ./config
 RUN mkdir ./schema
 RUN mkdir ./log
