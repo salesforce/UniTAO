@@ -37,33 +37,44 @@ def main():
     except Exception as e:
         print("failed loading Submit Data file as json. {} ".format(e))
         exit(-2)
-    print("Submit data loaded")
-    for ds_name in ds_map:
+
+    data_list = []
+    for ds_name in data:
+        print("check url for data service[{}]".format(ds_name))
+        if ds_name not in ds_map:
+            print("DataService[{}] does not exists,skip".format(ds_name))
+            continue
         ds_url = ds_map[ds_name]["url"]
-        print("Data Service[{}][{}]".format(ds_name, ds_url))
-        if ds_name in ds_map:
-            print("submit {} data to {}[{}]".format(len(data[ds_name]), ds_name, ds_url))
-            submit_data(ds_url, data[ds_name])
-        else:
-            print("No more data to submit for {}, {}".format(ds_name, json.dumps(data, indent=4)))
-
-
-def submit_data(ds_url, data_list):
-    data_to_add = data_list
+        print("found url[{}]".format(ds_url))
+        for item in data[ds_name]:
+            dataItem = {
+                "dsName": ds_name,
+                "url": ds_url,
+                "data": item
+            }
+            data_list.append(dataItem)
+    if len(data_list) == 0:
+        print("no record to submit")
+        return
     while True:
-        failed_list = []
-        for data in data_to_add:
-            if not create_record(ds_url, data):
-                failed_list.append(data)
-        if len(failed_list) == 0:
-            print("no more data to submit for [{}]".format(ds_url))
-            break
-        print("submit {} more records, sleep 1 second".format(len(failed_list)))
+        failed_list = submit_data(data_list)
+        if len(failed_list) ==0:
+            print("all record submitted")
+            return
+        print("[{}] record failed to create, sleep 1 second, try again".format(len(failed_list)))
+        data_list = failed_list
         time.sleep(1)
-        data_to_add = failed_list
+
+def submit_data(data_list):
+    failed_list = []    
+    for data in data_list:
+        if not create_record(data["url"], data["data"]):
+            failed_list.append(data)
+    return failed_list
 
 
 def create_record(ds_url, record):
+    print("post record to [{}]".format(ds_url))
     record_url = "{}/{}/{}".format(ds_url, record["__type"], record["__id"])
     res = requests.get(record_url)
     if requests.codes.ok <= res.status_code < 300:
@@ -72,6 +83,7 @@ def create_record(ds_url, record):
     if res.status_code != requests.codes.not_found:
         print("failed to get data [{}/{}] from [{}]".format(record["__type"], record["__id"], ds_url))
         return False
+    print("post {} {}".format(ds_url, json.dumps(record, indent=4)))
     res = requests.post(ds_url, json=record)
     if requests.codes.ok <= res.status_code < 300:
         print("data [{}/{}] created.".format(record["__type"], record["__id"]))
