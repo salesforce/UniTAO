@@ -167,6 +167,14 @@ func New(data map[string]interface{}) (*SchemaDoc, error) {
 	return doc, nil
 }
 
+func ParseDataType(dataType string) (string, string) {
+	schemaName, schemaVersion := Util.ParseCustomPath(dataType, JsonKey.ArchivedSchemaIdDiv)
+	if schemaVersion != "" {
+		return schemaName, schemaVersion
+	}
+	return Util.ParsePath(dataType)
+}
+
 func ArchivedSchemaId(dataType string, typeVersion string) string {
 	return fmt.Sprintf("%s%s%s", dataType, JsonKey.ArchivedSchemaIdDiv, typeVersion)
 }

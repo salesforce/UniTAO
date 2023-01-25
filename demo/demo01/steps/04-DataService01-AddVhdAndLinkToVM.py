@@ -91,7 +91,7 @@ print("""
 
 input("press ANY key to continue...")
 
-print("http://localhost:8001 {}",format(json.dumps(vhd, indent=4)))
+print("POST http://localhost:8001 {}",format(json.dumps(vhd, indent=4)))
 
 resp = requests.post("http://localhost:8001", json=vhd)
 
@@ -99,7 +99,7 @@ print(resp.text)
 
 input("press ANY key to continue...")
 
-print("http://localhost:8001 {}",format(json.dumps(vmLink, indent=4)))
+print("POST http://localhost:8001 {}",format(json.dumps(vmLink, indent=4)))
 
 resp = requests.post("http://localhost:8001", json=vmLink)
 

@@ -44,3 +44,23 @@ python $PSScriptRoot\steps\02-DataService01-AddVirtualMachineRecord.py
 Pause
 
 python $PSScriptRoot\steps\04-DataService01-AddVhdAndLinkToVM.py
+
+Pause
+
+python $PSScriptRoot\steps\05-InventoryServiceSchemaSync.py
+
+Pause
+
+python $PSScriptRoot\steps\06-AcrossDataServiceRef.py
+
+Pause
+
+python $PSScriptRoot\steps\07-InventoryServiceBasic.py
+
+Pause
+
+python $PSScriptRoot\steps\08-DataServcice01-AddSecondVm.py
+
+Pause
+
+python $PSScriptRoot\steps\09-InventoryServiceExplorerData.py

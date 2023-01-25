@@ -40,18 +40,41 @@ import (
 )
 
 const (
-	Referral  = "referral"
-	LatestVer = "0.0.1"
+	Referral     = "referral"
+	LatestVer    = "0.0.1"
+	SchemaRecord = `{
+		"__id": "referral",
+		"__type": "schema",
+		"__ver": "0.0.1",
+		"data": {
+			"name": "referral",
+			"description": "referral record schema",
+			"version": "0.0.1",
+			"properties": {
+				"DataType": {
+					"type": "string"
+				},
+				"DataServiceId": {
+					"type": "string"
+				},
+				"AuthUrl": {
+					"type": "string"
+				},
+				"AuthType": {
+					"type": "string"
+				}
+			}
+		}
+	}`
 )
 
 type ReferralData struct {
-	DataType  string                 `json:"DataType"`
-	SchemaVer string                 `json:"SchemaVersion"`
-	DsId      string                 `json:"DataServiceId"`
-	AuthUrl   string                 `json:"AuthUrl"`
-	AuthType  string                 `json:"AuthType"`
-	Schema    map[string]interface{} `json:"Schema"`
-	DsInfo    *InvRecord.DataServiceInfo
+	DataType string `json:"DataType"`
+	DsId     string `json:"DataServiceId"`
+	AuthUrl  string `json:"AuthUrl"`
+	AuthType string `json:"AuthType"`
+	Schema   map[string]interface{}
+	DsInfo   *InvRecord.DataServiceInfo
 }
 
 func LoadMap(data map[string]interface{}) (*ReferralData, error) {
@@ -67,42 +90,41 @@ func LoadMap(data map[string]interface{}) (*ReferralData, error) {
 	return &record, nil
 }
 
-func (r *ReferralData) GetSchema(logger *log.Logger) *Http.HttpError {
+func (r *ReferralData) GetSchema(dataType string, logger *log.Logger) (*Record.Record, *Http.HttpError) {
 	if logger == nil {
 		logger = log.Default()
 	}
 	if r.DsInfo == nil {
-		msg := fmt.Sprintf("failed to load DsInfo for type=[%s]", r.DataType)
+		msg := fmt.Sprintf("failed to load DsInfo for type=[%s]", dataType)
 		logger.Print(msg)
-		return Http.NewHttpError(msg, http.StatusInternalServerError)
+		return nil, Http.NewHttpError(msg, http.StatusInternalServerError)
 
 	}
 	dsUrl, err := r.DsInfo.GetUrl()
 	if err != nil {
 		msg := fmt.Sprintf("no good url to DS=[%s], error:%s", r.DsInfo.Id, err)
 		logger.Print(msg)
-		return Http.NewHttpError(msg, http.StatusInternalServerError)
+		return nil, Http.NewHttpError(msg, http.StatusInternalServerError)
 	}
-	schemaUrl := fmt.Sprintf("%s/%s/%s", dsUrl, JsonKey.Schema, r.DataType)
+	schemaUrl := fmt.Sprintf("%s/%s/%s", dsUrl, JsonKey.Schema, dataType)
 	schemaData, code, err := Http.GetRestData(schemaUrl)
 	if err != nil {
 		logger.Print(err.Error())
-		return Http.NewHttpError(err.Error(), code)
+		return nil, Http.NewHttpError(err.Error(), code)
 	}
 	schema, ok := schemaData.(map[string]interface{})
 	if !ok {
 		msg := fmt.Sprintf("failed to parse schema record. from path=[%s]", schemaUrl)
 		logger.Print(msg)
-		return Http.NewHttpError(msg, http.StatusInternalServerError)
+		return nil, Http.NewHttpError(msg, http.StatusInternalServerError)
 	}
 	schemaRecord, err := Record.LoadMap(schema)
 	if err != nil {
 		msg := "schema from dataservice is not in Record format."
 		logger.Printf("%s, Error: %s", msg, err)
-		return Http.WrapError(err, msg, http.StatusInternalServerError)
+		return nil, Http.WrapError(err, msg, http.StatusInternalServerError)
 	}
-	r.Schema = schemaRecord.Data
-	return nil
+	return schemaRecord, nil
 }
 
 func (r *ReferralData) GetRecord() *Record.Record {

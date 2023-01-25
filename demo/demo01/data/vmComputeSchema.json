@@ -133,7 +133,7 @@
                 "name": "NetworkCard",
                 "description": "hardware network card on Physcial host",
                 "version":"0.0.1",
-                "key": "nc-{name}",
+                "key": "nic-{name}",
                 "properties": {
                     "name": {
                         "type": "string"
@@ -161,7 +161,8 @@
                     "links": {
                         "type": "array",
                         "items":{
-                            "type": "string"
+                            "type": "string",
+                            "contentMediaType": "inventory/VmLink"
                         }
                     }
                 }
@@ -170,11 +171,11 @@
     ],
     "DataService_02": [
         {
-            "__id": "VMHost",
+            "__id": "VmHost",
             "__type": "schema",
             "__ver": "0.0.1",
             "data": {
-                "name": "VMHost",
+                "name": "VmHost",
                 "description": "Physical Machine that host all virtual machines",
                 "version":"0.0.1",
                 "key": "vmhost-{name}",
@@ -182,32 +183,46 @@
                     "name": {
                         "type": "string"
                     },
-                    "bridges": {
+                    "netBridge": {
                         "type": "array",
                         "items": {
                             "type": "string",
                             "contentMediaType": "inventory/NetBridge"
                         }
                     },
-                    "links": {
+                    "vmLink": {
                         "type": "array",
                         "items": {
                             "type": "string",
-                            "contentMediaType": "inventory/NetLink"
+                            "contentMediaType": "inventory/VmLink"
                         }
                     },
-                    "vms": {
+                    "virtualMachine": {
                         "type": "array",
                         "items": {
                             "type": "string",
                             "contentMediaType": "inventory/VirtualMachine"
                         }
                     },
-                    "nics": {
+                    "nic": {
                         "type": "array",
                         "items": {
                             "type": "string",
                             "contentMediaType": "inventory/NetworkCard"
+                        }
+                    },
+                    "virtualHardDisk": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "contentMediaType": "inventory/VirtualHardDisk"
+                        }
+                    },
+                    "storageDevice": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "contentMediaType": "inventory/StorageDevice"
                         }
                     }
                 }
