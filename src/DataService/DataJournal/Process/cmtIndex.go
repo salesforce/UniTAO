@@ -101,12 +101,13 @@ func (s *CmtIndexChanges) isSubscribedType(dataType string) (bool, *Http.HttpErr
 	return true, nil
 }
 
-func (s *CmtIndexChanges) getSubscriberSchemaIdx(dataType string, version string) (*Schema.SchemaOps, []CmtIndex.AutoIndex, *Http.HttpError) {
+func (s *CmtIndexChanges) getSubscriberSchemaIdx(dataType string, version string) (*Schema.SchemaOps, []*CmtIndex.AutoIndex, *Http.HttpError) {
 	schema, err := s.Data.LocalSchema(dataType, version)
 	if err != nil {
 		s.Log(fmt.Sprintf("[%s/%s] failed to load schema, Error:%s", dataType, version, err))
 		return nil, nil, err
 	}
+	s.Log(fmt.Sprintf("SubscriberCahange[%s/%s]: collect autoIdx list", dataType, version))
 	idxList := CmtIndex.FindAutoIndex(schema.Schema, "")
 	return schema, idxList, nil
 }
@@ -117,14 +118,18 @@ func (s *CmtIndexChanges) Log(message string) {
 
 func (s *CmtIndexChanges) ProcessEntry(dataType string, dataId string, entry *ProcessIface.JournalEntry) *Http.HttpError {
 	s.Log(fmt.Sprintf("process Entry of %s", dataType))
-	err := s.processDataChange(dataType, dataId, entry)
+	err := s.processSubscribedDataChange(dataType, dataId, entry)
 	if err != nil {
-		return err
+		if err.Status != http.StatusNotModified {
+			return err
+		}
+		s.Log(fmt.Sprintf("[%s/%s] no change done for processSubscribedDataChange", dataType, dataId))
 	}
 	return s.processSubscriberChange(dataType, dataId, entry)
 }
 
-func (s *CmtIndexChanges) processDataChange(dataType string, dataId string, entry *ProcessIface.JournalEntry) *Http.HttpError {
+func (s *CmtIndexChanges) processSubscribedDataChange(dataType string, dataId string, entry *ProcessIface.JournalEntry) *Http.HttpError {
+	s.Log(fmt.Sprintf("[%s/%s] publish data change to subscriber", dataType, dataId))
 	isSubscribed, err := s.isSubscribedType(dataType)
 	if err != nil {
 		return err
@@ -251,6 +256,7 @@ func (s *CmtIndexChanges) setIndex(dataType string, version string, dataPath str
 }
 
 func (s *CmtIndexChanges) processSubscriberChange(dataType string, dataId string, entry *ProcessIface.JournalEntry) *Http.HttpError {
+	s.Log(fmt.Sprintf("SubscriberChange[%s/%s] collect data from subscription targets", dataType, dataId))
 	beforeRecord, ex := Record.LoadMap(entry.Before)
 	if ex != nil {
 		msg := fmt.Sprintf("SubscriberChange[%s/%s]: failed to load before record,", dataType, dataId)
@@ -316,17 +322,22 @@ func (s *CmtIndexChanges) getIdxPathChanges(before *Record.Record, after *Record
 		s.Log(fmt.Sprintf("SubscriberChange[%s/%s]: same version[%s] data change, prepare Before", after.Type, after.Id, before.Version))
 		prepareBefore = true
 	}
+	s.Log(fmt.Sprintf("SubscriberChange[%s/%s]: check [{%d}] idxs from after", after.Type, after.Id, len(idxList)))
 	for _, idx := range idxList {
-		autoIdxDiff := newAutoIdxCompare(&idx)
+		s.Log(fmt.Sprintf("SubscriberChange[%s/%s]: compare idx[%s], attrPath[%s]", after.Type, after.Id, idx.IndexTemplate, idx.AttrPath))
+		autoIdxDiff := newAutoIdxCompare(idx)
 		if prepareBefore {
 			autoIdxDiff.Before = idx.ExplorerIdxPath(schema.Schema, before)
 		}
 		idxDiffMap[autoIdxDiff.Key] = autoIdxDiff
 	}
-	s.Log(fmt.Sprintf("SubscriberChange[%s/%s]: prepare new path list and removed path values", after.Type, after.Id))
-	for _, autoIdxDiff := range idxDiffMap {
+	s.Log(fmt.Sprintf("SubscriberChange[%s/%s]: [%d] idxPath in map to prepare new path list and removed path values", after.Type, after.Id, len(idxDiffMap)))
+	for idxDiffKey, autoIdxDiff := range idxDiffMap {
+		s.Log(fmt.Sprintf("SubscriberChange[%s/%s]: idxPath[%s:%s] explore on after", after.Type, after.Id, idxDiffKey, autoIdxDiff.Idx.IndexTemplate))
 		pathData := autoIdxDiff.Idx.ExplorerIdxPath(schema.Schema, after)
+		s.Log(fmt.Sprintf("SubscriberChange[%s/%s]: idxPath[%s:%s] found [%d] paths on after", after.Type, after.Id, idxDiffKey, autoIdxDiff.Idx.IndexTemplate, len(pathData)))
 		for idxPath, idxData := range pathData {
+			s.Log(fmt.Sprintf("SubscriberChange[%s/%s]: idxPath[%s], check path[%s]", after.Type, after.Id, autoIdxDiff.Idx.IndexTemplate, idxPath))
 			if _, ok := autoIdxDiff.Before[idxPath]; !ok {
 				s.Log(fmt.Sprintf("SubscriberChange[%s/%s]: new idx path added [%s]", after.Type, after.Id, idxPath))
 				autoIdxDiff.New[idxPath] = idxData
@@ -334,15 +345,18 @@ func (s *CmtIndexChanges) getIdxPathChanges(before *Record.Record, after *Record
 			}
 			autoIdxDiff.Removed[idxPath] = map[string]interface{}{}
 			for idx := range autoIdxDiff.Before[idxPath] {
+				s.Log(fmt.Sprintf("SubscriberChange[%s/%s]: idxPath[%s] check path[%s] if idx[%s] exists", after.Type, after.Id, autoIdxDiff.Idx.IndexTemplate, idxPath, idx))
 				if _, ok := idxData[idx]; !ok {
 					s.Log(fmt.Sprintf("SubscriberChange[%s/%s]: path [%s] removed idx[%s]", after.Type, after.Id, idxPath, idx))
 					autoIdxDiff.Removed[idxPath][idx] = autoIdxDiff.Before[idxPath][idx]
 				}
 			}
 			if len(autoIdxDiff.Removed[idxPath]) == 0 {
+				s.Log(fmt.Sprintf("SubscriberChange[%s/%s]: idxPath[%s], no idx to be delete", after.Type, after.Id, idxPath))
 				delete(autoIdxDiff.Removed, idxPath)
 			}
 		}
+		s.Log(fmt.Sprintf("SubscriberChange[%s/%s]: idxPath[%s:%s] check completed", after.Type, after.Id, idxDiffKey, autoIdxDiff.Idx.IndexTemplate))
 	}
 	return idxDiffMap, nil
 }
@@ -405,14 +419,17 @@ func (s *CmtIndexChanges) getCmtRecords(after *Record.Record, idxDiffMap map[str
 func (s *CmtIndexChanges) fillForNewIdxPath(after *Record.Record, compare map[string]*AutoIdxCompare) *Http.HttpError {
 	cache, err := s.getCmtRecords(after, compare)
 	if err != nil {
+		s.Log(fmt.Sprintf("SubscriberChange[%s/%s]: failed to get CmtRecords. Error:%s", after.Type, after.Id, err))
 		return err
 	}
-	for _, idxCmp := range compare {
+	for key, idxCmp := range compare {
 		if len(idxCmp.New) == 0 {
+			s.Log(fmt.Sprintf("SubscriberChange[%s/%s]: idxPath[%s:%s] no new idx path change", after.Type, after.Id, key, idxCmp.Idx.AttrPath))
 			continue
 		}
 		typeCache, ok := cache[idxCmp.Idx.ContentType]
 		if !ok {
+			s.Log(fmt.Sprintf("SubscriberChange[%s/%s]: idxPath[%s:%s] no data for type[%s]", after.Type, after.Id, key, idxCmp.Idx.AttrPath, idxCmp.Idx.ContentType))
 			continue
 		}
 		strTemp, ex := Template.ParseStr(idxCmp.Idx.IndexTemplate, "{", "}")
@@ -424,18 +441,23 @@ func (s *CmtIndexChanges) fillForNewIdxPath(after *Record.Record, compare map[st
 		for id, record := range typeCache {
 			idxPath, ex := strTemp.BuildValue(record.Data)
 			if ex != nil {
+				s.Log(fmt.Sprintf("SubscriberChange[%s/%s]: not able to build idxPath", after.Type, after.Id))
 				continue
 			}
 			idMap, pathExists := idxCmp.New[idxPath]
 			if !pathExists {
+				s.Log(fmt.Sprintf("SubscriberChange[%s/%s]: no new idx path[%s]", after.Type, after.Id, idxPath))
 				continue
 			}
 			if _, ok := idMap[id]; ok {
+				s.Log(fmt.Sprintf("SubscriberChange[%s/%s]: id[%s] already exists", after.Type, after.Id, id))
 				continue
 			}
 			_, idPath := Util.ParsePath(idxPath)
+			s.Log(fmt.Sprintf("SubscriberChange[%s/%s]: set path [%s] with id[%s] already exists", after.Type, after.Id, idPath, id))
 			err = s.setIndex(after.Type, after.Version, idPath, id)
 			if err != nil && err.Status != http.StatusNotModified {
+				s.Log(fmt.Sprintf("SubscriberChange[%s/%s]: set path [%s] with id[%s] failed. Error:%s", after.Type, after.Id, idPath, id, err))
 				return err
 			}
 		}

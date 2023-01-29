@@ -86,10 +86,10 @@ func (c *CmtIndex) Record() *Record.Record {
 	return rec
 }
 
-func FindAutoIndex(schema *SchemaDoc.SchemaDoc, path string) []AutoIndex {
+func FindAutoIndex(schema *SchemaDoc.SchemaDoc, path string) []*AutoIndex {
 	// load schema data into schema doc
 	// loop through all path from doc root and find the string attribute with indexTemplate in the attribute definition
-	linkList := []AutoIndex{}
+	linkList := []*AutoIndex{}
 	for attr, def := range schema.Data[JsonKey.Properties].(map[string]interface{}) {
 		attrDef := def.(map[string]interface{})
 		attrList := getAttrAutoIndex(schema, attr, attrDef, fmt.Sprintf("%s/%s", path, attr))
@@ -115,14 +115,14 @@ func getStrIndex(schema *SchemaDoc.SchemaDoc, attr string, attrDef map[string]in
 	return &idx
 }
 
-func getAttrAutoIndex(schema *SchemaDoc.SchemaDoc, attr string, attrDef map[string]interface{}, path string) []AutoIndex {
-	linkList := []AutoIndex{}
+func getAttrAutoIndex(schema *SchemaDoc.SchemaDoc, attr string, attrDef map[string]interface{}, path string) []*AutoIndex {
+	linkList := []*AutoIndex{}
 	attrType := attrDef[JsonKey.Type].(string)
 	switch attrType {
 	case JsonKey.String:
 		idx := getStrIndex(schema, attr, attrDef, path)
 		if idx != nil {
-			linkList = append(linkList, *idx)
+			linkList = append(linkList, idx)
 		}
 	case JsonKey.Object:
 		if SchemaDoc.IsMap(attrDef) {
@@ -143,14 +143,14 @@ func getAttrAutoIndex(schema *SchemaDoc.SchemaDoc, attr string, attrDef map[stri
 	return linkList
 }
 
-func getItemAutoIndex(schema *SchemaDoc.SchemaDoc, attr string, itemDef map[string]interface{}, attrPath string) []AutoIndex {
-	linkList := []AutoIndex{}
+func getItemAutoIndex(schema *SchemaDoc.SchemaDoc, attr string, itemDef map[string]interface{}, attrPath string) []*AutoIndex {
+	linkList := []*AutoIndex{}
 	itemType := itemDef[JsonKey.Type].(string)
 	switch itemType {
 	case JsonKey.String:
 		idx := getStrIndex(schema, attr, itemDef, attrPath)
 		if idx != nil {
-			linkList = append(linkList, *idx)
+			linkList = append(linkList, idx)
 		}
 	case JsonKey.Object:
 		nextSchema := schema.SubDocs[attr]

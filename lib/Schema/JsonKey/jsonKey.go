@@ -45,6 +45,7 @@ const (
 	Required             = "required"
 	Schema               = "schema"
 	String               = "string"
+	Integer              = "integer"
 	Type                 = "type"
 	Version              = "version"
 )

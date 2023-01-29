@@ -121,9 +121,13 @@ func (schema *SchemaOps) ValidateRecord(record *Record.Record) error {
 			}
 		}
 		schemaData, _ := Json.CopyToMap(record.Data)
-		_, err := SchemaDoc.New(schemaData)
+		doc, err := SchemaDoc.New(schemaData)
 		if err != nil {
 			return err
+		}
+		docId, _ := Util.ParseCustomPath(record.Id, JsonKey.ArchivedSchemaIdDiv)
+		if docId != doc.Id {
+			return fmt.Errorf("schema record id [%s]!= schema name[%s]", docId, doc.Id)
 		}
 	} else {
 		if strings.Contains(record.Type, JsonKey.ArchivedSchemaIdDiv) {

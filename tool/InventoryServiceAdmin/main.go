@@ -158,6 +158,9 @@ func (a *Admin) Init() error {
 }
 
 func (a *Admin) Run() error {
+	a.log.Printf("Inventory Service Admin Start")
+	a.log.Printf("%s Command", a.args.cmd)
+	defer a.log.Printf("%s Command completed", a.args.cmd)
 	switch a.args.cmd {
 	case CMD_ADD:
 		return a.addDsRecord()
@@ -187,154 +190,135 @@ func (a *Admin) addDsRecord() error {
 }
 
 func (a *Admin) syncDsSchema() error {
-	if a.args.ops.id != "" {
-		return a.syncSchemaWithId(a.args.ops.id)
-	}
 	idList, err := a.handler.List(Schema.Inventory)
 	if err != nil {
 		return fmt.Errorf("failed to list all inventorys. Error: %s", err)
 	}
-	for _, dsId := range idList {
-		e := a.syncSchemaWithId(dsId.(string))
-		if e != nil {
-			return fmt.Errorf("failed to get schema from DS_Id=[%s], Error:%s", dsId, e)
-		}
+
+	a.log.Printf("[%d] Data Services to sync", len(idList))
+	refTypes, ex := a.getReferralTypes()
+	if ex != nil {
+		a.log.Printf("failed to collect existing referral type from Inventory Service. Error: %s", ex)
+		return ex
 	}
-	return nil
+	dsTypes, ex := a.getDsTypes(idList)
+	if ex != nil {
+		a.log.Printf("failed to collect data type from Data Services. Error: %s", ex)
+		return ex
+	}
+	return a.SyncDataTypes(refTypes, dsTypes)
 }
 
-func (a *Admin) getReferralTypes(dsId string) (map[string]*Record.Record, error) {
+func (a *Admin) getReferralTypes() (map[string]string, error) {
 	typeList, err := a.handler.List(RefRecord.Referral)
 	if err != nil {
+		a.log.Printf("failed to get list of [%s], Error: %s", RefRecord.Referral, err)
 		return nil, err
 	}
-	refTypes := map[string]*Record.Record{}
+	refTypes := map[string]string{}
 	for _, dataType := range typeList {
 		referral, err := a.handler.GetReferral(dataType.(string))
 		if err != nil {
-			a.removeType(dsId, dataType.(string))
+			a.log.Printf("failed to get %s: [%s], Error: %s", RefRecord.Referral, dataType, err)
+			a.removeType(dataType.(string))
 			continue
 		}
-		if referral.DsId == dsId {
-			typeSchema, _ := a.handler.GetData(JsonKey.Schema, dataType.(string))
-			record, _ := Record.LoadMap(typeSchema.(map[string]interface{}))
-			refTypes[dataType.(string)] = record
-		}
+		a.log.Printf("record current Referral[%s] from DS[%s]", dataType, referral.DsId)
+		refTypes[dataType.(string)] = referral.DsId
 	}
 	return refTypes, nil
 }
 
-func (a *Admin) getDsTypeHash(dsId string) (map[string]*Record.Record, error) {
-	ds, err := a.handler.GetDsInfo(dsId)
-	if err != nil {
-		return nil, err
-	}
-	dsUrl, e := ds.GetUrl()
-	if e != nil {
-		return nil, e
-	}
-	schemaUrl, e := Http.URLPathJoin(dsUrl, JsonKey.Schema)
-	if e != nil {
-		return nil, fmt.Errorf("failed to parse url from DS record [%s]=[%s], Err:%s", Record.DataId, a.args.ops.id, err)
-	}
-	result, code, e := Http.GetRestData(*schemaUrl)
-	if e != nil {
-		return nil, fmt.Errorf("failed to Rest Data from [path]=[%s], Code:%d", *schemaUrl, code)
-	}
-	typeHash := map[string]*Record.Record{}
-	for _, dataType := range result.([]interface{}) {
-		if _, ok := Common.InternalTypes[dataType.(string)]; !ok {
-			typeUrl, e := Http.URLPathJoin(*schemaUrl, dataType.(string))
-			if e != nil {
-				return nil, fmt.Errorf("failed to build url for [%s]=[%s], Err:%s", Record.DataType, dataType, err)
+func (a *Admin) getDsTypes(idList []interface{}) (map[string]string, error) {
+	dsTypes := map[string]string{}
+	for _, dsId := range idList {
+		ds, err := a.handler.GetDsInfo(dsId.(string))
+		if err != nil {
+			a.log.Printf("failed to get info of DataService[%s], Error: %s", dsId, err)
+			return nil, err
+		}
+		dsUrl, e := ds.GetUrl()
+		if e != nil {
+			a.log.Printf("failed to get URL for ds[%s], Error: %s", dsId, err)
+			return nil, e
+		}
+		schemaUrl, e := Http.URLPathJoin(dsUrl, JsonKey.Schema)
+		if e != nil {
+			return nil, fmt.Errorf("failed to parse url from DS record [%s]=[%s], Err:%s", Record.DataId, a.args.ops.id, err)
+		}
+		a.log.Printf("DataService[%s], schema URL=[%s]", dsId, *schemaUrl)
+		result, code, e := Http.GetRestData(*schemaUrl)
+		if e != nil {
+			return nil, fmt.Errorf("failed to Rest Data from [path]=[%s], Code:%d", *schemaUrl, code)
+		}
+		for _, dataTypeStr := range result.([]interface{}) {
+			dataType, _ := Util.ParseCustomPath(dataTypeStr.(string), JsonKey.ArchivedSchemaIdDiv)
+			if _, ok := Common.InternalTypes[dataType]; ok {
+				a.log.Printf("type[%s] @DS[%s] is internal type, skip", dataType, dsId)
+				continue
 			}
-			typeSchema, code, e := Http.GetRestData(*typeUrl)
-			if e != nil {
-				return nil, fmt.Errorf("failed to Rest Data from [path]=[%s], Code:%d", *schemaUrl, code)
+			if _, ok := dsTypes[dataType]; ok {
+				a.log.Printf("type[%s] @DS[%s] already exists", dataType, dsId)
+				continue
 			}
-			typeRecord, _ := Record.LoadMap(typeSchema.(map[string]interface{}))
-			typeHash[dataType.(string)] = typeRecord
+			a.log.Printf("record type[%s] from DS[%s]", dataType, dsId)
+			dsTypes[dataType] = dsId.(string)
 		}
 	}
-	return typeHash, nil
+	return dsTypes, nil
 }
 
-func (a *Admin) syncSchemaWithId(dsId string) error {
-	refTypes, err := a.getReferralTypes(dsId)
-	if err != nil {
-		return err
-	}
-	dsTypes, err := a.getDsTypeHash(dsId)
-	if err != nil {
-		return err
-	}
+func (a *Admin) SyncDataTypes(refTypes map[string]string, dsTypes map[string]string) error {
 	for dataType := range refTypes {
 		if _, ok := dsTypes[dataType]; !ok {
-			a.removeType(dsId, dataType)
+			a.removeType(dataType)
 		}
 	}
-	for dataType := range dsTypes {
-		_, archiveVer := Util.ParseCustomPath(dataType, JsonKey.ArchivedSchemaIdDiv)
-		if archiveVer != "" {
-			a.log.Printf("ignore archived type[%s]", dataType)
+	for dataType, dsId := range dsTypes {
+		if _, ok := refTypes[dataType]; !ok {
+			a.log.Printf("data type [%s] from DS[%s] does not exists. add", dataType, dsId)
+			err := a.addType(dsId, dataType)
+			if err != nil {
+				a.log.Printf("add data type [%s] from DS [%s] failed. Error: %s", dataType, dsId, err)
+				return err
+			}
 			continue
 		}
-		if _, ok := refTypes[dataType]; !ok {
-			a.log.Printf("type[%s] not exists, add new", dataType)
-			a.addType(dsId, dataType)
+		if refTypes[dataType] != dsId {
+			a.log.Printf("data type [%s] moved from DS[%s] -> DS[%s], replace", dataType, refTypes[dataType], dsId)
+			err := a.removeType(dataType)
+			if err != nil {
+				a.log.Printf("remove data type [%s] from DS [%s] failed. Error: %s", dataType, dsId, err)
+				return err
+			}
+			err = a.addType(dsId, dataType)
+			if err != nil {
+				a.log.Printf("add data type [%s] from DS [%s] failed. Error: %s", dataType, dsId, err)
+				return err
+			}
 		}
-		if dsTypes[dataType].Data[JsonKey.Version].(string) != refTypes[dataType].Data[JsonKey.Version].(string) {
-			a.log.Printf("version upgrade [%s]->[%s], update", refTypes[dataType].Data[JsonKey.Version], dsTypes[dataType].Data[JsonKey.Version])
-			a.updateType(dataType, dsTypes[dataType])
-		}
-		a.log.Printf("no change with type[%s] on DS[%s]", dataType, dsId)
-	}
-	return nil
-}
-
-func (a *Admin) updateType(dataType string, typeRecord *Record.Record) error {
-	err := a.removeData(JsonKey.Schema, dataType)
-	if err != nil {
-		a.log.Printf("failed to remove type[%s], Error:%s", dataType, err)
-		return err
-	}
-	err = a.handler.Db.Create(JsonKey.Schema, typeRecord)
-	if err != nil {
-		a.log.Printf("failed to create type[%s], Error:%s", dataType, err)
-		return err
 	}
 	return nil
 }
 
 func (a *Admin) addType(dsId string, dataType string) error {
-	dsInfo, err := a.handler.GetDsInfo(dsId)
-	if err != nil {
-		return err
-	}
-	dsUrl, e := dsInfo.GetUrl()
-	if e != nil {
-		return e
-	}
-	schemaUrl := fmt.Sprintf("%s/%s/%s", dsUrl, JsonKey.Schema, dataType)
-	schemaRecord, _, e := Http.GetRestData(schemaUrl)
-	if e != nil {
-		return e
-	}
-	a.removeData(JsonKey.Schema, dataType)
-	a.handler.Db.Create(JsonKey.Schema, schemaRecord)
+	a.log.Printf("get DsInfo [%s]", dsId)
 	referral := RefRecord.ReferralData{
-		DataType:  dataType,
-		SchemaVer: schemaRecord.(map[string]interface{})[Record.Version].(string),
-		DsId:      dsId,
+		DataType: dataType,
+		DsId:     dsId,
 	}
+	a.log.Printf("add referral for type[%s] to DS[%s]", dataType, dsId)
 	referralData, _ := Json.CopyToMap(referral.GetRecord())
-	a.handler.Db.Create(RefRecord.Referral, referralData)
+	e := a.handler.Db.Create(RefRecord.Referral, referralData)
+	if e != nil {
+		return e
+	}
+	a.log.Printf("referral type[%s] to DS[%s] added", dataType, dsId)
 	return nil
 }
 
-func (a *Admin) removeType(dsId string, dataType string) error {
+func (a *Admin) removeType(dataType string) error {
 	a.removeData(RefRecord.Referral, dataType)
-	a.removeData(JsonKey.Schema, dataType)
 	return nil
 }
 

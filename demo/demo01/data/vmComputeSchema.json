@@ -1,0 +1,232 @@
+{
+    "DataService_01": [
+        {
+            "__id": "VirtualMachine",
+            "__type": "schema",
+            "__ver": "0.0.1",
+            "data": {
+                "name": "VirtualMachine",
+                "description": "virtual machine",
+                "version": "0.0.1",
+                "key": "vm-{name}",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "storage": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "$ref": "#/definitions/storage"
+                        }
+                    },
+                    "network": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "$ref": "#/definitions/nic"
+                        }
+                    }
+                },
+                "definitions": {
+                    "nic": {
+                        "key": "{name}",
+                        "properties": {
+                            "name": {
+                                "type": "string"
+                            },
+                            "ip": {
+                                "type": "string",
+                                "required": false
+                            },
+                            "link": {
+                                "type": "string",
+                                "contentMediaType": "inventory/VmLink"
+                            }
+                        }
+                    },
+                    "storage": {
+                        "key": "{name}",
+                        "properties": {
+                            "name": {
+                                "type": "string"
+                            },
+                            "vhd": {
+                                "type": "string",
+                                "contentMediaType": "inventory/VirtualHardDisk",
+                                "required": false
+                            },
+                            "dev": {
+                                "type": "string",
+                                "contentMediaType": "inventory/StorageDevice",
+                                "required": false
+                            }
+                            
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "__id": "VmLink",
+            "__type": "schema",
+            "__ver": "0.0.1",
+            "data": {
+                "name": "VmLink",
+                "description": "the link entity that attached to VM nic card during creation",
+                "version":"0.0.1",
+                "key": "{vm}-link-{name}",
+                "properties": {
+                    "vm": {
+                        "type": "string",
+                        "contentMediaType":"inventory/VirtualMachine"
+                    },
+                    "name": {
+                        "type":"string"
+                    }
+                }
+            }
+        },
+        {
+            "__id": "VirtualHardDisk",
+            "__type": "schema",
+            "__ver": "0.0.1",
+            "data": {
+                "name": "VirtualHardDisk",
+                "description": "Virtual Hard Disk(VHD) file for Virtual Machines",
+                "version": "0.0.1",
+                "key": "vhd-{name}",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "path": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        {
+            "__id": "StorageDevice",
+            "__type": "schema",
+            "__ver": "0.0.1",
+            "data": {
+                "name": "StorageDevice",
+                "description": "physical device for VM to mount directly as storage",
+                "version": "0.0.1",
+                "key": "hd-{name}",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "size": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        {
+            "__id": "NetworkCard",
+            "__type": "schema",
+            "__ver": "0.0.1",
+            "data": {
+                "name": "NetworkCard",
+                "description": "hardware network card on Physcial host",
+                "version":"0.0.1",
+                "key": "nic-{name}",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        {
+            "__id": "NetBridge",
+            "__type": "schema",
+            "__ver": "0.0.1",
+            "data": {
+                "name": "NetBridge",
+                "description": "Net bridge that link all VMs together",
+                "version": "0.0.1",
+                "key": "br-{name}",
+                "properties":{
+                    "name": {
+                        "type": "string"
+                    },
+                    "nic": {
+                        "type": "string",
+                        "required": false
+                    },
+                    "links": {
+                        "type": "array",
+                        "items":{
+                            "type": "string",
+                            "contentMediaType": "inventory/VmLink"
+                        }
+                    }
+                }
+            }
+        }
+    ],
+    "DataService_02": [
+        {
+            "__id": "VmHost",
+            "__type": "schema",
+            "__ver": "0.0.1",
+            "data": {
+                "name": "VmHost",
+                "description": "Physical Machine that host all virtual machines",
+                "version":"0.0.1",
+                "key": "vmhost-{name}",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "netBridge": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "contentMediaType": "inventory/NetBridge"
+                        }
+                    },
+                    "vmLink": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "contentMediaType": "inventory/VmLink"
+                        }
+                    },
+                    "virtualMachine": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "contentMediaType": "inventory/VirtualMachine"
+                        }
+                    },
+                    "nic": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "contentMediaType": "inventory/NetworkCard"
+                        }
+                    },
+                    "virtualHardDisk": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "contentMediaType": "inventory/VirtualHardDisk"
+                        }
+                    },
+                    "storageDevice": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "contentMediaType": "inventory/StorageDevice"
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

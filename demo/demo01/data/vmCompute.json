@@ -1,0 +1,13 @@
+{
+    "DataService_01": [
+        {
+            "__id": "nc-eth1000-aef",
+            "__type": "NetworkCard",
+            "__ver": "0.0.1",
+            "data": {
+                "name": "eth1000-aef"
+            }
+        }
+    ],
+    "DataService_02": []
+}
