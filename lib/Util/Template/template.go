@@ -27,7 +27,6 @@ package Template
 
 import (
 	"fmt"
-	"reflect"
 	"strings"
 )
 
@@ -153,10 +152,19 @@ func (t *StrTemp) BuildValue(data map[string]interface{}) (string, error) {
 			continue
 		}
 		attrStr, ok := varMap[attr].(string)
-		if !ok {
-			return "", fmt.Errorf("invalid type attr=[%s], filed to convert type=[%s] to string", attr, reflect.TypeOf(varMap[attr]).Kind())
+		if ok {
+			result = fmt.Sprintf("%s%s", result, attrStr)
+			continue
 		}
-		result = fmt.Sprintf("%s%s", result, attrStr)
+		switch v := varMap[attr].(type) {
+		case int:
+			result = fmt.Sprintf("%s%d", result, v)
+		case float64:
+			vInt := int(v)
+			result = fmt.Sprintf("%s%d", result, vInt)
+		default:
+			return "", fmt.Errorf("invalid type of [%s], only string and int supported", attr)
+		}
 	}
 	return result, nil
 }

@@ -36,7 +36,31 @@ import (
 )
 
 const (
-	LatestVer = "0.0.1"
+	LatestVer    = "0.0.1"
+	SchemaRecord = `{
+		"__id": "inventory",
+		"__type": "schema",
+		"__ver": "0.0.1",
+		"data": {
+			"name": "inventory",
+			"description": "DataService Inventory Info",
+			"version": "0.0.1",
+			"properties": {
+				"dsId": {
+					"type": "string"
+				},
+				"url": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"lastSynctime": {
+					"type": "string"
+				}
+			}
+		}
+	}`
 )
 
 type DataServiceInfo struct {

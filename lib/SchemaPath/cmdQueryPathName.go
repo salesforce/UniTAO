@@ -37,7 +37,25 @@ import (
 )
 
 const (
-	PathName = "pathname"
+	PathName       = "pathname"
+	PathDataSchema = `{
+		"__id": "pathname",
+		"__type": "schema",
+		"__ver": "0.0.1",
+		"data": {
+			"name": "pathname",
+			"description": "schema path alias",
+			"version": "0.0.1",
+			"properties": {
+				"name": {
+					"type": "string"
+				},
+				"path": {
+					"type": "string"
+				}
+			}
+		}
+	}`
 )
 
 type PathData struct {

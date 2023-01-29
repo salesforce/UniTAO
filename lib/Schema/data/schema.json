@@ -136,12 +136,14 @@
                     "active": {
                         "type": "array",
                         "items": {
+                            "type": "object",
                             "$ref": "#/definitions/entry"
                         }
                     },
                     "archived": {
                         "type": "array",
                         "items": {
+                            "type": "object",
                             "$ref": "#/definitions/entry"
                         }
                     }

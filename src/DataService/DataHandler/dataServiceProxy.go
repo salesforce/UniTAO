@@ -298,8 +298,8 @@ func (i *DataServiceProxy) Post(record *Record.Record) *Http.HttpError {
 		i.Log(ex.Error())
 		return Http.WrapError(ex, errMsg, status)
 	}
-	if status != http.StatusAccepted && status != http.StatusOK {
-		errMsg := fmt.Sprintf("failed to post [%s], [%d] is not Accepted[%d]/Ok[%d]", queryUrl, status, http.StatusAccepted, http.StatusOK)
+	if status < 200 || status > 299 {
+		errMsg := fmt.Sprintf("failed to post [%s], [%d] is not in range (200-299)", queryUrl, status)
 		i.Log(errMsg)
 		return Http.NewHttpError(errMsg, status)
 	}
