@@ -307,7 +307,7 @@ func (d *SchemaDoc) validateKeyAttrs() error {
 	}
 	for attr, attrDef := range keyMap {
 		attrType := attrDef.(map[string]interface{})[JsonKey.Type].(string)
-		if attrType != JsonKey.String {
+		if attrType != JsonKey.String && attrType != JsonKey.Integer {
 			return fmt.Errorf("only string attribute can be key attribute. [attr]=[%s] [type]=[%s]", attr, attrType)
 		}
 	}
@@ -361,7 +361,10 @@ func (d *SchemaDoc) validateKeyDefs() error {
 }
 
 func (d *SchemaDoc) processItemDef(pType string, pname string, itemDef map[string]interface{}) error {
-	itemType := itemDef[JsonKey.Type].(string)
+	itemType, ok := itemDef[JsonKey.Type].(string)
+	if !ok {
+		return fmt.Errorf("missing [%s] in ItemDefinition. [%s/%s]", JsonKey.Type, d.Path(), pname)
+	}
 	switch itemType {
 	case JsonKey.String:
 		err := d.getCmtRef(pname, itemDef)

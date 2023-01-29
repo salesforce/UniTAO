@@ -57,7 +57,9 @@ def main():
         print("no record to submit")
         return
     while True:
-        failed_list = submit_data(data_list)
+        failed_list, created_list = submit_data(data_list)
+        if len(created_list) > 0:
+            print("records created. \n{}".format(json.dumps(created_list, indent=4)))
         if len(failed_list) ==0:
             print("all record submitted")
             return
@@ -66,11 +68,14 @@ def main():
         time.sleep(1)
 
 def submit_data(data_list):
-    failed_list = []    
+    failed_list = []
+    created_list = []
     for data in data_list:
         if not create_record(data["url"], data["data"]):
             failed_list.append(data)
-    return failed_list
+        else:
+            created_list.append("{}/{}".format(data["data"]["__type"], data["data"]["__id"]))
+    return failed_list, created_list
 
 
 def create_record(ds_url, record):
