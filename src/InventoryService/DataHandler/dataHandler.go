@@ -39,6 +39,7 @@ import (
 	"github.com/salesforce/UniTAO/lib/Schema"
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
+	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
 	"github.com/salesforce/UniTAO/lib/SchemaPath"
 	SchemaPathData "github.com/salesforce/UniTAO/lib/SchemaPath/Data"
 	"github.com/salesforce/UniTAO/lib/Util"
@@ -51,7 +52,6 @@ type Handler struct {
 }
 
 var InvTypes = map[string]bool{
-	JsonKey.Schema:      true,
 	Schema.Inventory:    true,
 	RefRecord.Referral:  true,
 	SchemaPath.PathName: true,
@@ -90,7 +90,7 @@ func (h *Handler) init() error {
 	if err != nil {
 		return err
 	}
-	for _, name := range []string{JsonKey.Schema, Schema.Inventory, RefRecord.Referral} {
+	for _, name := range []string{Schema.Inventory, RefRecord.Referral} {
 		tblExists := false
 		for _, tbl := range tbList {
 			if *tbl == name {
@@ -122,9 +122,18 @@ func (h *Handler) List(dataType string) ([]interface{}, *Http.HttpError) {
 		}
 		return dsList, nil
 	}
-	_, err := h.GetData(JsonKey.Schema, dataType)
-	if err != nil {
-		return nil, err
+	if dataType == JsonKey.Schema {
+		// we don't want to store Schema data locally in Inventory.
+		// but list of dataType supported is the list of referral
+		refList, err := h.List(RefRecord.Referral)
+		if err != nil {
+			return nil, err
+		}
+		// Add internal Inventory type to data type list
+		for key := range InvTypes {
+			refList = append(refList, key)
+		}
+		return refList, nil
 	}
 	referral, err := h.GetReferral(dataType)
 	if err != nil {
@@ -149,7 +158,7 @@ func (h *Handler) List(dataType string) ([]interface{}, *Http.HttpError) {
 func (h *Handler) Get(dataType string, dataPath string) (interface{}, *Http.HttpError) {
 	// if we get to this function, it means dataPath is not empty string already
 	dataId, nextPath := Util.ParsePath(dataPath)
-	if _, ok := InvTypes[dataType]; ok {
+	if _, ok := InvTypes[dataType]; ok || dataType == JsonKey.Schema {
 		if nextPath != "" {
 			return nil, Http.NewHttpError(fmt.Sprintf("path=[%s] not supported on type=[%s]", dataPath, dataType), http.StatusBadRequest)
 		}
@@ -158,12 +167,35 @@ func (h *Handler) Get(dataType string, dataPath string) (interface{}, *Http.Http
 	return h.GetDataByPath(dataType, dataId, nextPath)
 }
 
+func (h *Handler) GetSchemaRecord(dataType string) (*Record.Record, *Http.HttpError) {
+	if _, ok := InvTypes[dataType]; ok {
+		var record *Record.Record
+		switch dataType {
+		case RefRecord.Referral:
+			record, _ = Record.LoadStr(RefRecord.SchemaRecord)
+		case Schema.Inventory:
+			record, _ = Record.LoadStr(InvRecord.SchemaRecord)
+		case SchemaPath.PathName:
+			record, _ = Record.LoadStr(SchemaPath.PathDataSchema)
+		default:
+			return nil, Http.NewHttpError(fmt.Sprintf("don't know how to get schema for Inventory Type[%s]", dataType), http.StatusInternalServerError)
+		}
+		return record, nil
+	}
+	schemaName, _ := SchemaDoc.ParseDataType(dataType)
+	referral, err := h.GetReferral(schemaName)
+	if err != nil {
+		return nil, err
+	}
+	return referral.GetSchema(dataType, h.log)
+}
+
 func (h *Handler) GetRecord(dataType string, dataId string) (*Record.Record, *Http.HttpError) {
 	var data interface{}
 	var err *Http.HttpError
 	switch dataType {
 	case JsonKey.Schema:
-		data, err = h.GetData(JsonKey.Schema, dataId)
+		return h.GetSchemaRecord(dataId)
 	case Schema.Inventory:
 		data, err = h.GetData(Schema.Inventory, dataId)
 	case RefRecord.Referral:
@@ -171,6 +203,12 @@ func (h *Handler) GetRecord(dataType string, dataId string) (*Record.Record, *Ht
 		if err != nil {
 			return nil, err
 		}
+		// when query referral, we also want to display schema of the dataType
+		record, err := referral.GetSchema(dataId, h.log)
+		if err != nil {
+			return nil, err
+		}
+		referral.Schema = record.Data
 		return referral.GetRecord(), nil
 	case SchemaPath.PathName:
 		data, err = h.GetData(SchemaPath.PathName, dataId)
@@ -202,33 +240,6 @@ func (h *Handler) ListData(dataType string) ([]map[string]interface{}, *Http.Htt
 		return nil, Http.NewHttpError(err.Error(), http.StatusInternalServerError)
 	}
 	return result, nil
-}
-
-func (h *Handler) GetSchema(dataType string) (*Record.Record, *Http.HttpError) {
-	data, err := h.GetData(JsonKey.Schema, dataType)
-	if err != nil {
-		return nil, Http.WrapError(err, fmt.Sprintf("object of type “%s” does not exist", dataType), err.Status)
-	}
-	record, e := Record.LoadMap(data.(map[string]interface{}))
-	if e != nil {
-		return nil, Http.WrapError(e, fmt.Sprintf("failed to load schema record data. [type]=[%s]", dataType), http.StatusInternalServerError)
-	}
-	return record, nil
-}
-
-func (h *Handler) GetDataServiceRecord(dataType string, dataId string) (*Record.Record, *Http.HttpError) {
-	if dataType == JsonKey.Schema {
-		return h.GetSchema(dataId)
-	}
-	data, err := h.GetDataServiceData(dataType, dataId)
-	if err != nil {
-		return nil, err
-	}
-	record, e := Record.LoadMap(data.(map[string]interface{}))
-	if e != nil {
-		return nil, Http.NewHttpError("failed to load data as Record", http.StatusInternalServerError)
-	}
-	return record, nil
 }
 
 func (h *Handler) GetDataByPath(dataType string, idPath string, nextPath string) (interface{}, *Http.HttpError) {
@@ -335,10 +346,6 @@ func (h *Handler) GetReferral(dataType string) (*RefRecord.ReferralData, *Http.H
 		return nil, Http.NewHttpError(e.Error(), http.StatusBadRequest)
 	}
 	referral.DsInfo = dsInfo
-	err = referral.GetSchema(h.log)
-	if err != nil {
-		return nil, err
-	}
 	return referral, nil
 }
 

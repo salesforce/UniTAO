@@ -134,7 +134,11 @@ func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (srv *Server) handleGet(w http.ResponseWriter, r *http.Request) {
-	dataType, dataPath := Util.ParsePath(r.RequestURI)
+	urlPath, err := Http.GetUrl(r)
+	if err != nil {
+		Http.ResponseJson(w, err, err.Status, srv.config.Http)
+	}
+	dataType, dataPath := Util.ParsePath(urlPath)
 	if dataType == "" {
 		err := Http.NewHttpError("please use inventory/{type}[/{id}], dataType is empty", http.StatusBadRequest)
 		Http.ResponseJson(w, err, err.Status, srv.config.Http)
@@ -158,8 +162,11 @@ func (srv *Server) handleGet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (srv *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
-	dataType, _ := Util.ParsePath(r.RequestURI)
-	if dataType != "" {
+	urlPath, err := Http.GetUrl(r)
+	if err != nil {
+		Http.ResponseJson(w, err, err.Status, srv.config.Http)
+	}
+	if urlPath != "" {
 		err := Http.NewHttpError("for PUT method, no path allowed", http.StatusBadRequest)
 		Http.ResponseJson(w, err, err.Status, srv.config.Http)
 		return
@@ -182,14 +189,18 @@ func (srv *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (srv *Server) handlerDelete(w http.ResponseWriter, r *http.Request) {
-	dataType, idPath := Util.ParsePath(r.RequestURI)
+	urlPath, err := Http.GetUrl(r)
+	if err != nil {
+		Http.ResponseJson(w, err, err.Status, srv.config.Http)
+	}
+	dataType, idPath := Util.ParsePath(urlPath)
 	id, nextPath := Util.ParsePath(idPath)
 	if nextPath == "" {
 		err := Http.NewHttpError("invalid url for delete, expected format=[{dataType}/{dataId}]", http.StatusBadRequest)
 		Http.ResponseJson(w, err, err.Status, srv.config.Http)
 		return
 	}
-	err := srv.data.DeleteData(dataType, id)
+	err = srv.data.DeleteData(dataType, id)
 	if err != nil {
 		Http.ResponseJson(w, err, err.Status, srv.config.Http)
 		return

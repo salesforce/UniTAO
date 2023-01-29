@@ -125,28 +125,18 @@ func (p *PathNode) syncFromConn() *Http.HttpError {
 	if p.DataId == "" {
 		return Http.NewHttpError(fmt.Sprintf("missing data Id in path @[%s]", p.FullPath()), http.StatusBadRequest)
 	}
-	schemaRecord, err := p.Conn.GetRecord(JsonKey.Schema, p.DataType)
-	if err != nil {
-		return Http.WrapError(err, fmt.Sprintf("failed to get schema, @path=[%s]", p.FullPath()), http.StatusBadRequest)
-	}
 	record, err := p.Conn.GetRecord(p.DataType, p.DataId)
 	if err != nil {
 		return Http.WrapError(err, fmt.Sprintf("failed to get record @path=[%s]", p.FullPath()), http.StatusNotFound)
 	}
 	p.Data = record.Data
-	if record.Version != schemaRecord.Version {
-		archivedType := SchemaDoc.ArchivedSchemaId(p.DataType, record.Version)
-		schemaRecord, err = p.Conn.GetRecord(JsonKey.Schema, archivedType)
-		if err != nil {
-			return err
-		}
+	schemaRecord, err := p.Conn.GetRecord(JsonKey.Schema, fmt.Sprintf("%s/%s", record.Type, record.Version))
+	if err != nil {
+		return Http.WrapError(err, fmt.Sprintf("failed to get record @path=[%s]", p.FullPath()), err.Status)
 	}
 	schema, ex := SchemaDoc.New(schemaRecord.Data)
 	if ex != nil {
 		return Http.WrapError(ex, fmt.Sprintf("failed to create SchemaDoc @path=[%s]", p.FullPath()), http.StatusInternalServerError)
-	}
-	if p.DataType != schema.Id {
-		return Http.NewHttpError(fmt.Sprintf("invalid schema, %s=[%s] and schema=[%s] not match", JsonKey.Name, p.DataType, schema.Id), http.StatusInternalServerError)
 	}
 	p.Schema = schema
 	return nil

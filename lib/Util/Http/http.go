@@ -59,6 +59,17 @@ type Config struct {
 	HeaderCfg map[string]interface{} `json:"headers"`
 }
 
+func GetUrl(r *http.Request) (string, *HttpError) {
+	if !strings.Contains(r.RequestURI, "%") {
+		return r.RequestURI, nil
+	}
+	decodeUrl, err := url.QueryUnescape(r.RequestURI)
+	if err != nil {
+		return "", WrapError(err, fmt.Sprintf("failed to parse Url[%s]", r.RequestURI), http.StatusBadRequest)
+	}
+	return decodeUrl, nil
+}
+
 func LoadRequest(r *http.Request) (interface{}, *HttpError) {
 	reqBody, err := ioutil.ReadAll(r.Body)
 	if err != nil {
