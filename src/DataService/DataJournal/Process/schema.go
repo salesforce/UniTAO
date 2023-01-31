@@ -165,7 +165,7 @@ func (s *SchemaChanges) subscribeCMT(schemaRec *Record.Record) *Http.HttpError {
 	return nil
 }
 
-func (s *SchemaChanges) subscribeIndex(dataType string, version string, idx CmtIndex.AutoIndex) *Http.HttpError {
+func (s *SchemaChanges) subscribeIndex(dataType string, version string, idx *CmtIndex.AutoIndex) *Http.HttpError {
 	cmtIdx := CmtIndex.CmtIndex{
 		DataType: idx.ContentType,
 		Subscriber: map[string]CmtIndex.CmtSubscriber{
@@ -189,7 +189,7 @@ func (s *SchemaChanges) subscribeIndex(dataType string, version string, idx CmtI
 	return nil
 }
 
-func (s *SchemaChanges) removeIdxSubscription(dataType string, version string, idx CmtIndex.AutoIndex) *Http.HttpError {
+func (s *SchemaChanges) removeIdxSubscription(dataType string, version string, idx *CmtIndex.AutoIndex) *Http.HttpError {
 	_, err := s.Data.Inventory.Get(CmtIndex.KeyCmtIdx, idx.ContentType)
 	if err != nil {
 		if err.Status != http.StatusNotFound {

@@ -33,6 +33,7 @@ import (
 
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
+	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
 	"github.com/salesforce/UniTAO/lib/SchemaPath"
 	SchemaPathData "github.com/salesforce/UniTAO/lib/SchemaPath/Data"
 	"github.com/salesforce/UniTAO/lib/Util"
@@ -65,9 +66,29 @@ func PrepareConn(recordStr string) *SchemaPathData.Connection {
 		if err != nil {
 			return nil, Http.WrapError(err, "failed to ummarshal schema map str", http.StatusInternalServerError)
 		}
-		data, ok := recordMap[dataType].(map[string]interface{})[dataId].(map[string]interface{})
-		if !ok {
-			return nil, Http.NewHttpError(fmt.Sprintf("record [%s/%s] does not exists", dataType, dataId), http.StatusNotFound)
+		var data map[string]interface{}
+		if dataType == JsonKey.Schema {
+			schemaId, schemaVer, _ := SchemaDoc.ParseDataType(dataId)
+			schemaMap := recordMap[dataType].(map[string]interface{})
+			schemaData, ok := schemaMap[schemaId].(map[string]interface{})
+			if !ok {
+				return nil, Http.NewHttpError(fmt.Sprintf("schema [%s/%s] does not exists", dataType, schemaId), http.StatusNotFound)
+			}
+			data = schemaData
+			if schemaVer != "" && data[Record.Version] != schemaVer {
+				archiveId := SchemaDoc.ArchivedSchemaId(schemaId, schemaVer)
+				schemaData, ok := schemaMap[archiveId].(map[string]interface{})
+				if !ok {
+					return nil, Http.NewHttpError(fmt.Sprintf("schema [%s/%s] does not exists", dataType, archiveId), http.StatusNotFound)
+				}
+				data = schemaData
+			}
+		} else {
+			recordData, ok := recordMap[dataType].(map[string]interface{})[dataId].(map[string]interface{})
+			if !ok {
+				return nil, Http.NewHttpError(fmt.Sprintf("record [%s/%s] does not exists", dataType, dataId), http.StatusNotFound)
+			}
+			data = recordData
 		}
 		record, err := Record.LoadMap(data)
 		if err != nil {

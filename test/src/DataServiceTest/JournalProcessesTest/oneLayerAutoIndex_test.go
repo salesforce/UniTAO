@@ -249,7 +249,7 @@ func addLayer1SchemaDataAndUpgradSchema(t *TestEnv) {
 		}
 	}`
 	addData(t, catLayer1Data1)
-	_, err := t.Handler.Get(CmtIndex.KeyCmtIdx, "test")
+	_, err := t.Handler.LocalData(CmtIndex.KeyCmtIdx, "test")
 	if err == nil {
 		t.T.Fatal("there should be no CmtIndex of Type=[test]")
 	}
@@ -277,7 +277,7 @@ func addLayer1SchemaDataAndUpgradSchema(t *TestEnv) {
 		}
 	}`
 	addSchema(t, catLayer1SchemaV2)
-	cmtIdxData, err := t.Handler.Get(CmtIndex.KeyCmtIdx, "test")
+	cmtIdxData, err := t.Handler.LocalData(CmtIndex.KeyCmtIdx, "test")
 	if err != nil {
 		t.T.Fatal("failed to add CmtIndex of Type=[test]")
 	}

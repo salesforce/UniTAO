@@ -43,6 +43,9 @@ import (
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
 	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
+	"github.com/salesforce/UniTAO/lib/SchemaPath"
+	SchemaPathData "github.com/salesforce/UniTAO/lib/SchemaPath/Data"
+	"github.com/salesforce/UniTAO/lib/SchemaPath/PathCmd"
 	"github.com/salesforce/UniTAO/lib/Util"
 	"github.com/salesforce/UniTAO/lib/Util/HashLock"
 	"github.com/salesforce/UniTAO/lib/Util/Http"
@@ -101,7 +104,7 @@ func (h *Handler) QueryDb(dataType string, dataId string) ([]map[string]interfac
 
 func (h *Handler) List(dataType string) ([]interface{}, *Http.HttpError) {
 	if dataType != JsonKey.Schema && dataType != "" {
-		_, err := h.GetData(JsonKey.Schema, dataType)
+		_, err := h.LocalData(JsonKey.Schema, dataType)
 		if err != nil {
 			return nil, Http.WrapError(err, fmt.Sprintf("object of type “%s” does not exist", dataType), err.Status)
 		}
@@ -123,23 +126,55 @@ func (h *Handler) List(dataType string) ([]interface{}, *Http.HttpError) {
 	return result, nil
 }
 
-func (h *Handler) Get(dataType string, dataId string) (map[string]interface{}, *Http.HttpError) {
+func (h *Handler) Get(dataType string, idPath string) (interface{}, *Http.HttpError) {
 	if dataType == JsonKey.Schema {
-		id, version := Util.ParsePath(dataId)
+		id, version, ex := SchemaDoc.ParseDataType(idPath)
+		if ex != nil {
+			return nil, Http.WrapError(ex, fmt.Sprintf("failed to parse schema type[%s]", idPath), http.StatusBadRequest)
+		}
 		schema, err := h.LocalSchema(id, version)
 		if err != nil {
 			return nil, err
 		}
 		return schema.Record.Map(), nil
 	}
-	_, err := h.GetData(JsonKey.Schema, dataType)
+	dataId, nextPath := Util.ParsePath(idPath)
+	isLocal, err := h.Inventory.IsLocal(dataType, dataId)
 	if err != nil {
-		return nil, Http.WrapError(err, fmt.Sprintf("object of type “%s” does not exist", dataType), err.Status)
+		return nil, err
 	}
-	return h.GetData(dataType, dataId)
+	if !isLocal {
+		return nil, Http.NewHttpError(fmt.Sprintf("data type [%s/%s] is not start from this DataService", dataType, idPath), http.StatusNotFound)
+	}
+	if nextPath == "" && !strings.Contains(dataId, PathCmd.CmdPrefix) {
+		return h.LocalData(dataType, dataId)
+	}
+	return h.GetDataByPath(dataType, dataId, nextPath)
 }
 
-func (h *Handler) GetData(dataType string, dataId string) (map[string]interface{}, *Http.HttpError) {
+func (h *Handler) GetDataByPath(dataType string, idPath string, nextPath string) (interface{}, *Http.HttpError) {
+	conn := SchemaPathData.Connection{
+		FuncRecord: h.Inventory.Get,
+	}
+	dataPath := idPath
+	if nextPath != "" {
+		dataPath = fmt.Sprintf("%s/%s", idPath, nextPath)
+	}
+	query, err := SchemaPath.CreateQuery(&conn, dataType, dataPath)
+	if err != nil {
+		return nil, err
+	}
+	result, err := query.WalkValue()
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return nil, Http.NewHttpError(fmt.Sprintf("walk SchemaPath with no value.from [path]=[%s]", dataPath), http.StatusNotFound)
+	}
+	return result, nil
+}
+
+func (h *Handler) LocalData(dataType string, dataId string) (map[string]interface{}, *Http.HttpError) {
 	recordList, err := h.QueryDb(dataType, dataId)
 	if err != nil {
 		return nil, err
@@ -158,7 +193,7 @@ func (h *Handler) querySchema(dataType string) (*Schema.SchemaOps, *Http.HttpErr
 	if ok {
 		return schema, nil
 	}
-	data, err := h.GetData(JsonKey.Schema, dataType)
+	data, err := h.LocalData(JsonKey.Schema, dataType)
 	if err != nil {
 		return nil, err
 	}
@@ -386,7 +421,7 @@ func (h *Handler) validateCmtAutoIdxOnSchema(record *Record.Record) *Http.HttpEr
 	return nil
 }
 
-func (h *Handler) validateCmtAutoIdx(idx CmtIndex.AutoIndex) *Http.HttpError {
+func (h *Handler) validateCmtAutoIdx(idx *CmtIndex.AutoIndex) *Http.HttpError {
 	schemaRec, err := h.Inventory.Get(JsonKey.Schema, idx.ContentType)
 	if err != nil {
 		return err
@@ -554,7 +589,7 @@ func (h *Handler) Set(dataType string, dataId string, record *Record.Record) *Ht
 	idKey := fmt.Sprintf("%s/%s", dataType, dataId)
 	h.Lock.Aquire(idKey, "HandlerSet")
 	defer h.Lock.Release(idKey, "HandlerSet")
-	data, err := h.GetData(dataType, dataId)
+	data, err := h.LocalData(dataType, dataId)
 	if err != nil && err.Status != http.StatusNotFound {
 		return err
 	}
@@ -693,7 +728,7 @@ func (h *Handler) Patch(dataType string, idPath string, headers map[string]inter
 	h.Lock.Aquire(idKey, "HandlerPatch")
 	h.Log(fmt.Sprintf("Handler PATCH[%s/%s]: lock acquired, GetData", dataType, dataId))
 	defer h.Lock.Release(idKey, "HandlerPatch")
-	patchData, err := h.GetData(dataType, dataId)
+	patchData, err := h.LocalData(dataType, dataId)
 	if err != nil {
 		h.Log(fmt.Sprintf("cannot get data [%s/%s]", dataType, dataId))
 		h.Log(err.Error())
