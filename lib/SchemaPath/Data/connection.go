@@ -31,6 +31,7 @@ import (
 
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
+	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
 	"github.com/salesforce/UniTAO/lib/Util/Http"
 	"github.com/salesforce/UniTAO/lib/Util/Json"
 )
@@ -57,6 +58,15 @@ func (c *Connection) cacheData(dataType string, id string) (interface{}, *Http.H
 			IdCache:  make(map[string]interface{}),
 		}
 	}
+	if dataType == JsonKey.Schema {
+		schemaId, schemaVer, ex := SchemaDoc.ParseDataType(id)
+		if ex != nil {
+			return nil, Http.WrapError(ex, fmt.Sprintf("failed to parse data type[%s]", id), http.StatusBadRequest)
+		}
+		if schemaVer != "" {
+			id = SchemaDoc.ArchivedSchemaId(schemaId, schemaVer)
+		}
+	}
 	data, ok := c.cache[dataType].IdCache[id]
 	if ok {
 		dataCopy, ex := Json.Copy(data)
@@ -66,13 +76,7 @@ func (c *Connection) cacheData(dataType string, id string) (interface{}, *Http.H
 		recordCopy, _ := Record.LoadMap(dataCopy.(map[string]interface{}))
 		return recordCopy, nil
 	}
-	var err *Http.HttpError
-	switch dataType {
-	case JsonKey.Schema:
-		data, err = c.FuncRecord(JsonKey.Schema, id)
-	default:
-		data, err = c.FuncRecord(dataType, id)
-	}
+	data, err := c.FuncRecord(dataType, id)
 	if err != nil {
 		return nil, err
 	}

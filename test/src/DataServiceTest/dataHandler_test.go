@@ -289,7 +289,7 @@ func TestDataHandlerPatchAttr(t *testing.T) {
 	if e != nil {
 		t.Fatalf("failed to get patched data")
 	}
-	data, e := handler.Get("test", "test01")
+	data, e := handler.LocalData("test", "test01")
 	if e != nil {
 		t.Fatalf("failed to get patched data")
 	}
@@ -297,7 +297,7 @@ func TestDataHandlerPatchAttr(t *testing.T) {
 		t.Fatalf("patch failed")
 	}
 	handler.Patch("test", "test01/attr2", nil, 2)
-	data, e = handler.Get("test", "test01")
+	data, e = handler.LocalData("test", "test01")
 	if e != nil {
 		t.Fatalf("failed to get patched data")
 	}
@@ -312,7 +312,7 @@ func TestDataHandlerPatchAttr(t *testing.T) {
 	if e != nil {
 		t.Fatalf("failed to patch next level of attr. Err: %s", e)
 	}
-	data, e = handler.Get("test", "test01")
+	data, e = handler.LocalData("test", "test01")
 	if e != nil {
 		t.Fatalf("failed to get patched data")
 	}
@@ -326,7 +326,7 @@ func TestDataHandlerPatchAttr(t *testing.T) {
 	if e != nil {
 		t.Fatalf("failed to patch next level of attr. Err: %s", e)
 	}
-	data, e = handler.Get("test", "test01")
+	data, e = handler.LocalData("test", "test01")
 	if e != nil {
 		t.Fatalf("failed to get patched data")
 	}
@@ -489,10 +489,11 @@ func TestDataHandlerPatchArrayObj(t *testing.T) {
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
-	data, e := handler.Get("test", "test01")
+	result, e := handler.Get("test", "test01")
 	if e != nil {
 		t.Fatalf("failed to get patched data")
 	}
+	data := result.(map[string]interface{})
 	if len(data[Record.Data].(map[string]interface{})["attr1"].([]interface{})) != 1 {
 		t.Fatalf("patch failed")
 	}
@@ -504,7 +505,7 @@ func TestDataHandlerPatchArrayObj(t *testing.T) {
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
-	data, e = handler.Get("test", "test01")
+	data, e = handler.LocalData("test", "test01")
 	if e != nil {
 		t.Fatalf("failed to get patched data")
 	}
@@ -518,7 +519,7 @@ func TestDataHandlerPatchArrayObj(t *testing.T) {
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
-	data, e = handler.Get("test", "test01")
+	data, e = handler.LocalData("test", "test01")
 	if e != nil {
 		t.Fatalf("failed to get patched data")
 	}
@@ -534,7 +535,7 @@ func TestDataHandlerPatchArrayObj(t *testing.T) {
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
-	data, e = handler.Get("test", "test01")
+	data, e = handler.LocalData("test", "test01")
 	if e != nil {
 		t.Fatalf("failed to get patched data")
 	}
@@ -548,7 +549,7 @@ func TestDataHandlerPatchArrayObj(t *testing.T) {
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
-	data, e = handler.Get("test", "test01")
+	data, e = handler.LocalData("test", "test01")
 	if e != nil {
 		t.Fatalf("failed to get patched data")
 	}
@@ -710,7 +711,7 @@ func TestDataHandlerPatchArraySimpleStr(t *testing.T) {
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
-	data, e := handler.Get("test", "test01")
+	data, e := handler.LocalData("test", "test01")
 	if e != nil {
 		t.Fatalf("failed to get patched data")
 	}
@@ -724,7 +725,7 @@ func TestDataHandlerPatchArraySimpleStr(t *testing.T) {
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
-	data, e = handler.Get("test", "test01")
+	data, e = handler.LocalData("test", "test01")
 	if e != nil {
 		t.Fatalf("failed to get patched data")
 	}
@@ -738,7 +739,7 @@ func TestDataHandlerPatchArraySimpleStr(t *testing.T) {
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
-	data, e = handler.Get("test", "test01")
+	data, e = handler.LocalData("test", "test01")
 	if e != nil {
 		t.Fatalf("failed to get patched data")
 	}
@@ -752,7 +753,7 @@ func TestDataHandlerPatchArraySimpleStr(t *testing.T) {
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
-	data, e = handler.Get("test", "test01")
+	data, e = handler.LocalData("test", "test01")
 	if e != nil {
 		t.Fatalf("failed to get patched data")
 	}
@@ -915,7 +916,7 @@ func TestDataHandlerPatchArrayInt(t *testing.T) {
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
-	data, e := handler.Get("test", "test01")
+	data, e := handler.LocalData("test", "test01")
 	if e != nil {
 		t.Fatalf("failed to get patched data")
 	}
@@ -929,7 +930,7 @@ func TestDataHandlerPatchArrayInt(t *testing.T) {
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
-	data, e = handler.Get("test", "test01")
+	data, e = handler.LocalData("test", "test01")
 	if e != nil {
 		t.Fatalf("failed to get patched data")
 	}
@@ -943,7 +944,7 @@ func TestDataHandlerPatchArrayInt(t *testing.T) {
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
-	data, e = handler.Get("test", "test01")
+	data, e = handler.LocalData("test", "test01")
 	if e != nil {
 		t.Fatalf("failed to get patched data")
 	}
@@ -957,7 +958,7 @@ func TestDataHandlerPatchArrayInt(t *testing.T) {
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
-	data, e = handler.Get("test", "test01")
+	data, e = handler.LocalData("test", "test01")
 	if e != nil {
 		t.Fatalf("failed to get patched data")
 	}
@@ -974,7 +975,7 @@ func TestDataHandlerPatchArrayInt(t *testing.T) {
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
-	data, e = handler.Get("test", "test01")
+	data, e = handler.LocalData("test", "test01")
 	if e != nil {
 		t.Fatalf("failed to get patched data")
 	}
@@ -1140,7 +1141,7 @@ func TestDataHandlerPatchArrayCmt(t *testing.T) {
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
-	data, e := handler.Get("test", "test01")
+	data, e := handler.LocalData("test", "test01")
 	if e != nil {
 		t.Fatalf("failed to get patched data")
 	}
@@ -1154,7 +1155,7 @@ func TestDataHandlerPatchArrayCmt(t *testing.T) {
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
-	data, e = handler.Get("test", "test01")
+	data, e = handler.LocalData("test", "test01")
 	if e != nil {
 		t.Fatalf("failed to get patched data")
 	}
@@ -1175,10 +1176,11 @@ func TestDataHandlerPatchArrayCmt(t *testing.T) {
 	if e != nil {
 		t.Fatalf("failed to patch data. Error:%s", e)
 	}
-	data, e = handler.Get("test", "test01")
+	result, e := handler.Get("test", "test01")
 	if e != nil {
 		t.Fatalf("failed to get patched data")
 	}
+	data = result.(map[string]interface{})
 	if len(data[Record.Data].(map[string]interface{})["attr4"].([]interface{})) != 2 {
 		t.Fatalf("patch failed")
 	}

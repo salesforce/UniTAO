@@ -196,7 +196,7 @@ func TestIterOneFork(t *testing.T) {
 		"refObj": {
 			"ref01_01": {
 				"__id": "ref01_01",
-				"__type": "Obj",
+				"__type": "refObj",
 				"__ver": "0.0.1",
 				"data": {
 					"key1": "01",
@@ -206,7 +206,7 @@ func TestIterOneFork(t *testing.T) {
 			},
 			"ref01_02": {
 				"__id": "ref01_02",
-				"__type": "Obj",
+				"__type": "refObj",
 				"__ver": "0.0.1",
 				"data": {
 					"key1": "01",
@@ -600,7 +600,7 @@ func TestIterTwoForks(t *testing.T) {
 		"refObj": {
 			"ref01_01": {
 				"__id": "ref01_01",
-				"__type": "Obj",
+				"__type": "refObj",
 				"__ver": "0.0.1",
 				"data": {
 					"key1": "01",
@@ -610,7 +610,7 @@ func TestIterTwoForks(t *testing.T) {
 			},
 			"ref01_02": {
 				"__id": "ref01_02",
-				"__type": "Obj",
+				"__type": "refObj",
 				"__ver": "0.0.1",
 				"data": {
 					"key1": "01",
@@ -1037,7 +1037,7 @@ func TestIterFilter(t *testing.T) {
 		"refObj": {
 			"ref01_01": {
 				"__id": "ref01_01",
-				"__type": "Obj",
+				"__type": "refObj",
 				"__ver": "0.0.1",
 				"data": {
 					"key1": "01",
@@ -1047,7 +1047,7 @@ func TestIterFilter(t *testing.T) {
 			},
 			"ref01_02": {
 				"__id": "ref01_02",
-				"__type": "Obj",
+				"__type": "refObj",
 				"__ver": "0.0.1",
 				"data": {
 					"key1": "01",

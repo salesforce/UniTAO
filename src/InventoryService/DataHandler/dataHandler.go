@@ -182,7 +182,10 @@ func (h *Handler) GetSchemaRecord(dataType string) (*Record.Record, *Http.HttpEr
 		}
 		return record, nil
 	}
-	schemaName, _ := SchemaDoc.ParseDataType(dataType)
+	schemaName, _, ex := SchemaDoc.ParseDataType(dataType)
+	if ex != nil {
+		return nil, Http.WrapError(ex, fmt.Sprintf("failed to parse schema type[%s]", dataType), http.StatusBadRequest)
+	}
 	referral, err := h.GetReferral(schemaName)
 	if err != nil {
 		return nil, err

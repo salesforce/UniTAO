@@ -90,7 +90,7 @@ func (s *CmtIndexChanges) HandleType(dataType string, version string) (bool, err
 
 func (s *CmtIndexChanges) isSubscribedType(dataType string) (bool, *Http.HttpError) {
 	s.Log(fmt.Sprintf("check if data of [%s] is subscribed", dataType))
-	_, err := s.Data.Get(CmtIndex.KeyCmtIdx, dataType)
+	_, err := s.Data.LocalData(CmtIndex.KeyCmtIdx, dataType)
 	if err != nil {
 		if err.Status == http.StatusNotFound {
 			return false, nil
@@ -140,7 +140,7 @@ func (s *CmtIndexChanges) processSubscribedDataChange(dataType string, dataId st
 	if entry.Before == nil && entry.After == nil {
 		return Http.NewHttpError(fmt.Sprintf("[%s/%s] entry page/idx=[%d/%d], have both Before and After empty.", dataType, dataId, entry.Page, entry.Idx), http.StatusNotModified)
 	}
-	cmtIdxData, err := s.Data.GetData(CmtIndex.KeyCmtIdx, dataType)
+	cmtIdxData, err := s.Data.LocalData(CmtIndex.KeyCmtIdx, dataType)
 	if err != nil {
 		return err
 	}
@@ -161,7 +161,7 @@ func (s *CmtIndexChanges) processSubscribedDataChange(dataType string, dataId st
 		if ex != nil {
 			s.log.Printf("failed to load entry.After as record. [%s/%s], page/idx=[%d/%d], Error:%s", dataType, dataId, entry.Page, entry.Idx, ex)
 		}
-		_, err = s.Data.GetData(rec.Type, rec.Id)
+		_, err = s.Data.LocalData(rec.Type, rec.Id)
 		if err != nil {
 			if err.Status != http.StatusNotFound {
 				s.Log(fmt.Sprintf("processDataChange[%s/%s]: failed to get current record, Error:%s", rec.Type, rec.Id, err))
