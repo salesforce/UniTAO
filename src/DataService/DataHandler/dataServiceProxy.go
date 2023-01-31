@@ -36,6 +36,8 @@ import (
 	"github.com/salesforce/UniTAO/lib/Schema/CmtIndex"
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
+	"github.com/salesforce/UniTAO/lib/Schema/SchemaDoc"
+	"github.com/salesforce/UniTAO/lib/Util"
 	"github.com/salesforce/UniTAO/lib/Util/Http"
 	"github.com/salesforce/UniTAO/lib/Util/Json"
 )
@@ -90,23 +92,27 @@ func (i *DataServiceProxy) GetDsInfo(dataType string) (*InvRecord.DataServiceInf
 		i.Log(errMsg)
 		return nil, Http.NewHttpError(errMsg, http.StatusBadRequest)
 	}
-	_, ok := Common.InternalTypes[dataType]
+	schemaId, _, ex := SchemaDoc.ParseDataType(dataType)
+	if ex != nil {
+		return nil, Http.WrapError(ex, fmt.Sprintf("parse dataType[%s] failed", dataType), http.StatusBadRequest)
+	}
+	_, ok := Common.InternalTypes[schemaId]
 	if ok {
 		errMsg := fmt.Sprintf("internal data type of [%s], not for inventory", dataType)
 		i.Log(errMsg)
 		return nil, Http.NewHttpError(errMsg, http.StatusBadRequest)
 	}
-	if _, ok := i.DsInfo[dataType]; !ok {
+	if _, ok := i.DsInfo[schemaId]; !ok {
 		i.refresh()
 	}
-	dsInfo, ok := i.DsInfo[dataType]
+	dsInfo, ok := i.DsInfo[schemaId]
 	if !ok {
-		errMsg := fmt.Sprintf("unknwon data type of [%s] for inventory", dataType)
+		errMsg := fmt.Sprintf("unknwon data type of [%s] for inventory", schemaId)
 		i.Log(errMsg)
 		return nil, Http.NewHttpError(errMsg, http.StatusBadRequest)
 	}
 	if dsInfo == nil {
-		refUrl, _ := Http.URLPathJoin(i.Url, RefRecord.Referral, dataType)
+		refUrl, _ := Http.URLPathJoin(i.Url, RefRecord.Referral, schemaId)
 		dsReferralInfo, status, err := Http.GetRestData(*refUrl)
 		if err != nil {
 			errMsg := fmt.Sprintf("failed to get referral data type=[%s] from inventory=[%s]", dataType, i.Url)
@@ -135,10 +141,10 @@ func (i *DataServiceProxy) GetDsInfo(dataType string) (*InvRecord.DataServiceInf
 			i.Log(err.Error())
 			return nil, Http.WrapError(err, errMsg, http.StatusInternalServerError)
 		}
-		i.DsInfo[dataType] = dsRef.DsInfo
+		i.DsInfo[schemaId] = dsRef.DsInfo
 		dsInfo = dsRef.DsInfo
 	}
-	i.Log(fmt.Sprintf("DataService[%s] for dataType[%s]", dsInfo.Id, dataType))
+	i.Log(fmt.Sprintf("DataService[%s] for dataType[%s]", dsInfo.Id, schemaId))
 	return dsInfo, nil
 }
 
@@ -207,8 +213,14 @@ func (i *DataServiceProxy) IsLocal(dataType string, dataId string) (bool, *Http.
 		if dataId == "" {
 			return false, nil
 		}
-		_, ex := i.handler.LocalSchema(dataId, "")
-		err = ex
+		if dataType == JsonKey.Schema {
+			schemaId, schemaVer := Util.ParsePath(dataId)
+			_, ex := i.handler.LocalSchema(schemaId, schemaVer)
+			err = ex
+		} else {
+			_, ex := i.handler.LocalSchema(dataId, "")
+			err = ex
+		}
 	} else {
 		_, ex := i.handler.LocalSchema(dataType, "")
 		err = ex
@@ -228,8 +240,17 @@ func (i *DataServiceProxy) Get(dataType string, dataId string) (*Record.Record, 
 		return nil, err
 	}
 	if isLocal {
+		if dataType == JsonKey.Schema {
+			schemaId, schemaVer := Util.ParsePath(dataId)
+			schema, err := i.handler.LocalSchema(schemaId, schemaVer)
+			if err != nil {
+				i.Log(fmt.Sprintf("failed to get local schema [%s/%s]", schemaId, schemaVer))
+				return nil, err
+			}
+			return schema.Record, nil
+		}
 		i.Log(fmt.Sprintf("%s/%s is local data", dataType, dataId))
-		data, err := i.handler.Get(dataType, dataId)
+		data, err := i.handler.LocalData(dataType, dataId)
 		if err != nil {
 			i.Log(fmt.Sprintf("local GET failed. [%s/%s]", dataType, dataId))
 			i.Log(err.Error())

@@ -78,7 +78,7 @@ func TestAddSchema(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to add init schema. Error: %s", err)
 	}
-	data, err := handler.Get(JsonKey.Schema, "test")
+	data, err := handler.LocalData(JsonKey.Schema, "test")
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -107,7 +107,7 @@ func TestAddSchema(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to add new schema. Error: %s", err)
 	}
-	data, err = handler.Get(JsonKey.Schema, "test")
+	data, err = handler.LocalData(JsonKey.Schema, "test")
 	if err != nil {
 		t.Fatalf(err.Error())
 	}

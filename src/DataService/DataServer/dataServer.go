@@ -170,7 +170,12 @@ func (srv *Server) init() error {
 }
 
 func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
-	dataType, idPath := Util.ParsePath(r.URL.Path)
+	requestUrl, err := Http.GetUrl(r)
+	if err != nil {
+		srv.log.Printf("failed to parse request URL. Error:%s", err)
+		Http.ResponseJson(w, err, err.Status, srv.config.Http)
+	}
+	dataType, idPath := Util.ParsePath(requestUrl)
 	srv.log.Printf("process request[%s] on [%s/%s]", r.Method, dataType, idPath)
 	if dataType == Record.KeyRecord {
 		srv.log.Printf("Invalid request on [%s]", dataType)
@@ -213,8 +218,8 @@ func (srv *Server) handler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (srv *Server) handleGet(w http.ResponseWriter, dataType string, dataId string) {
-	if dataId == "" {
+func (srv *Server) handleGet(w http.ResponseWriter, dataType string, idPath string) {
+	if idPath == "" {
 		srv.log.Printf("list id of [%s]", dataType)
 		idList, err := srv.data.List(dataType)
 		if err != nil {
@@ -228,11 +233,11 @@ func (srv *Server) handleGet(w http.ResponseWriter, dataType string, dataId stri
 	var err *Http.HttpError
 	switch dataType {
 	case Common.KeyJournal:
-		srv.log.Printf("get Journal of type [%s]", dataId)
-		result, err = srv.journal.GetJournal(dataId)
+		srv.log.Printf("get Journal of type [%s]", idPath)
+		result, err = srv.journal.GetJournal(idPath)
 	default:
-		srv.log.Printf("get data of [%s/%s]", dataType, dataId)
-		result, err = srv.data.Get(dataType, dataId)
+		srv.log.Printf("get data of [%s/%s]", dataType, idPath)
+		result, err = srv.data.Get(dataType, idPath)
 	}
 	if err != nil {
 		Http.ResponseJson(w, err, err.Status, srv.config.Http)

@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"path"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/salesforce/UniTAO/lib/Schema/JsonKey"
@@ -167,12 +168,41 @@ func New(data map[string]interface{}) (*SchemaDoc, error) {
 	return doc, nil
 }
 
-func ParseDataType(dataType string) (string, string) {
-	schemaName, schemaVersion := Util.ParseCustomPath(dataType, JsonKey.ArchivedSchemaIdDiv)
-	if schemaVersion != "" {
-		return schemaName, schemaVersion
+func ValidateVersionFormat(version string) bool {
+	if version == "" {
+		// empty version consider validate.
+		return true
 	}
-	return Util.ParsePath(dataType)
+	verList := strings.Split(version, ".")
+	for _, ver := range verList {
+		digi, err := strconv.Atoi(ver)
+		if err != nil {
+			return false
+		}
+		if digi < 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func ParseDataType(dataType string) (string, string, error) {
+	schemaName, schemaVer := Util.ParsePath(dataType)
+	if schemaVer != "" {
+		_, ver := Util.ParseCustomPath(schemaName, JsonKey.ArchivedSchemaIdDiv)
+		if ver != "" {
+			return "", "", fmt.Errorf("invalid type[%s], cannot specify version[%s] on archived type[%s]", dataType, schemaVer, ver)
+		}
+	} else {
+		id, ver := Util.ParseCustomPath(dataType, JsonKey.ArchivedSchemaIdDiv)
+		schemaName = id
+		schemaVer = ver
+
+	}
+	if !ValidateVersionFormat(schemaVer) {
+		return "", "", fmt.Errorf("invalid type[%s], version[%s] format not correct, expect[x.x.x.x]", dataType, schemaVer)
+	}
+	return schemaName, schemaVer, nil
 }
 
 func ArchivedSchemaId(dataType string, typeVersion string) string {

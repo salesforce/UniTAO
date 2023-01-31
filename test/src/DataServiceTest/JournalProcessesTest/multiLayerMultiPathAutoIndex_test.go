@@ -320,7 +320,7 @@ func TestForAddLayerToExistsIdxTree(t *testing.T) {
 		}
 	}`
 	addSchema(env, Layer1SchemaV1)
-	cmtIdxData, err := env.Handler.GetData(CmtIndex.KeyCmtIdx, "leaf")
+	cmtIdxData, err := env.Handler.LocalData(CmtIndex.KeyCmtIdx, "leaf")
 	if err != nil {
 		t.Fatalf("failed to get [%s] record for [leaf], Error:%s", CmtIndex.KeyCmtIdx, err)
 	}
@@ -458,7 +458,7 @@ func TestForAddLayerToExistsIdxTree(t *testing.T) {
 		}
 	}`
 	addSchema(env, layer2SchemaV1)
-	cmtIdxData, err = env.Handler.GetData(CmtIndex.KeyCmtIdx, "leaf")
+	cmtIdxData, err = env.Handler.LocalData(CmtIndex.KeyCmtIdx, "leaf")
 	if err != nil {
 		t.Fatalf("failed to get [%s] record for [leaf], Error:%s", CmtIndex.KeyCmtIdx, err)
 	}
