@@ -1,5 +1,5 @@
 {
-    "DataService_01": [
+    "DataService01": [
         {
             "__id": "nc-eth1000-aef",
             "__type": "NetworkCard",
@@ -9,5 +9,5 @@
             }
         }
     ],
-    "DataService_02": []
+    "DataService02": []
 }

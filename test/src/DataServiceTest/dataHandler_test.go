@@ -57,7 +57,7 @@ func TestDataHandler(t *testing.T) {
 			"type": "http",
 			"dns": "localhost",
 			"port": "8002",
-			"id": "DataService_01"
+			"id": "DataService01"
 		},
 		"inventory": {
 			"url": "http://localhost:8004"
@@ -130,8 +130,8 @@ func TestDataHandler(t *testing.T) {
 		}
 	}
 	`
-	connectDb := func(config DbConfig.DatabaseConfig) (DbIface.Database, error) {
-		mockDb, err := NewMockDb(config, schemaStr)
+	connectDb := func(config DbConfig.DatabaseConfig, logger *log.Logger) (DbIface.Database, error) {
+		mockDb, err := NewMockDb(config, schemaStr, logger)
 		if err != nil {
 			return nil, err
 		}
@@ -212,7 +212,7 @@ func TestDataHandlerPatchAttr(t *testing.T) {
 			"type": "http",
 			"dns": "localhost",
 			"port": "8002",
-			"id": "DataService_01"
+			"id": "DataService01"
 		},
 		"inventory": {
 			"url": "http://localhost:8004"
@@ -274,8 +274,8 @@ func TestDataHandlerPatchAttr(t *testing.T) {
 			}
 		}
 	}`
-	connectDb := func(config DbConfig.DatabaseConfig) (DbIface.Database, error) {
-		mockDb, err := NewMockDb(config, dataStr)
+	connectDb := func(config DbConfig.DatabaseConfig, logger *log.Logger) (DbIface.Database, error) {
+		mockDb, err := NewMockDb(config, dataStr, logger)
 		if err != nil {
 			return nil, err
 		}
@@ -352,7 +352,7 @@ func TestDataHandlerPatchArrayObj(t *testing.T) {
 			"type": "http",
 			"dns": "localhost",
 			"port": "8002",
-			"id": "DataService_01"
+			"id": "DataService01"
 		},
 		"inventory": {
 			"url": "http://localhost:8004"
@@ -470,8 +470,8 @@ func TestDataHandlerPatchArrayObj(t *testing.T) {
 			}
 		}
 	}`
-	connectDb := func(config DbConfig.DatabaseConfig) (DbIface.Database, error) {
-		mockDb, err := NewMockDb(config, dataStr)
+	connectDb := func(config DbConfig.DatabaseConfig, logger *log.Logger) (DbIface.Database, error) {
+		mockDb, err := NewMockDb(config, dataStr, logger)
 		if err != nil {
 			return nil, err
 		}
@@ -578,7 +578,7 @@ func TestDataHandlerPatchArraySimpleStr(t *testing.T) {
 			"type": "http",
 			"dns": "localhost",
 			"port": "8002",
-			"id": "DataService_01"
+			"id": "DataService01"
 		},
 		"inventory": {
 			"url": "http://localhost:8004"
@@ -696,8 +696,8 @@ func TestDataHandlerPatchArraySimpleStr(t *testing.T) {
 			}
 		}
 	}`
-	connectDb := func(config DbConfig.DatabaseConfig) (DbIface.Database, error) {
-		mockDb, err := NewMockDb(config, dataStr)
+	connectDb := func(config DbConfig.DatabaseConfig, logger *log.Logger) (DbIface.Database, error) {
+		mockDb, err := NewMockDb(config, dataStr, logger)
 		if err != nil {
 			return nil, err
 		}
@@ -782,7 +782,7 @@ func TestDataHandlerPatchArrayInt(t *testing.T) {
 			"type": "http",
 			"dns": "localhost",
 			"port": "8002",
-			"id": "DataService_01"
+			"id": "DataService01"
 		},
 		"inventory": {
 			"url": "http://localhost:8004"
@@ -901,8 +901,8 @@ func TestDataHandlerPatchArrayInt(t *testing.T) {
 			}
 		}
 	}`
-	connectDb := func(config DbConfig.DatabaseConfig) (DbIface.Database, error) {
-		mockDb, err := NewMockDb(config, dataStr)
+	connectDb := func(config DbConfig.DatabaseConfig, logger *log.Logger) (DbIface.Database, error) {
+		mockDb, err := NewMockDb(config, dataStr, logger)
 		if err != nil {
 			return nil, err
 		}
@@ -1007,7 +1007,7 @@ func TestDataHandlerPatchArrayCmt(t *testing.T) {
 			"type": "http",
 			"dns": "localhost",
 			"port": "8002",
-			"id": "DataService_01"
+			"id": "DataService01"
 		},
 		"inventory": {
 			"url": "http://localhost:8004"
@@ -1126,8 +1126,8 @@ func TestDataHandlerPatchArrayCmt(t *testing.T) {
 			}
 		}
 	}`
-	connectDb := func(config DbConfig.DatabaseConfig) (DbIface.Database, error) {
-		mockDb, err := NewMockDb(config, dataStr)
+	connectDb := func(config DbConfig.DatabaseConfig, logger *log.Logger) (DbIface.Database, error) {
+		mockDb, err := NewMockDb(config, dataStr, logger)
 		if err != nil {
 			return nil, err
 		}

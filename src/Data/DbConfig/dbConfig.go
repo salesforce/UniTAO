@@ -42,6 +42,9 @@ type DynmoDbConfig struct {
 
 type MongoDbConfig struct {
 	EndPoint string `json:"endpoint"`
+	Database string `json:"database"`
+	UserName string `json:"user"`
+	Password string `json:"password"`
 }
 
 type SysDirFileConfig struct {

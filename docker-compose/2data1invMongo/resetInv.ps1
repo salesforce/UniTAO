@@ -36,6 +36,7 @@ if (Test-Path -Path $PSScriptRoot\logs) {
     Remove-Item -Path $PSScriptRoot\logs -Recurse
 }
 Write-Host "removed"
-Write-Host "remove database file $PSScriptRoot\DynamoDB\*"
-del -Force -Recurse $PSScriptRoot\DynamoDB\*
+Write-Host "remove database file $PSScriptRoot\MongoDB\db\*"
+del -Force -Recurse $PSScriptRoot\MongoDB\db\*
+
 

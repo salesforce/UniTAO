@@ -89,7 +89,7 @@ func MockHandler() (*DataHandler.Handler, error) {
 			"type": "http",
 			"dns": "localhost",
 			"port": "8002",
-			"id": "DataService_01"
+			"id": "DataService01"
 		},
 		"inventory": {
 			"url": "http://localhost:8004"
@@ -106,8 +106,8 @@ func MockHandler() (*DataHandler.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	connectDb := func(config DbConfig.DatabaseConfig) (DbIface.Database, error) {
-		mockDb, err := NewMockDb(config, dbStr)
+	connectDb := func(config DbConfig.DatabaseConfig, logger *log.Logger) (DbIface.Database, error) {
+		mockDb, err := NewMockDb(config, dbStr, logger)
 		if err != nil {
 			return nil, err
 		}

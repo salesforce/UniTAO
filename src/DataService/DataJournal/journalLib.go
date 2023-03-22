@@ -348,9 +348,12 @@ func (j *JournalLib) updateJournal(page *ProcessIface.JournalPage) *Http.HttpErr
 		return Http.WrapError(err, fmt.Sprintf("failed to create Record Data. Error:%s", err), http.StatusBadRequest)
 	}
 	pageRecord := Record.NewRecord(Common.KeyJournal, CurrentVer, page.Id(), pageData)
-	err = j.db.Create(j.table, pageRecord.Map())
+	err = j.db.Replace(j.table, map[string]interface{}{
+		Record.DataType: Common.KeyJournal,
+		Record.DataId:   page.Id(),
+	}, pageRecord.Map())
 	if err != nil {
-		return Http.WrapError(err, fmt.Sprintf("failed to create record [{type}/{id}]=[%s]/%s", pageRecord.Type, pageRecord.Id), http.StatusInternalServerError)
+		return Http.WrapError(err, fmt.Sprintf("failed to create record [{type}/{id}]=[%s/%s]", pageRecord.Type, pageRecord.Id), http.StatusInternalServerError)
 	}
 	return nil
 }

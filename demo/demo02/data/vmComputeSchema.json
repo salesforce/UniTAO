@@ -1,5 +1,5 @@
 {
-    "DataService_01": [
+    "DataService01": [
         {
             "__id": "VirtualMachine",
             "__type": "schema",
@@ -225,7 +225,7 @@
             }
         }
     ],
-    "DataService_02": [
+    "DataService02": [
         {
             "__id": "VmHost",
             "__type": "schema",

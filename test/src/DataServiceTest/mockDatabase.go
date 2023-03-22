@@ -29,22 +29,32 @@ import (
 	"Data/DbConfig"
 	"encoding/json"
 	"fmt"
+	"log"
 
 	"github.com/salesforce/UniTAO/lib/Schema/Record"
 )
 
 type MockDatabase struct {
+	logger *log.Logger
 	config DbConfig.DatabaseConfig
 	Data   map[string]interface{}
 }
 
-func NewMockDb(config DbConfig.DatabaseConfig, dataStr string) (*MockDatabase, error) {
+func (db MockDatabase) Name() string {
+	return "MockDatabase"
+}
+
+func NewMockDb(config DbConfig.DatabaseConfig, dataStr string, logger *log.Logger) (*MockDatabase, error) {
+	if logger == nil {
+		logger = log.Default()
+	}
 	data := map[string]interface{}{}
 	err := json.Unmarshal([]byte(dataStr), &data)
 	if err != nil {
 		return nil, err
 	}
 	db := MockDatabase{
+		logger: logger,
 		config: config,
 		Data:   data,
 	}
@@ -71,7 +81,7 @@ func (db MockDatabase) CreateTable(name string, data map[string]interface{}) err
 	return nil
 }
 
-func (db MockDatabase) ListTable() ([]*string, error) {
+func (db MockDatabase) ListTable() ([]interface{}, error) {
 	return nil, nil
 }
 

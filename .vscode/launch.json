@@ -21,6 +21,31 @@
             "args": ["-id", "DataService01" ,"-config", "${workspaceFolder}/docker-compose/2data1inv/DataService01/extConfig.json"],
         },
         {
+            "name": "Debug Data Service 01 Admin init mongo table",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/tool/DataServiceAdmin/main.go",
+            "args": [
+                "table" ,
+                "-config", "${workspaceFolder}/docker-compose/2data1invMongo/DataService01/extConfig.json",
+                "-table", "${workspaceFolder}/dbSchemas/MongoDB/Tables.json",
+                "-reset", "true"
+            ],
+        },
+        {
+            "name": "Debug Data Service 01 Admin import data",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/tool/DataServiceAdmin/main.go",
+            "args": [
+                "data",
+                "-config", "${workspaceFolder}/docker-compose/2data1invMongo/DataService01/extConfig.json",
+                "-data", "${workspaceFolder}/lib/Schema/data/schema.json"
+            ]
+        },
+        {
             "name": "Debug Data Service 02",
             "type": "go",
             "request": "launch",

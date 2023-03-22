@@ -1,0 +1,21 @@
+{
+    "data": {
+        "TableName": "data",
+        "Indexes": {
+            "primary": {
+                "IndexFields": {
+                    "__type": 1,
+                    "__id": 1,
+                    "__ver": 1
+                },
+                "UniqueIndex": true
+            },
+            "dataType": {
+                "IndexFields": {
+                    "__type": 1,
+                    "__id": 1
+                }
+            }
+        }
+    }
+}

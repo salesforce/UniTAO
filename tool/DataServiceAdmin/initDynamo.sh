@@ -1,4 +1,5 @@
-<#
+#!/usr/bin/env bash
+
 # ************************************************************************************************************
 # Copyright (c) 2022 Salesforce, Inc.
 # All rights reserved.
@@ -21,21 +22,31 @@
 
 # This copyright notice and license applies to all files in this directory or sub-directories, except when stated otherwise explicitly.
 # ************************************************************************************************************
-#>
-docker-compose down
 
-Write-Host "clear $PSScriptRoot\InventoryService\data\referral/*"
-del -Force -Recurse $PSScriptRoot\InventoryService\data\referral\*
-dir $PSScriptRoot\InventoryService\data\referral\
-Write-Host "clear $PSScriptRoot\InventoryService\data\schema\*"
-del -Force -Recurse $PSScriptRoot\InventoryService\data\schema\*
-dir $PSScriptRoot\InventoryService\data\schema\
-Write-Host "remove $PSScriptRoot\logs"
-if (Test-Path -Path $PSScriptRoot\logs) {
-    Write-Host "log path exists, delete []"
-    Remove-Item -Path $PSScriptRoot\logs -Recurse
-}
-Write-Host "removed"
-Write-Host "remove database file $PSScriptRoot\DynamoDB\*"
-del -Force -Recurse $PSScriptRoot\DynamoDB\*
+if [ "$#" -ne 1 ]; then
+    echo "expect log path paramter"
+    echo " initDynamo.sh {logPath}"
+    exit -1
+fi
 
+DataServiceAdmin  table \
+    -config config/config.json \
+    -table schema/DynamoDBTables.json \
+    -reset true \
+    -log $1
+
+if [ "$?" -ne 0 ]; then
+    echo "create table failed"
+    exit -1
+fi
+
+
+DataServiceAdmin data \
+    -config config/config.json \
+    -data schema/schema.json \
+    -log $1
+
+if [ "$?" -ne 0 ]; then
+    echo "import data failed"
+    exit -1
+fi

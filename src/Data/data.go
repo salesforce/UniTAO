@@ -32,13 +32,14 @@ import (
 	"Data/DbConfig"
 	"Data/DbDynamoDb"
 	"Data/DbIface"
+	MongoDb "Data/Mongodb"
 	"Data/SysDirFile"
 )
 
-func ConnectDb(config DbConfig.DatabaseConfig) (DbIface.Database, error) {
+func ConnectDb(config DbConfig.DatabaseConfig, logger *log.Logger) (DbIface.Database, error) {
 	switch config.DbType {
 	case DbDynamoDb.Name:
-		db, err := DbDynamoDb.Connect(config)
+		db, err := DbDynamoDb.Connect(config, logger)
 		if err != nil {
 			newError := fmt.Errorf("failed to connect to DynamoDB. Error:%s", err.Error())
 			return nil, newError
@@ -46,9 +47,16 @@ func ConnectDb(config DbConfig.DatabaseConfig) (DbIface.Database, error) {
 		log.Printf("dynamodb connected")
 		return db, nil
 	case SysDirFile.Name:
-		db, err := SysDirFile.Connect(config)
+		db, err := SysDirFile.Connect(config, logger)
 		if err != nil {
 			err = fmt.Errorf("failed to connect to SysDirFile. Error:%s", err)
+			return nil, err
+		}
+		return db, nil
+	case MongoDb.Name:
+		db, err := MongoDb.Connect(config, logger)
+		if err != nil {
+			err = fmt.Errorf("failed to connect to MongoDb. Error:%s", err)
 			return nil, err
 		}
 		return db, nil
