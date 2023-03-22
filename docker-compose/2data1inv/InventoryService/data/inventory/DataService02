@@ -1,9 +1,9 @@
 {
-    "__id": "DataService_02",
+    "__id": "DataService02",
     "__type": "inventory",
     "__ver": "0.0.1",
     "data": {
-        "dsId": "DataService_02",
+        "dsId": "DataService02",
         "lastSynctime": "",
         "url": [
             "http://unitao-data-service02",

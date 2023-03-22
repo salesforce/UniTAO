@@ -33,22 +33,22 @@ go run ./tool/InventoryServiceAdmin/main.go \
     add \
     -config ./test/data/InventoryService/config.json \
     -ds http://localhost:8002 \
-    -id DataService_01
+    -id DataService01
 
 go run ./tool/InventoryServiceAdmin/main.go \
     sync \
     -config ./test/data/InventoryService/config.json \
-    -id DataService_01
+    -id DataService01
 
 go run ./tool/InventoryServiceAdmin/main.go \
     add \
     -config ./test/data/InventoryService/config.json \
     -ds http://localhost:8003 \
-    -id DataService_02
+    -id DataService02
 
 go run ./tool/InventoryServiceAdmin/main.go \
     sync \
     -config ./test/data/InventoryService/config.json \
-    -id DataService_02
+    -id DataService02
 
 popd

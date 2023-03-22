@@ -1,26 +1,38 @@
 version: '3.8'
 services:
-  dynamodb:
-    image:  amazon/dynamodb-local:latest
-    container_name: dynamodb-local
+  mongodb:
+    container_name: mongodb
     restart: always
-    volumes:
-      -  ./DynamoDB:/home/dynamodblocal/data
-    ports:
-      - "8000:8000"
-    command: "-jar DynamoDBLocal.jar -sharedDb -dbPath /home/dynamodblocal/data/"
-
-  dynamodb-admin:
-    image: aaronshaf/dynamodb-admin
-    ports:
-      - "7999:8001"
+    image: mongo:latest
     environment:
-      DYNAMO_ENDPOINT: "http://dynamodb-local:8000"
-      AWS_REGION: "us-west-2"
-      AWS_ACCESS_KEY_ID: local
-      AWS_SECRET_ACCESS_KEY: local
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: rootpassword
+    ports:
+      - '27017:27017' 
+    volumes:
+      - ./MongoDB/db:/data/db
+      - ./MongoDB/import:/opt/mongo/import
+
+  mongo-express:
+    container_name: mongo-express
+    restart: always
+    image: mongo-express:latest
+    links:
+      - mongodb
+    environment:
+      - ME_CONFIG_MONGODB_SERVER=mongodb
+      - ME_CONFIG_MONGODB_PORT=27017
+      - ME_CONFIG_MONGODB_ENABLE_ADMIN=true
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=root
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=rootpassword
+      - ME_CONFIG_BASICAUTH_USERNAME=admin
+      - ME_CONFIG_BASICAUTH_PASSWORD=admin
+    ports:
+      - '7999:8081'
+    volumes: 
+      - ./MongoDB:/data/db 
     depends_on:
-      - dynamodb
+      - mongodb
 
   unitao-data-service01:
     image: unitao/dataservice:localbuild
@@ -34,7 +46,7 @@ services:
     ports:
       - "8001:80"
     depends_on:
-      - dynamodb
+      - mongodb
     command: "DataService -id DataService01 -config /opt/UniTAO/config/config.json -log /opt/UniTAO/log"
 
   unitao-data-service01-admin:
@@ -45,9 +57,9 @@ services:
       -  ./DataService01:/opt/UniTAO/config
       -  ./logs:/opt/UniTAO/log
     depends_on:
-      - dynamodb
-    command: "initDynamo.sh /opt/UniTAO/log"
-
+      - mongodb
+    command: "initMongo.sh /opt/UniTAO/log"
+  
   unitao-data-service02:
     image: unitao/dataservice:localbuild
     container_name: unitao-data-service02
@@ -60,21 +72,19 @@ services:
     ports:
       - "8002:80"
     depends_on:
-      - dynamodb
+      - mongodb
     command: "DataService -id DataService02 -config /opt/UniTAO/config/config.json -log /opt/UniTAO/log"
 
   unitao-data-service02-admin:
     image: unitao/dataservice:localbuild
     container_name: unitao-data-service02-admin
     restart: "on-failure"
-    stdin_open: true
-    tty: true
     volumes:
       -  ./DataService02:/opt/UniTAO/config
       -  ./logs:/opt/UniTAO/log
     depends_on:
-      - dynamodb
-    command: "initDynamo.sh /opt/UniTAO/log"
+      - mongodb
+    command: "initMongo.sh /opt/UniTAO/log"
 
   unitao-inv-service:
     image: unitao/inventoryservice:localbuild
@@ -106,17 +116,3 @@ services:
       -  ./InventoryService/data:/opt/UniTAO/data
       -  ./logs:/opt/UniTAO/log
     command: "InventoryServiceAdmin sync -config /opt/UniTAO/config/config.json -log /opt/UniTAO/log"
-
-  unitao-ui-server:
-    image: unitao/uiserver:localbuild
-    container_name: unitao-ui-schema-visualizer
-    restart: "no"
-    stdin_open: true
-    tty: true
-    volumes:
-      -  ../../ui/UI:/opt/UniTAO/UI
-      -  ../../schemaVisualizer:/opt/UniTAO/WebServer
-      -  ./logs:/opt/UniTAO/log
-    ports:
-      - "8005:3000"
-    command: "node ./WebServer/index.js"

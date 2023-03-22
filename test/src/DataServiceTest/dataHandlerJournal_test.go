@@ -54,7 +54,7 @@ func mockDbConfig() (*Config.Confuguration, error) {
 			"type": "http",
 			"dns": "localhost",
 			"port": "8002",
-			"id": "DataService_01"
+			"id": "DataService01"
 		},
 		"inventory": {
 			"url": "http://localhost:8004"
@@ -74,7 +74,7 @@ func NewDb(config *Config.Confuguration) (*MockDatabase, error) {
 	if err != nil {
 		return nil, err
 	}
-	mockDb, err := NewMockDb(config.Database, dataStr)
+	mockDb, err := NewMockDb(config.Database, dataStr, nil)
 	if err != nil {
 		return nil, err
 	}

@@ -27,6 +27,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os"
 
@@ -34,6 +35,7 @@ import (
 	"Data/DbIface"
 	"DataService/Config"
 
+	"github.com/salesforce/UniTAO/lib/Util/CustomLogger"
 	"github.com/salesforce/UniTAO/lib/Util/Json"
 )
 
@@ -43,6 +45,7 @@ type AdminArgs struct {
 	srvConfig Config.Confuguration
 	table     TableArgs
 	data      DataArgs
+	logPath   string
 }
 
 type TableArgs struct {
@@ -61,16 +64,17 @@ const (
 )
 
 func ArgHandler() AdminArgs {
-
 	tableCmd := flag.NewFlagSet(TABLE, flag.ExitOnError)
 	tableDbConfig := tableCmd.String("config", "", "database connection config")
 	tableMeta := tableCmd.String(TABLE, "", "metadata file describe tables to be create")
 	tableReset := tableCmd.Bool("reset", false, "whether we want to reset data in table or not")
+	tableLogPath := tableCmd.String("log", "", "path that hold log")
 
 	dataCmd := flag.NewFlagSet(DATA, flag.ExitOnError)
 	dataDbConfig := dataCmd.String("config", "", "database connection config")
 	dataTable := dataCmd.String(TABLE, "", "data table to import")
 	dataFile := dataCmd.String(DATA, "", "data file to be import into database")
+	dataLogPath := dataCmd.String("log", "", "path that hold log")
 
 	if len(os.Args) < 2 {
 		log.Fatal("expected [table, data]] subcommands")
@@ -84,6 +88,7 @@ func ArgHandler() AdminArgs {
 		args.config = *tableDbConfig
 		args.table.meta = *tableMeta
 		args.table.reset = *tableReset
+		args.logPath = *tableLogPath
 		if args.config == "" {
 			tableCmd.Usage()
 			log.Fatalf("missing configuration for %s", TABLE)
@@ -97,6 +102,7 @@ func ArgHandler() AdminArgs {
 		args.config = *dataDbConfig
 		args.data.table = *dataTable
 		args.data.file = *dataFile
+		args.logPath = *dataLogPath
 		if args.config == "" {
 			dataCmd.Usage()
 			log.Fatalf("missing configuration for %s", DATA)
@@ -111,143 +117,154 @@ func ArgHandler() AdminArgs {
 	return args
 }
 
-func CreateTables(db DbIface.Database, args AdminArgs) {
-	log.Printf("create table from %s", args.table.meta)
+func CreateTables(db DbIface.Database, args AdminArgs, logger *log.Logger) {
+	logger.Printf("create table from %s", args.table.meta)
 	tableMeta, err := Json.LoadJSONMap(args.table.meta)
 	if err != nil {
-		log.Fatalf("failed to load database metadata file [%s]", args.table.meta)
+		logger.Fatalf("failed to load database metadata file [%s]", args.table.meta)
 	}
 	tableList, err := db.ListTable()
 	if err != nil {
-		log.Fatalf(err.Error())
+		logger.Fatalf(err.Error())
 	}
-	log.Printf("current table length, %d", len(tableList))
+	logger.Printf("current table length, %d", len(tableList))
 	configMeta := make(map[string]interface{})
 	configTables := args.srvConfig.DataTable.Map()
-	log.Printf("create translated table structure")
+	logger.Printf("create translated table structure")
 
 	for key, meta := range tableMeta {
-		log.Printf("check for table %s", key)
+		logger.Printf("check for table %s", key)
 		if tableName, ok := configTables[key].(string); ok {
 			log.Printf("custom table name [%s]=>[%s]", key, tableName)
 			configMeta[tableName] = meta
 			continue
 		}
-		log.Printf("keep table as the same name: [%s]", key)
+		logger.Printf("keep table as the same name: [%s]", key)
 		configMeta[key] = meta
 	}
 	log.Print("determine if we should remove existing table")
 	for _, table := range tableList {
-		log.Printf("Match table [%s] with expected meta", *table)
-		_, exists := configMeta[*table]
+		logger.Printf("Match table [%s] with expected meta", table)
+		tableName := table.(string)
+		_, exists := configMeta[tableName]
 		if exists {
-			log.Printf("table [%s] exists", *table)
+			logger.Printf("table [%s] exists", table)
 			if args.table.reset {
-				log.Printf("remove table [%s]", *table)
-				db.DeleteTable(*table)
+				logger.Printf("remove table [%s]", table)
+				db.DeleteTable(tableName)
 			} else {
-				log.Printf("remove talbe [%s] from create list", *table)
-				delete(tableMeta, *table)
+				logger.Printf("remove talbe [%s] from create list", table)
+				delete(tableMeta, tableName)
 			}
 			continue
 		}
-		log.Printf("ignore unknown table [%s]", *table)
+		logger.Printf("ignore unknown table [%s]", table)
 	}
 	if len(configMeta) == 0 {
-		log.Print("there is no table to create")
+		logger.Print("there is no table to create")
 		return
 	}
-	log.Printf("create %d tables", len(configMeta))
+	logger.Printf("create %d tables", len(configMeta))
 	for table, meta := range configMeta {
-		log.Printf("create table [%s]", table)
+		logger.Printf("create table [%s]", table)
 		err := db.CreateTable(table, meta.(map[string]interface{}))
 		if err != nil {
-			log.Fatalf("failed to create table %s, Err: %s", table, err)
+			logger.Fatalf("failed to create table %s, Err: %s", table, err)
 		}
 	}
 }
 
-func ImportData(db DbIface.Database, args AdminArgs) {
+func ImportData(db DbIface.Database, args AdminArgs, logger *log.Logger) {
 	tableList, err := db.ListTable()
 	if err != nil {
-		log.Fatalf(err.Error())
+		logger.Fatalf(err.Error())
 	}
 	if args.data.table == "" {
-		ImportTables(db, tableList, args)
+		ImportTables(db, tableList, args, logger)
 		return
 	}
-	log.Printf("load record list for table [%s]", args.data.table)
+	logger.Printf("load record list for table [%s]", args.data.table)
 	data, err := Json.LoadJSONList(args.data.file)
 	if err != nil {
-		log.Fatalf("failed to load database metadata file [%s]", args.data.file)
+		logger.Fatalf("failed to load database metadata file [%s]", args.data.file)
 	}
 	for _, table := range tableList {
-		if *table == args.data.table {
-			log.Printf("table [%s] exists, import %d records from file %s", *table, len(data), args.data.file)
+		tableName := table.(string)
+		if tableName == args.data.table {
+			logger.Printf("table [%s] exists, import %d records from file %s", table, len(data), args.data.file)
 			for idx, record := range data {
-				err := db.Create(*table, record)
+				err := db.Create(tableName, record)
 				if err != nil {
-					log.Fatalf("falied to create data @%d for table %s, Err: %s", idx, *table, err)
+					logger.Fatalf("falied to create data @%d for table %s, Err: %s", idx, table, err)
 				}
 			}
-			log.Print("data loaded")
+			logger.Print("data loaded")
 			return
 		}
 	}
-	log.Fatalf("table [%s] does not exists in database", args.data.table)
+	logger.Fatalf("table [%s] does not exists in database", args.data.table)
 }
 
-func ImportTables(db DbIface.Database, tableList []*string, args AdminArgs) {
+func ImportTables(db DbIface.Database, tableList []interface{}, args AdminArgs, logger *log.Logger) {
 	tableMap := args.srvConfig.DataTable.Map()
-	log.Print("no table specified, load multi-table data file")
+	logger.Printf("load table meta from %s", args.data.file)
 	data, err := Json.LoadJSONMap(args.data.file)
 	if err != nil {
-		log.Fatalf("failed to load database metadata file [%s]", args.data.file)
+		logger.Fatalf("failed to load database metadata file [%s]", args.data.file)
 	}
 	impData := make(map[string]interface{})
 	for key, tData := range data {
 		if _, ok := tableMap[key]; ok {
-			impData[tableMap[key].(string)] = tData
+			newKey := tableMap[key].(string)
+			logger.Printf("create table[%s] as [%s]", key, newKey)
+			impData[newKey] = tData
 		} else {
+			logger.Printf("create table[%s]", key)
 			impData[key] = tData
 		}
 	}
 
 	for _, table := range tableList {
-		log.Printf("Match table [%s] with table data", *table)
-		tableData, exists := impData[*table].([]interface{})
+		logger.Printf("Match table [%s] with table data", table)
+		tableName := table.(string)
+		tableData, exists := impData[tableName].([]interface{})
 		if !exists {
-			log.Printf("table [%s], no data import", *table)
+			logger.Printf("table [%s], no data import", table)
 			continue
 		}
 		for idx, record := range tableData {
-			err := db.Create(*table, record)
+			err := db.Create(tableName, record)
 			if err != nil {
-				log.Fatalf("falied to create data @%d for table %s, Err: %s", idx, *table, err)
+				logger.Fatalf("falied to create data @%d for table %s, Err: %s", idx, table, err)
 			}
 		}
 	}
 }
 
 func main() {
-	log.Print("Admin tool for Data Service")
 	args := ArgHandler()
+	log.Print("Admin tool for Data Service")
 	config := Config.Confuguration{}
 	err := Config.Read(args.config, &config)
 	if err != nil {
 		log.Fatalf("failed to read configuration file=[%s], Err:%s", args.config, err)
 	}
 	args.srvConfig = config
-	database, err := Data.ConnectDb(config.Database)
-	if err != nil {
-		log.Fatalf("failed to connect to database, err:%s", err)
+	logFile, logger, ex := CustomLogger.FileLoger(args.logPath, fmt.Sprintf("%s_admin", config.Http.Id))
+	if ex != nil {
+		log.Fatalf("failed to create log file @[%s]", args.logPath)
 	}
-	log.Println("database connected")
+	defer logFile.Close()
+	database, err := Data.ConnectDb(config.Database, logger)
+	if err != nil {
+		logger.Fatalf("failed to connect to database, err:%s", err)
+	}
+	logger.Println("database connected")
 	switch args.cmd {
 	case "table":
-		CreateTables(database, args)
+		CreateTables(database, args, logger)
 	case "data":
-		ImportData(database, args)
+		ImportData(database, args, logger)
 	}
-	log.Printf("Admin Operation %s completed", args.cmd)
+	logger.Printf("Admin Operation %s completed", args.cmd)
 }

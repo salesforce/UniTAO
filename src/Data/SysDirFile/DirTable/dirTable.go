@@ -142,8 +142,8 @@ func New(name string, path string) (*Table, error) {
 	return &table, nil
 }
 
-func List(rootPath string) ([]*string, error) {
-	result := []*string{}
+func List(rootPath string) ([]interface{}, error) {
+	result := []interface{}{}
 	dirList, err := ioutil.ReadDir(rootPath)
 	if err != nil {
 		return nil, err
@@ -151,7 +151,7 @@ func List(rootPath string) ([]*string, error) {
 	for _, file := range dirList {
 		if file.IsDir() {
 			dirName := file.Name()
-			result = append(result, &dirName)
+			result = append(result, dirName)
 		}
 	}
 	return result, nil
