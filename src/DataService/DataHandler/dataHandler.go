@@ -65,11 +65,11 @@ type Handler struct {
 	log        *log.Logger
 }
 
-func New(config Config.Confuguration, logger *log.Logger, connectDb func(db DbConfig.DatabaseConfig) (DbIface.Database, error)) (*Handler, *Http.HttpError) {
+func New(config Config.Confuguration, logger *log.Logger, connectDb func(db DbConfig.DatabaseConfig, logger *log.Logger) (DbIface.Database, error)) (*Handler, *Http.HttpError) {
 	if logger == nil {
 		logger = log.Default()
 	}
-	db, err := connectDb(config.Database)
+	db, err := connectDb(config.Database, logger)
 	if err != nil {
 		return nil, Http.WrapError(err, "failed to connect to Database", http.StatusInternalServerError)
 	}

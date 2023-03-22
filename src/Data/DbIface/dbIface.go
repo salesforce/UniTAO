@@ -42,7 +42,8 @@ const (
 )
 
 type Database interface {
-	ListTable() ([]*string, error)
+	Name() string
+	ListTable() ([]interface{}, error)
 	CreateTable(name string, data map[string]interface{}) error
 	DeleteTable(name string) error
 	Get(queryArgs map[string]interface{}) ([]map[string]interface{}, error)
@@ -55,9 +56,10 @@ type Database interface {
 // walk into data with dataPath
 // return last data layer that wrapping the attrbute
 // attribute path:
-//      attr name if it is a direct attribute
-//      attr name with key, if it is a map
-//      attr name with idx, if it is a array
+//
+//	attr name if it is a direct attribute
+//	attr name with key, if it is a map
+//	attr name with idx, if it is a array
 func GetDataOnPath(data map[string]interface{}, dataPath string, prevPath string) (map[string]interface{}, string, error) {
 	attrPath, nextPath := Util.ParsePath(dataPath)
 	if nextPath == "" {

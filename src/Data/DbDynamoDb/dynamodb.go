@@ -51,9 +51,14 @@ const (
 )
 
 type dynamoDB struct {
+	logger   *log.Logger
 	config   DbConfig.DatabaseConfig
 	sess     *session.Session
 	database *dynamodb.DynamoDB
+}
+
+func (db *dynamoDB) Name() string {
+	return Name
 }
 
 func ParseQueryOutput(output *dynamodb.QueryOutput) ([]map[string]interface{}, error) {
@@ -120,8 +125,8 @@ func (db *dynamoDB) Get(queryArgs map[string]interface{}) ([]map[string]interfac
 	return db.Query(tableName, "", args)
 }
 
-func (db *dynamoDB) ListTable() ([]*string, error) {
-	tableList := []*string{}
+func (db *dynamoDB) ListTable() ([]interface{}, error) {
+	tableList := []interface{}{}
 	input := &dynamodb.ListTablesInput{}
 	for {
 		// Get the list of tables
@@ -141,8 +146,9 @@ func (db *dynamoDB) ListTable() ([]*string, error) {
 			}
 			return nil, err
 		}
-
-		tableList = append(tableList, result.TableNames...)
+		for _, name := range result.TableNames {
+			tableList = append(tableList, *name)
+		}
 
 		// assign the last read tablename as the start for our next call to the ListTables function
 		// the maximum number of table names returned in a call is 100 (default), which requires us to make
@@ -216,9 +222,15 @@ func (db *dynamoDB) createRecord(table string, data interface{}) error {
 }
 
 func (db *dynamoDB) Replace(table string, keys map[string]interface{}, data interface{}) error {
-	currentList, err := db.Query(table, "", keys)
+	queryArgs := map[string]interface{}{
+		DbIface.Table: table,
+	}
+	for key, value := range keys {
+		queryArgs[key] = value
+	}
+	currentList, err := db.Get(queryArgs)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to query record exists.Error:%s", err)
 	}
 	if len(currentList) > 0 {
 		err = db.deleteRecord(table, keys)
@@ -293,7 +305,10 @@ func (db *dynamoDB) Update(table string, keys map[string]interface{}, data inter
 	return patchData[0], nil
 }
 
-func Connect(config DbConfig.DatabaseConfig) (DbIface.Database, error) {
+func Connect(config DbConfig.DatabaseConfig, logger *log.Logger) (DbIface.Database, error) {
+	if logger == nil {
+		logger = log.Default()
+	}
 	if config.Dynamodb.Region == "" {
 		err := fmt.Errorf("missing configuration region")
 		return nil, err
@@ -328,6 +343,7 @@ func Connect(config DbConfig.DatabaseConfig) (DbIface.Database, error) {
 		panic("failed to list tables")
 	}
 	database := dynamoDB{
+		logger:   logger,
 		config:   config,
 		sess:     dbSession,
 		database: dbSvc,

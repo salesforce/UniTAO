@@ -1,13 +1,15 @@
 {
     "database": {
-        "type": "dynamodb",
-        "dynamodb": {
-            "region": "us-west-2",
-            "endpoint": "http://dynamodb-local:8000"
+        "type": "mongodb",
+        "mongodb": {
+            "endpoint": "mongodb://mongodb:27017",
+            "database": "DataService02",
+	        "user": "root",
+	        "password": "rootpassword"
         }
     },
     "table": {
-        "data": "DataService02"
+        "data": "Data"
     },
     "http": {
         "type": "http",

@@ -26,12 +26,12 @@ print("get http://localhost:8004/inventory")
 resp = requests.get("http://localhost:8004/inventory")
 print(json.dumps(resp.json(), indent=4))
 
-print("get http://localhost:8004/inventory/DataService_01")
-resp = requests.get("http://localhost:8004/inventory/DataService_01")
+print("get http://localhost:8004/inventory/DataService01")
+resp = requests.get("http://localhost:8004/inventory/DataService01")
 print(json.dumps(resp.json(), indent=4))
 
-print("get http://localhost:8004/inventory/DataService_02")
-resp = requests.get("http://localhost:8004/inventory/DataService_02")
+print("get http://localhost:8004/inventory/DataService02")
+resp = requests.get("http://localhost:8004/inventory/DataService02")
 print(json.dumps(resp.json(), indent=4))
 
 input("press ANY key to continue...")

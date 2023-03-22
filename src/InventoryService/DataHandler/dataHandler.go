@@ -65,7 +65,7 @@ func New(config DbConfig.DatabaseConfig, logger *log.Logger) (*Handler, error) {
 	if logger == nil {
 		logger = log.Default()
 	}
-	db, err := Data.ConnectDb(config)
+	db, err := Data.ConnectDb(config, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +93,7 @@ func (h *Handler) init() error {
 	for _, name := range []string{Schema.Inventory, RefRecord.Referral} {
 		tblExists := false
 		for _, tbl := range tbList {
-			if *tbl == name {
+			if tbl == name {
 				tblExists = true
 			}
 		}

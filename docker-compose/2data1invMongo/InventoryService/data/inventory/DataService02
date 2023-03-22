@@ -1,0 +1,13 @@
+{
+    "__id": "DataService02",
+    "__type": "inventory",
+    "__ver": "0.0.1",
+    "data": {
+        "dsId": "DataService02",
+        "lastSynctime": "",
+        "url": [
+            "http://unitao-data-service02",
+            "http://localhost:8002"
+        ]
+    }
+}

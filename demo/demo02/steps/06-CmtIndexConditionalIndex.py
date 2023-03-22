@@ -158,8 +158,8 @@ print("get http://localhost:8002/VmHost/vmhost-test01")
 resp = requests.get("http://localhost:8002/VmHost/vmhost-test01")
 print(json.dumps(resp.json(), indent=4))
 
-print("sleep 1 second")
-time.sleep(1)
+print("sleep 3 second")
+time.sleep(3)
 
 print("get http://localhost:8002/VmHost/vmhost-test01")
 resp = requests.get("http://localhost:8002/VmHost/vmhost-test01")
@@ -208,8 +208,8 @@ for vhd in vhdList:
     print("POST http://localhost:8001 {}".format(json.dumps(vhd, indent=4)))
     resp = requests.post("http://localhost:8001", json=vhd)
     
-print("sleep 1 second")
-time.sleep(1)
+print("sleep 3 second")
+time.sleep(3)
 
 print("GET http://localhost:8001/VirtualMachine/vm-test01")
 resp = requests.get("http://localhost:8001/VirtualMachine/vm-test01")
@@ -232,8 +232,8 @@ print("PATCH http://localhost:8001/VirtualMachine/vm-test01/storage {}".format(j
 resp = requests.patch("http://localhost:8001/VirtualMachine/vm-test01/storage", json=dataStorage)
 print(json.dumps(resp.json(), indent=4))
 
-print("sleep for 1 second")
-time.sleep(1)
+print("sleep for 3 second")
+time.sleep(3)
 
 print("get http://localhost:8001/VirtualMachine/vm-test01")
 resp = requests.get("http://localhost:8001/VirtualMachine/vm-test01")
@@ -256,8 +256,8 @@ print("get http://localhost:8001/VirtualMachine/vm-test01")
 resp = requests.get("http://localhost:8001/VirtualMachine/vm-test01")
 print(json.dumps(resp.json(), indent=4))
 
-print("sleep for 1 second")
-time.sleep(1)
+print("sleep for 3 second")
+time.sleep(3)
 
 print("get http://localhost:8001/VirtualMachine/vm-test01")
 resp = requests.get("http://localhost:8001/VirtualMachine/vm-test01")
@@ -291,8 +291,8 @@ print("get http://localhost:8001/VirtualMachine/vm-test01")
 resp = requests.get("http://localhost:8001/VirtualMachine/vm-test01")
 print(json.dumps(resp.json(), indent=4))
 
-print("sleep for 1 second")
-time.sleep(1)
+print("sleep for 6 second")
+time.sleep(6)
 
 print("get http://localhost:8001/VirtualMachine/vm-test01")
 resp = requests.get("http://localhost:8001/VirtualMachine/vm-test01")

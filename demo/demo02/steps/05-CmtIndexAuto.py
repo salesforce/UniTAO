@@ -6,7 +6,7 @@ print("""
 ######################################################################################################################
 # With attribute[indexTemplate] introduced under array/map items definition.
 # we can now automatically have VmHost register newly created entities.
-# 1, upgrade schema of VmHost that point to all entities from DataService_01
+# 1, upgrade schema of VmHost that point to all entities from DataService01
 # 2, upgrade schema version of vmhost-test01 to new version 0.0.2
 # 3, add another record of VirtualHardDrive
 # 4, see that new vhd record registered under http://localhost:8002/VmHost/vmhost-test01/virtualHardDisk
@@ -18,7 +18,7 @@ input("press ANY KEY to continue...")
 
 print("""
 ######################################################################################################################
-# 1, upgrade schema of VmHost that point to all entities from DataService_01
+# 1, upgrade schema of VmHost that point to all entities from DataService01
 ######################################################################################################################
 """)
 
@@ -95,13 +95,13 @@ print("""
 # with schema include [indexTemplate], 
 # the Journal Process will create corresponding Record of [cmtIdx] to 
 # subscribe data change event from CMT reference in this case:
-# Data Types from DataService_01:
+# Data Types from DataService01:
 # NetBridge, VmLink, VirtualMachine, NetworkCard, VirtualHardDisk, StorageDevice
 ######################################################################################################################
 """)
 
-print("sleep 5 second for journal process to work on the data subscription of [indexTemplate]")
-time.sleep(5)
+print("sleep 10 second for journal process to work on the data subscription of [indexTemplate]")
+time.sleep(10)
 
 print("GET http://localhost:8001/cmtIdx")
 resp = requests.get("http://localhost:8001/cmtIdx")
@@ -170,8 +170,8 @@ print("GET http://localhost:8002/VmHost/vmhost-test01")
 resp = requests.get("http://localhost:8002/VmHost/vmhost-test01")
 print(json.dumps(resp.json(), indent=4))
 
-print("sleep 1 second")
-time.sleep(1)
+print("sleep 10 second")
+time.sleep(10)
 
 print("""
 ######################################################################################################################
@@ -205,8 +205,8 @@ print("GET http://localhost:8002/VmHost/vmhost-test01")
 resp = requests.get("http://localhost:8002/VmHost/vmhost-test01")
 print(json.dumps(resp.json(), indent=4))
 
-print("sleep 1 second")
-time.sleep(1)
+print("sleep 5 second")
+time.sleep(5)
 
 print("GET http://localhost:8002/VmHost/vmhost-test01")
 resp = requests.get("http://localhost:8002/VmHost/vmhost-test01")

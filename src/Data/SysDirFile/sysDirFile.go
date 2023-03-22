@@ -44,12 +44,17 @@ const (
 )
 
 type Database struct {
+	logger *log.Logger
 	Path   string
 	config DbConfig.SysDirFileConfig
 	tables map[string]*DirTable.Table
 }
 
-func (db *Database) ListTable() ([]*string, error) {
+func (db *Database) Name() string {
+	return Name
+}
+
+func (db *Database) ListTable() ([]interface{}, error) {
 	result, err := DirTable.List(db.Path)
 	if err != nil {
 		return nil, err
@@ -63,7 +68,7 @@ func (db *Database) CreateTable(name string, data map[string]interface{}) error 
 		return err
 	}
 	for _, tableName := range tableList {
-		if *tableName == name {
+		if tableName == name {
 			return nil
 		}
 	}
@@ -80,14 +85,14 @@ func (db *Database) DeleteTable(name string) error {
 		return err
 	}
 	for _, tableName := range tableList {
-		if *tableName == name {
-			err = DirTable.Delete(db.config.Path, *tableName)
+		if tableName == name {
+			err = DirTable.Delete(db.config.Path, tableName.(string))
 			if err != nil {
 				return err
 			}
-			_, ok := db.tables[*tableName]
+			_, ok := db.tables[tableName.(string)]
 			if ok {
-				delete(db.tables, *tableName)
+				delete(db.tables, tableName.(string))
 			}
 			return nil
 		}
@@ -157,7 +162,7 @@ func (db *Database) GetTable(name string) (*DirTable.Table, error) {
 		return nil, err
 	}
 	for _, tableName := range tableList {
-		if *tableName == name {
+		if tableName == name {
 			tbl, err := DirTable.New(name, db.Path)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get DirTable name=[%s] from path=[%s]", name, db.Path)
@@ -242,7 +247,10 @@ func (db *Database) Delete(table string, keys map[string]interface{}) error {
 	return nil
 }
 
-func Connect(config DbConfig.DatabaseConfig) (DbIface.Database, error) {
+func Connect(config DbConfig.DatabaseConfig, logger *log.Logger) (DbIface.Database, error) {
+	if logger == nil {
+		logger = log.Default()
+	}
 	if config.SysDirFile.Path == "" {
 		return nil, fmt.Errorf("missing path from config for %s", Name)
 	}
@@ -262,6 +270,7 @@ func Connect(config DbConfig.DatabaseConfig) (DbIface.Database, error) {
 		return nil, fmt.Errorf("inventory path is not dir, path=[%s], Err:%s", config.SysDirFile.Path, err)
 	}
 	db := Database{
+		logger: logger,
 		Path:   absPath,
 		config: config.SysDirFile,
 		tables: make(map[string]*DirTable.Table),

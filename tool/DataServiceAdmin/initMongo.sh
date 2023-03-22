@@ -23,11 +23,30 @@
 # This copyright notice and license applies to all files in this directory or sub-directories, except when stated otherwise explicitly.
 # ************************************************************************************************************
 
+if [ "$#" -ne 1 ]; then
+    echo "expect log path paramter"
+    echo " initMongo.sh {logPath}"
+    exit -1
+fi
+
 DataServiceAdmin  table \
     -config config/config.json \
-    -table schema/Tables.json \
-    -reset true
+    -table schema/MongoDBTables.json \
+    -reset true \
+    -log $1
+
+if [ "$?" -ne 0 ]; then
+    echo "create table failed"
+    exit -1
+fi
 
 DataServiceAdmin data \
     -config config/config.json \
-    -data schema/schema.json
+    -data schema/schema.json \
+    -log $1
+
+if [ "$?" -ne 0 ]; then
+    echo "import data failed"
+    exit -1
+fi
+

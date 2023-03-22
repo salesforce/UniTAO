@@ -1,4 +1,5 @@
-<#
+#!/usr/bin/env bash
+
 # ************************************************************************************************************
 # Copyright (c) 2022 Salesforce, Inc.
 # All rights reserved.
@@ -21,21 +22,17 @@
 
 # This copyright notice and license applies to all files in this directory or sub-directories, except when stated otherwise explicitly.
 # ************************************************************************************************************
-#>
+
+SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]:-$0}"; )" &> /dev/null && pwd 2> /dev/null; )";
+
 docker-compose down
-
-Write-Host "clear $PSScriptRoot\InventoryService\data\referral/*"
-del -Force -Recurse $PSScriptRoot\InventoryService\data\referral\*
-dir $PSScriptRoot\InventoryService\data\referral\
-Write-Host "clear $PSScriptRoot\InventoryService\data\schema\*"
-del -Force -Recurse $PSScriptRoot\InventoryService\data\schema\*
-dir $PSScriptRoot\InventoryService\data\schema\
-Write-Host "remove $PSScriptRoot\logs"
-if (Test-Path -Path $PSScriptRoot\logs) {
-    Write-Host "log path exists, delete []"
-    Remove-Item -Path $PSScriptRoot\logs -Recurse
-}
-Write-Host "removed"
-Write-Host "remove database file $PSScriptRoot\DynamoDB\*"
-del -Force -Recurse $PSScriptRoot\DynamoDB\*
-
+echo "$SCRIPT_DIR/InventoryService/data/referral/*"
+rm $SCRIPT_DIR/InventoryService/data/referral/*
+ls -al $SCRIPT_DIR/InventoryService/data/referral/
+echo "$SCRIPT_DIR/InventoryService/data/schema/*"
+rm $SCRIPT_DIR/InventoryService/data/schema/*
+ls -al $SCRIPT_DIR/InventoryService/data/schema/
+echo "rebuild $SCRIPT_DIR/logs"
+rm -rf $SCRIPT_DIR/logs
+echo "remove database file"
+rm $SCRIPT_DIR/MongoDB/*

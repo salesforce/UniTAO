@@ -1,8 +1,8 @@
 {
-    "DataService_01": {
+    "DataService01": {
         "url": "http://localhost:8001"
     },
-    "DataService_02": {
+    "DataService02": {
         "url": "http://localhost:8002"
     }
 }

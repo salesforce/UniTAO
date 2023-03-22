@@ -13,7 +13,7 @@
         "type": "http",
         "dns": "localhost",
         "port": "8001",
-        "id": "DataService_01",
+        "id": "DataService01",
         "headers": {}
     },
     "inventory": {

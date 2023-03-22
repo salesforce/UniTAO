@@ -3,17 +3,20 @@ WORKDIR /go/src/github.com/salesforce/UniTAO/
 COPY . ./
 RUN go build -a -o ./bin/ ./app/DataService
 RUN go build -a -o ./bin/ ./tool/DataServiceAdmin
-RUN sed 's/\r$//' ./tool/DataServiceAdmin/initTable.sh > ./bin/initTable.sh
+RUN sed 's/\r$//' ./tool/DataServiceAdmin/initDynamo.sh > ./bin/initDynamo.sh
+RUN sed 's/\r$//' ./tool/DataServiceAdmin/initMongo.sh > ./bin/initMongo.sh
 RUN ls ./bin/
 
 FROM centos:latest
 WORKDIR /opt/UniTAO/
 ENV PATH="/opt/UniTAO/:${PATH}"
 COPY --from=build /go/src/github.com/salesforce/UniTAO/bin/. ./
-RUN chmod +x ./initTable.sh
+RUN chmod +x ./initDynamo.sh
+RUN chmod +x ./initMongo.sh
 RUN mkdir ./config
 RUN mkdir ./schema
 RUN mkdir ./log
 RUN echo 'alias ll="ls -alF"' >> ~/.bashrc
-COPY --from=build /go/src/github.com/salesforce/UniTAO/dbSchemas/DynamoDB/Tables.json ./schema/
+COPY --from=build /go/src/github.com/salesforce/UniTAO/dbSchemas/DynamoDB/Tables.json ./schema/DynamoDBTables.json
+COPY --from=build /go/src/github.com/salesforce/UniTAO/dbSchemas/MongoDB/Tables.json ./schema/MongoDBTables.json
 COPY --from=build /go/src/github.com/salesforce/UniTAO/lib/Schema/data/schema.json ./schema/
