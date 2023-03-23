@@ -18,7 +18,7 @@ https://github.com/TuringCompute/UniTAO
 
 all future development will happens to that repo first. 
 
-I will sync all changes back from the fork as long as I have the permission.
+I will try to sync all future development back here, as long as I have the permission to do so.
 
 ## Description
 
