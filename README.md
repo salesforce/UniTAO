@@ -7,6 +7,8 @@ Universal No-Coding Heterogeneous Infrastructure Maintenance & Inventory system 
 
 It is designed to be self-contained and self-documenting to serve as foundation for human-free automation of heterogeneous computing infrastructure.
 
+this repo is a fork from Salesforce repo: http://github.com/salesforce/UniTAO
+
 The model/schema uses the standard JSON schema format as basis, with additional enhancements. Those can be found in the documentation. 
 
 **schema of schema is defined in path:**
