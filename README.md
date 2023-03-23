@@ -1,5 +1,8 @@
 # UniTao
 
+## Main Repo Moved To
+https://github.com/TuringCompute/UniTAO
+
 ## NOTE from Author (Yi Huo):
 
 Apparently, The project lead Shai Herzog was laid off by Salesforce. and this opensource project is terminated by salesforce.
@@ -14,9 +17,6 @@ https://github.com/TuringCompute
 https://github.com/TuringCompute/UniTAO
 
 **But, all future development will happens to that repo first. I will sync all changes back from the fork as long as I have the permission.**
-
-## Main Repo Moved To
-https://github.com/TuringCompute/UniTAO
 
 ## Description
 
