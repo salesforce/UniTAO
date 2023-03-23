@@ -13,6 +13,59 @@ The model/schema uses the standard JSON schema format as basis, with additional 
 ```
 lib/Schema/data/schema.json
 ```
+### Demo
+
+#### **Docker**
+We can build DataService and Inventory Service into docker container images. so we can run these in a docker environment for demo.
+
+to build all images, run one of the following command based on your target environment.
+
+```
+# Powershell script for Windows environment
+./docker/buildAll.ps1
+
+# Bash script for Mac or Linux
+./docker/buildAll.sh
+```
+
+#### **Environment**
+after all docker images build successfully. we can bring a set of docker instances up as demo environment.
+ - Data Service 01
+ - Data Service 01 Admin
+ - Data Service 02
+ - Data Service 02 Admin
+ - Inventory Service
+ - Inventory Service Admin
+ - Database (DynamoDB / MongoDB)
+ - Database Admin (UI interface)
+
+pick a folder and run the command 
+**docker compose up -d**
+```
+# demo environment with DynamoDB
+cd ./docker-compose/2data1inv
+
+# demo environment with MongoDB
+cd ./docker-compose/2data1invMongo
+
+```
+
+#### **Run**
+to run demo:
+ - bring up demo environment. wait all instance running stable after multiple restart for data setup
+ - login to demo folder
+ ```
+ ./demo
+ ```
+ - choose a demo folder and run demo script depending on demo environment.
+ ```
+ # Windows environment:
+ demo.ps1
+
+ # Mac/Linux environment
+ demo.sh
+ ```
+
 
 ## Components
  
