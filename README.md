@@ -15,8 +15,8 @@ https://github.com/TuringCompute/UniTAO
 
 **But, all future development will happens to that repo first. I will sync all changes back from the fork as long as I have the permission.**
 
-## **TuringCompute** is the **main development** repo now
-
+## Main Repo Moved To
+https://github.com/TuringCompute/UniTAO
 
 ## Description
 
