@@ -1,5 +1,23 @@
 # UniTao
 
+## NOTE from Author (Yi Huo):
+
+Apparently, The project lead Shai Herzog was laid off by Salesforce. and this opensource project is terminated by salesforce.
+all further development will be fully based on my own requirement.
+
+**Thus, I decided to fork this project to my own Organization (TuringCompute) for further development**
+
+https://github.com/TuringCompute
+
+**The new repo will be a fork to this repo.**
+
+https://github.com/TuringCompute/UniTAO
+
+**But, all future development will happens to that repo first. I will sync all changes back from the fork as long as I have the permission.**
+
+**TuringCompute** will have the latest update of this project
+
+
 ## Description
 
 UniTAO was originally created in 2022 by Shai Herzog & Yi Huo as an 
