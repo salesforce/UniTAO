@@ -5,7 +5,7 @@ https://github.com/TuringCompute/UniTAO
 
 ## NOTE from Author (Yi Huo):
 
-Apparently, This pensource project is terminated by salesforce.
+Apparently, This opensource project is terminated by salesforce.
 
 **All further development will be fully based on my own requirement now.**
 
